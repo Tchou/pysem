@@ -1,0 +1,8 @@
+(library
+ (name pysem)
+ (public_name pysem)
+ (libraries mlsem-lang mlsem.common pyre-ast sexplib0)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.ord ppx_deriving.eq)))
+
+(include_subdirs unqualified)

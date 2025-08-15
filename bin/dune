@@ -1,0 +1,5 @@
+(executable
+ (public_name pysem)
+ (name main)
+ (package pysem-bin)
+ (libraries pysem))
