@@ -17,5 +17,7 @@ class N:
     def __init__(self):
         self.u = 3
 
-    
+    def mumthoe(self : int):
+        pass
+
 

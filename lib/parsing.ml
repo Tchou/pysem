@@ -1,5 +1,37 @@
 module PyCo = PyreAst.Concrete
 module PyTF = PyreAst.TaglessFinal
+
+let builtins = [
+  "ArithmeticError"; "AssertionError"; "AttributeError"; "BaseException"; "BaseExceptionGroup"; 
+  "BlockingIOError"; "BrokenPipeError"; "BufferError"; "BytesWarning"; "ChildProcessError"; 
+  "ConnectionAbortedError"; "ConnectionError"; "ConnectionRefusedError"; "ConnectionResetError"; 
+  "DeprecationWarning"; "EOFError"; "Ellipsis"; "EncodingWarning"; "EnvironmentError"; "Exception"; 
+  "ExceptionGroup"; "False"; "FileExistsError"; "FileNotFoundError"; "FloatingPointError";
+  "FutureWarning"; "GeneratorExit"; "IOError"; "ImportError"; "ImportWarning"; "IndentationError"; 
+  "IndexError";  "InterruptedError"; "IsADirectoryError"; "KeyError"; "KeyboardInterrupt"; "LookupError"; 
+  "MemoryError"; "ModuleNotFoundError"; "NameError"; "None"; "NotADirectoryError"; "NotImplemented";
+  "NotImplementedError";  "OSError"; "OverflowError"; "PendingDeprecationWarning"; "PermissionError";
+  "ProcessLookupError"; "PythonFinalizationError"; "RecursionError"; "ReferenceError"; "ResourceWarning"; 
+  "RuntimeError"; "RuntimeWarning"; "StopAsyncIteration"; "StopIteration"; "SyntaxError"; "SyntaxWarning"; 
+  "SystemError"; "SystemExit"; "TabError"; "TimeoutError"; "True"; "TypeError"; "UnboundLocalError"; 
+  "UnicodeDecodeError"; "UnicodeEncodeError"; "UnicodeError"; "UnicodeTranslateError"; "UnicodeWarning"; 
+  "UserWarning"; "ValueError"; "Warning"; "ZeroDivisionError"; "_IncompleteInputError"; 
+  "__build_class__"; "__debug__"; "__doc__"; "__import__"; "__loader__"; "__name__"; "__package__";
+  "__spec__"; "abs"; "aiter"; "all"; "anext"; "any"; "ascii"; "bin"; "bool"; "breakpoint"; "bytearray";
+  "bytes"; "callable"; "chr"; "classmethod"; "compile"; "complex"; "copyright"; "credits"; "delattr";
+  "dict"; "dir"; "divmod"; "enumerate"; "eval"; "exec"; "exit"; "filter"; "float"; "format"; "frozenset";
+  "getattr"; "globals"; "hasattr"; "hash"; "help"; "hex"; "id"; "input"; "int"; "isinstance"; "issubclass"; 
+  "iter"; "len"; "license"; "list"; "locals"; "map"; "max"; "memoryview"; "min"; "next"; "object"; "oct"; 
+  "open"; "ord"; "pow"; "print"; "property"; "quit"; "range"; "repr"; "reversed"; "round"; "set"; "setattr"; 
+  "slice"; "sorted"; "staticmethod"; "str"; "sum"; "super"; "tuple"; "type"; "vars"; "zip"
+]
+
+let dummy_pos = PyCo.Position.make_t ~line:~-1 ~column:~-1 ()
+let dummy_loc = PyCo.Location.make_t ~start:dummy_pos ~stop:dummy_pos ()
+let builtins_as_arguments =
+  List.map (fun s -> PyCo.Argument.make_t ~location:dummy_loc 
+               ~identifier:(PyCo.Identifier.make_t s()) ()) builtins
+
 module Error =
 struct
   type t = 
@@ -46,8 +78,6 @@ let string_of_scope = function
   | Unknown -> "unknown (nonlocal or global)"
 
 
-let dummy_pos = PyCo.Position.make_t ~line:~-1 ~column:~-1 ()
-let dummy_loc = PyCo.Location.make_t ~start:dummy_pos ~stop:dummy_pos ()
 
 type context = { del : bool; load : bool; store : bool; }
 let default_context = { del = false; load = false; store = false }
@@ -782,7 +812,7 @@ let module_ (tbl:env) ~body ~type_ignores =
   let module_name = PyCo.Identifier.make_t tbl.filename () in
   let body, vars, bids = compute_block_variables tbl dummy_loc Module 
       module_name
-      (PyCo.Arguments.make_t ()) body
+      (PyCo.Arguments.make_t ~args:builtins_as_arguments ()) body
   in
   match IdentMap.remove module_name vars |> IdentMap.choose_opt with
     Some (ident, {locations=loc::_;_}) -> raise_ (UndefinedGlobalName(ident, loc))
