@@ -6,6 +6,7 @@ struct
       IncompatibleScope of PyCo.Identifier.t * PyCo.Location.t * string * string 
     | AltPatternNames of PyCo.Location.t (* patterns x | y *)
     | UndefinedGlobalName of PyCo.Identifier.t * PyCo.Location.t
+    | DuplicateArgument of PyCo.Identifier.t * PyCo.Location.t
   let to_pyre e = 
     let open PyreAst.Parser.Error in
     let open Format in
@@ -17,14 +18,17 @@ struct
         end_line = loc.stop.line;
         end_column = loc.stop.column;
       } in
+    let id_str = PyCo.Identifier.to_string in
     match e with
     | IncompatibleScope (id1, loc, s1, s2) ->
       mk_error (sprintf "Name '%s' has incompatible scope %s and %s" 
-                  (PyCo.Identifier.to_string id1) s1 s2)
+                  (id_str id1) s1 s2)
         loc
-    | AltPatternNames loc -> mk_error "alternative pattern binds different names" loc
+    | AltPatternNames loc -> mk_error "Alternative pattern binds different names" loc
     | UndefinedGlobalName (id, loc) ->
-      mk_error (sprintf "Undefined name %s" (PyCo.Identifier.to_string id)) loc
+      mk_error (sprintf "Undefined name '%s'" (id_str id)) loc
+    | DuplicateArgument (id, loc) ->
+      mk_error (sprintf "Duplicate argument '%s'" (id_str id)) loc
 end
 exception Error of Error.t (* internal errors, re-raised see parse at the end of the file *)
 let raise_ e = raise (Error (e))
@@ -150,9 +154,12 @@ let bind_opt ~location o = match o with
 
 let enter_arguments (a : PyCo.Arguments.t) vars =
   let open PyCo.ExpressionContext in
+  let seen = IdentTable.create 16 in
   let add_arg_list l vars =
     List.fold_left (fun avars PyCo.Argument.{location;identifier; _} ->
         (* same effect as bind above *)
+        if IdentTable.mem seen identifier then raise_ (DuplicateArgument (identifier, location));
+        IdentTable.add seen identifier ();
         ident ~location ~scope:Parameter ~ctx:(make_store_of_t ()) identifier
         |> merge_vars avars 
       ) vars l

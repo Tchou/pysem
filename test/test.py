@@ -1,15 +1,15 @@
-def f(x, x):
+def f(x):
     z = 46
     def g():
-        nonlocal z
+        nonlocal z, z
         global _
         x = 42
         z = z + u
     g()
 
     h = lambda u,v : (z:= v)
-
 u = 50
+f(1)
 
 
 class N:
