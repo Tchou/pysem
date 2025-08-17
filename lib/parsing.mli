@@ -41,10 +41,22 @@ val pp_loc : Format.formatter -> Location.t -> unit
 val pp_block_info : Format.formatter -> block_info -> unit
 (** Pretty print block informations. *)
 
+val pp_vars : Format.formatter -> (Identifier.t * info) list -> unit
+
 val parse : file:string -> Module.t * block_info list
 (** [parse ~file] returns a pair [(ast, bil)] where [ast] is the concrete AST of
     the module defined written in [file] and [bil] is the list of all scope blocks
     defined in the file.
 
     @raise Syntax if a syntax error occurs.
+*)
+
+val parse_partial : file:string -> (Statement.t, PyreAst.Parser.Error.t) result list * TypeIgnore.t list * info IdentMap.t * block_info list
+(** [parse_partial file] attempts to parse the module in file [file].
+    It returns [stmts,typ_ign,vars,bil] where:
+    - [stmts] is a list of correctly parsed statements [Ok(s)] or parsing errors [Error(e)]
+    - [typ_ign] is a list of type ignores (special comments)
+    - [vars] is a map of undefined variables
+    - [bil] is a list of block info, for blocks which have been defined.
+
 *)

@@ -17,10 +17,18 @@ let main () =
     Format.eprintf "%s: missing file@\n%s" Sys.argv.(0) 
       (Arg.usage_string options usage_message)
   | Some file ->
-    let ast, bil = Parsing.parse ~file in
+    let stmts,_,vars, bil = Parsing.parse_partial ~file in
     let open Format in
-    printf "%a@\n--@\n%a@\n"
-      Sexplib0.Sexp.pp_hum (PyreAst.Concrete.Module.sexp_of_t ast)
+    List.iter (function 
+        | Ok s ->
+          printf "%a@\n--@\n"  Sexplib0.Sexp.pp_hum (PyreAst.Concrete.Statement.sexp_of_t s)
+        | Error e -> 
+          let open PyreAst.Parser.Error in
+          printf "%d:%d-%d:%d : %s@\n--@\n" 
+            e.line e.column e.end_line e.end_column e.message
+      ) stmts;
+    printf "@[<v>%a@]@\n--@\n" Parsing.pp_vars (Parsing.IdentMap.bindings vars);
+    printf "%a@\n"
       (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil
 
 

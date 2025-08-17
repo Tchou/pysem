@@ -1,7 +1,7 @@
 module PyCo = PyreAst.Concrete
 module PyTF = PyreAst.TaglessFinal
 
-let builtins = [
+let builtins = [ (* Available via [dirs(__builtins__)] *)
   "ArithmeticError"; "AssertionError"; "AttributeError"; "BaseException"; "BaseExceptionGroup"; 
   "BlockingIOError"; "BrokenPipeError"; "BufferError"; "BytesWarning"; "ChildProcessError"; 
   "ConnectionAbortedError"; "ConnectionError"; "ConnectionRefusedError"; "ConnectionResetError"; 
@@ -247,7 +247,7 @@ let compute_block_variables env location kind name args body =
       IdentTable.replace env.free v (bid::l));
   BidTable.replace env.global bid (nvars, idents);
   let rem_vars = IdentMap.of_list !free in
-  let rem_vars = if PyCo.Identifier.compare name lambda_name = 0 then rem_vars
+  let rem_vars = if PyCo.Identifier.compare name lambda_name = 0 || kind = Module then rem_vars
     else merge_vars rem_vars (ident ~location ~ctx:store_ctx name) (* functions bind their name *)
   in
   List.map get1 body, rem_vars, [bid]
@@ -808,24 +808,31 @@ and make_summary_list tbl l =
     [] -> []
   | bid :: ll -> (make_summary tbl bid) @ make_summary_list tbl ll
 
-let module_ (tbl:env) ~body ~type_ignores =
+let module_gen (tbl:env) ~body ~type_ignores =
   let module_name = PyCo.Identifier.make_t tbl.filename () in
   let body, vars, bids = compute_block_variables tbl dummy_loc Module 
       module_name
       (PyCo.Arguments.make_t ~args:builtins_as_arguments ()) body
   in
-  match IdentMap.remove module_name vars |> IdentMap.choose_opt with
+  PyCo.Module.make_t ~body ~type_ignores (),vars, bids 
+
+
+let module_toplevel (tbl:env) ~body ~type_ignores =
+  let m, v, i = module_gen tbl ~body ~type_ignores in
+  match  IdentMap.choose_opt v with
     Some (ident, {locations=loc::_;_}) -> raise_ (UndefinedGlobalName(ident, loc))
   | Some (ident, {locations=[];_}) -> raise_ (UndefinedGlobalName(ident, dummy_loc))
   | None ->
-    PyCo.Module.make_t ~body ~type_ignores (),make_summary_list tbl bids
+    m,make_summary_list tbl i
+
+let module_ (_tbl:env) ~body ~type_ignores =
+  (body, type_ignores)
 
 (* after we are done, any remaining variable that has scope Local is changed
    to Global (it is "local" to the module) and any free variable that remains should raise an error.
 *)
 
-let spec filename = 
-  let env = create_env filename in 
+let spec env module_ = 
   PyTF.make ~argument ~arguments ~binary_operator ~boolean_operator 
     ~comparison_operator ~comprehension ~constant
     ~exception_handler
@@ -851,14 +858,71 @@ exception Syntax of string * PyreAst.Parser.Error.t
 let syntax file e = raise (Syntax (file, e))
 
 let parse ~file =
-  let str = In_channel.(with_open_bin file input_all) in
+  let str = In_channel.(with_open_text file input_all) in
+  let env = create_env file in
   let open PyreAst in
   match
     Parser.with_context (fun context ->
         Parser.
-          TaglessFinal.parse_module ~context ~spec:(spec file) ~enable_type_comment:true str
+          TaglessFinal.parse_module ~context ~spec:(spec env module_toplevel) ~enable_type_comment:true str
       )
   with
     Error e -> syntax file e
   | exception Error e -> syntax file (Error.to_pyre e)
   | Ok (ast,defs) -> ast, defs
+
+let is_white_space = function ' ' | '\t' -> true | _ -> false
+let adavance lines =
+  let rec loop l acc =
+    match l, acc with
+      [], [] -> None
+    | [], _ -> Some (List.rev acc, [])
+    | [line], _ -> Some (List.rev (line::acc), [])
+    | line1 :: line2 :: rem, _ ->
+      if line1 = "" ||
+         is_white_space line1.[0] ||
+         String.get line1 (String.length line1 - 1) = '\\' ||
+         line2 <> "" && is_white_space line2.[0]
+      then loop (line2::rem) (line1::acc)
+      else Some (List.rev acc, line2::rem)
+  in
+  loop lines []
+
+let parse_partial ~file =
+  let str = In_channel.(with_open_text file input_all) in
+  let env = create_env file in
+  let all_lines = String.split_on_char '\n' str in
+  let open PyreAst in
+  let body_with_errors = 
+    Parser.with_context (fun context -> 
+        let rec loop lines acc =
+          match adavance lines with
+            None -> List.rev acc
+          | Some (lines, rem) ->
+            let str = String.concat "\n" lines in
+            let res =
+              match 
+                Parser.
+                  TaglessFinal.parse_module ~context ~spec:(spec env module_) 
+                  ~enable_type_comment:true str
+              with
+                Ok _ | Error _ as r -> r
+              | exception Error e -> Error (Error.to_pyre e)
+            in
+            loop rem (res::acc)
+        in loop all_lines []
+      )
+  in
+  let body, type_ignores = List.fold_left (fun ((accb, acct)as acc) r ->
+      match r with
+        Result.Error _ -> acc
+      | Ok (m,t) -> (accb @ m, acct @t)
+    ) ([],[]) body_with_errors
+  in
+  let _, vars, bids = module_gen env  ~body ~type_ignores in
+  List.concat_map (function (Ok (s, _ )) -> List.map (fun s -> Result.ok (get1 s)) s
+                          | Result.Error e -> [ Result.Error e]) body_with_errors,
+  type_ignores,
+  vars, make_summary_list env bids
+
+

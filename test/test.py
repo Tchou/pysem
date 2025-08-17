@@ -11,6 +11,8 @@ def f(x):
 u = 50
 f(1)
 
+def g(x; ):
+    pass
 
 class N:
     z = 10
