@@ -133,6 +133,7 @@ struct
     { kind : block_kind; 
       name : PyCo.Identifier.t;
       location : PyCo.Location.t }
+  let mk ~kind ~name ~location = { kind; name=PyCo.Identifier.make_t name (); location }
 
   let hash = Hashtbl.hash
   let equal f1 f2 =
@@ -806,7 +807,7 @@ let module_gen (tbl:env) ~body ~type_ignores =
   PyCo.Module.make_t ~body ~type_ignores (),vars, bids 
 
 
-let module_toplevel (tbl:env) ~body ~type_ignores =
+let module_ (tbl:env) ~body ~type_ignores =
   let m, v, i = module_gen tbl ~body ~type_ignores in
   match  IdentMap.choose_opt v with
     Some (ident, {locations=loc::_;_}) -> raise_ (UndefinedGlobalName(ident, loc))
@@ -814,14 +815,11 @@ let module_toplevel (tbl:env) ~body ~type_ignores =
   | None ->
     m,make_summary_list tbl i
 
-let module_ (_tbl:env) ~body ~type_ignores =
-  (body, type_ignores)
-
 (* after we are done, any remaining variable that has scope Local is changed
    to Global (it is "local" to the module) and any free variable that remains should raise an error.
 *)
 
-let spec env module_ = 
+let spec env = 
   PyTF.make ~argument ~arguments ~binary_operator ~boolean_operator 
     ~comparison_operator ~comprehension ~constant
     ~exception_handler
@@ -853,65 +851,9 @@ let parse ~file =
   match
     Parser.with_context (fun context ->
         Parser.
-          TaglessFinal.parse_module ~context ~spec:(spec env module_toplevel) ~enable_type_comment:true str
+          TaglessFinal.parse_module ~context ~spec:(spec env) ~enable_type_comment:true str
       )
   with
     Error e -> syntax file e
   | exception Error e -> syntax file (Error.to_pyre e)
-  | Ok (ast,defs) -> ast, defs
-
-let is_white_space = function ' ' | '\t' -> true | _ -> false
-let adavance lines =
-  let rec loop l acc =
-    match l, acc with
-      [], [] -> None
-    | [], _ -> Some (List.rev acc, [])
-    | [line], _ -> Some (List.rev (line::acc), [])
-    | line1 :: line2 :: rem, _ ->
-      if line1 = "" ||
-         is_white_space line1.[0] ||
-         String.get line1 (String.length line1 - 1) = '\\' ||
-         line2 <> "" && is_white_space line2.[0]
-      then loop (line2::rem) (line1::acc)
-      else Some (List.rev acc, line2::rem)
-  in
-  loop lines []
-
-let parse_partial ~file =
-  let str = In_channel.(with_open_text file input_all) in
-  let env = create_env file in
-  let all_lines = String.split_on_char '\n' str in
-  let open PyreAst in
-  let body_with_errors = 
-    Parser.with_context (fun context -> 
-        let rec loop lines acc =
-          match adavance lines with
-            None -> List.rev acc
-          | Some (lines, rem) ->
-            let str = String.concat "\n" lines in
-            let res =
-              match 
-                Parser.
-                  TaglessFinal.parse_module ~context ~spec:(spec env module_) 
-                  ~enable_type_comment:true str
-              with
-                Ok _ | Error _ as r -> r
-              | exception Error e -> Error (Error.to_pyre e)
-            in
-            loop rem (res::acc)
-        in loop all_lines []
-      )
-  in
-  let body, type_ignores = List.fold_left (fun ((accb, acct)as acc) r ->
-      match r with
-        Result.Error _ -> acc
-      | Ok (m,t) -> (accb @ m, acct @t)
-    ) ([],[]) body_with_errors
-  in
-  let _, vars, bids = module_gen env  ~body ~type_ignores in
-  List.concat_map (function (Ok (s, _ )) -> List.map (fun s -> Result.ok (get1 s)) s
-                          | Result.Error e -> [ Result.Error e]) body_with_errors,
-  type_ignores,
-  vars, make_summary_list env bids
-
-
+  | Ok (ast,defs) -> ast, defs, Utils.loc_converter file str

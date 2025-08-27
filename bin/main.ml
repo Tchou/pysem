@@ -17,11 +17,13 @@ let main () =
     Format.eprintf "%s: missing file@\n%s" Sys.argv.(0) 
       (Arg.usage_string options usage_message)
   | Some file ->
-    let m, bil = Parsing.parse ~file in
+    let m, bil, to_loc = Parsing.parse ~file in
     let open Format in
     printf "%a@\n--@\n"  Sexplib0.Sexp.pp_hum (PyreAst.Concrete.Module.sexp_of_t m);
     printf "%a@\n"
-      (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil
+      (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil;
+    let env = Env.init bil to_loc in
+    Module.translate env m |> ignore
 
 
 let () = try main () with
