@@ -1,4 +1,4 @@
 (library
  (name pysem)
  (public_name pysem)
- (libraries mlsem-lang mlsem.common pyre-ast))
+ (libraries mlsem-lang mlsem.common mlsem.types mlsem.system pyre-ast zarith sexplib0))

@@ -68,7 +68,9 @@ let raise_ e = raise (Error (e))
 
 
 module IdentMap = Map.Make(PyreAst.Concrete.Identifier)
-type scope = Local | Parameter | Nonlocal | Global | Unknown
+type scope = 
+  Local | Parameter | Nonlocal | Global | Unknown
+
 
 let string_of_scope = function
     Local -> "local"
@@ -182,7 +184,7 @@ let bind_opt ~location o = match o with
 
 (* Computations of free variables and variable scope *)
 
-let enter_arguments (a : PyCo.Arguments.t) vars =
+let enter_arguments scope (a : PyCo.Arguments.t) vars =
   let open PyCo.ExpressionContext in
   let seen = IdentTable.create 16 in
   let add_arg_list l vars =
@@ -190,7 +192,7 @@ let enter_arguments (a : PyCo.Arguments.t) vars =
         (* same effect as bind above *)
         if IdentTable.mem seen identifier then raise_ (DuplicateArgument (identifier, location));
         IdentTable.add seen identifier ();
-        ident ~location ~scope:Parameter ~ctx:(make_store_of_t ()) identifier
+        ident ~location ~scope ~ctx:(make_store_of_t ()) identifier
         |> merge_vars avars 
       ) vars l
   in
@@ -205,6 +207,7 @@ let enter_arguments (a : PyCo.Arguments.t) vars =
    [compute_fun_variables] closes the scope corresponding to the body of the function
 
 *)
+let () = Printexc.record_backtrace true
 let compute_block_variables env location kind name args body =
   (* vars is the mapping from variable names to info.
      - if a variable is known Global or NonLocal, leave it
@@ -215,30 +218,31 @@ let compute_block_variables env location kind name args body =
   *)
   let vars = List.fold_left (fun acc (_,v, _) -> merge_vars acc v) IdentMap.empty body in
   let idents = List.concat_map get3 body in
-  let vars = enter_arguments args vars in
-  let free = ref [] in
+  let vars = enter_arguments (if kind = Module then Global else Parameter) args vars in
+  let free = ref [] in (* Variables that remain free after the current scope *)
+  let todo = ref [] in (* Free variables that were found in the current scope *)
   let nvars = vars |> IdentMap.filter_map (fun var info -> 
-      let scope = match info.scope with
-          Unknown when info.context.del || info.context.store -> Local
-        | s -> s
+      let scope =
+        match info.scope with
+          Unknown when info.context.del || info.context.store || kind = Module -> 
+          todo := (var, kind = Module) ::!todo; 
+          if kind = Module then Global else Local
+        | Unknown -> free := (var, info) :: !free; Unknown
+        | s -> if IdentTable.mem env.free var then todo := (var, kind = Module)::!todo; s
       in
-      let scope = match scope with
-          Local -> if kind = Module then Global else Local
-        | s -> s
-      in
-      let info = { info with scope } in 
-      match scope with
-        Unknown -> free := (var,info) :: !free; Some info
-      | _ ->
-        let () = match IdentTable.find_opt env.free var with
-          | None -> ()
-          | Some l ->
-            l |> List.iter (fun bid -> 
-                let map, l = BidTable.find env.global bid in
-                BidTable.replace env.global bid (IdentMap.add var info map, l)
-              );
-            IdentTable.remove env.free var
-        in Some info
+      Some { info with scope }
+    )
+  in
+  let () = !todo |> List.iter (fun (v, is_global) -> 
+      try IdentTable.find env.free v
+          |> List.map (fun bid -> 
+              let map, l = BidTable.find env.global bid in
+              let info = IdentMap.find v map in
+              let info' = { info with scope = if is_global then Global else Nonlocal } in
+              (bid, (IdentMap.add v info' map, l))
+            )
+          |> List.iter (fun (k, v) -> BidTable.replace env.global k v)
+      with Not_found -> () (* free variables introduced in the current scope *)
     )
   in
   let bid = BlockId.{ kind; name; location } in
@@ -368,21 +372,6 @@ let arguments ~posonlyargs ~args ~vararg ~kwonlyargs ~kw_defaults ~kwarg ~defaul
   and*@ kwonlyargs and*?@ kw_defaults
   and*? kwarg and*@ defaults in
   PyCo.Arguments.make_t ~posonlyargs ~args ?vararg ~kwonlyargs ~kw_defaults ?kwarg ~defaults ()
-
-
-    (*
-let use_name name =
-  match name with
-    PyCo.Expression.Name { location; id; ctx } ->
-    let _ = location in
-    let context = match ctx with
-        PyCo.ExpressionContext.Del -> { del = true; load = false; store = false}
-      | Load -> { del = false; load = true; store = false }
-      | Store -> { del = false; load = false; store = true}
-    in 
-    id, IdentMap.singleton id { scope = Unknown; context }, []
-  | _ -> assert false
-         *)
 
 (* Expressions: auxiliary definitions corresponding to constructors of the Concrete.Expressioon.t are
    local functions *)
