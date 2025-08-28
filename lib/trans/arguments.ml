@@ -67,15 +67,15 @@ let zip_for l1 l2 =
   in
   loop l1 l2 []
 
-let join_slide l1 l2 =
-  let rec loop acc l1 l2 =
+let join_slide f l1 l2 =
+  let rec loop acc1 acc2 l1 l2 =
     match l1, l2 with
-      [], _ -> [List.rev acc,[]]
-    | e1 :: ll1, _::ll2 ->
-      (List.rev acc, l2) :: loop (e1::acc) ll1 ll2
+      [], _ -> [ f (List.rev acc1) (List.rev acc2), f l2 l1, List.rev acc1, []]
+    | e1 :: ll1, e2::ll2 ->
+      (f (List.rev acc1) (List.rev acc2), f l2 l1, List.rev acc1, l2) :: loop (e1::acc1) (e2::acc2) ll1 ll2
     | _ -> assert false
   in
-  loop [] l1 l2
+  loop [] [] l1 l2
 
 let pos_param_name i = Utils.mk_id "#%d" i
 let kw_param_name kw = Utils.mk_id ":%s" kw
@@ -137,7 +137,10 @@ let translate_arguments (a : Arguments.t) =
   let kw_args_fields = mk_kw_fields args in
   let args_recs = 
     (* order matters, join_slide will generate by increasing pos *)
-    join_slide pos_args_fields kw_args_fields
+    join_slide (fun l1 l2 ->
+        List.map2 (fun x (n2, _) -> [x;(n2,(true,Ty.empty))]) l1 l2
+        |> List.flatten) 
+      pos_args_fields kw_args_fields
   in
   let count_min = Utils.count_if (fun (_,(b, _)) -> not b) in
   let min_pos =  count_min pos_only_fields in
@@ -145,17 +148,16 @@ let translate_arguments (a : Arguments.t) =
   let min_kw = count_min kw_only_fields in
   let max_kw = List.length kw_only_fields in
 
-  let type_ = List.map (fun (pos_part, kw_part) ->
+  let type_ = List.map (fun (fields, dis_fields, pos_part, kw_part) ->
       let min_pos = min_pos + count_min pos_part in
       let max_pos = max_pos + List.length pos_part in
       let min_kw = min_kw + count_min kw_part in
       let max_kw = max_kw + List.length kw_part in
       let pos = interval min_pos max_pos in
       let kw = interval min_kw max_kw in
-
       Tuple.(mk [ mk [ pos; kw ] ;
-                  Record.mk true (pos_only_fields @ pos_part @ 
-                                  kw_part @ kw_only_fields)])
+                  Record.mk true (pos_only_fields @ pos_part @ fields @
+                                  dis_fields @ kw_part @ kw_only_fields)])
     ) args_recs 
   in
   let () = Format.eprintf ">> %d\n%!" (List.length type_) in
