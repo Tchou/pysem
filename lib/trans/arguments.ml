@@ -169,9 +169,9 @@ let translate_arguments (a : Arguments.t) =
       let max_kw = max_kw + List.length kw_part in
       let pos = interval min_pos max_pos in
       let kw = interval min_kw max_kw in
-      Tuple.(mk [ mk [ pos; kw ] ;
-                  Record.mk true (pos_only_fields @ pos_part @ fields @
-                                  dis_fields @ kw_part @ kw_only_fields)])
+      Tuple.(mk [ mk [ pos; kw ]
+                ; Record.mk false (pos_only_fields @ pos_part @ fields @
+                                   dis_fields @ kw_part @ kw_only_fields)])
     ) args_recs
   in
   let () = Format.eprintf ">> %d\n%!" (List.length type_) in
