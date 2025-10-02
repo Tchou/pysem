@@ -14,16 +14,18 @@ General scheme. Given an [Arguments.t] record with:
 {
   posonlyargs:  p1=?def1, …, pk=?defk
   /
-  args:         a1=?defk+1, …, al=?defl   , where if defi in defaults.
-                                           if defi is present, then it must by present
-                                           for all j > i. So to associate a default value
-                                           to a parameter, one only needs to join them from
-                                           the end of both lists.
+  args:         a1=?defk+1, …, al=?defl,   where if defi in defaults.
+                                           if defi is present, then it must by 
+                                           present for all j > i. So to 
+                                           associate a default value to a
+                                           parameter, one only needs to join
+                                           them from the end of both lists.
 
   vararg:       *va                        rest of positional parameters
 
-  kwonlyargs:   kw1=?dkw1, …, kwm=?dkwm    dkwi from kw_defaults. Boths lists have the same
-                                           length, with None value∩s if no kwargs.
+  kwonlyargs:   kw1=?dkw1, …, kwm=?dkwm    dkwi from kw_defaults. Boths lists
+                                           have the same length, with None
+                                           values if no kwargs.
 
   kwarg         **kw                       rest of the kw arguments
 }
@@ -48,12 +50,14 @@ f ({#1:v1, … #n:vn; x1:v1; … ; xm:vm; #arity:(n,m)})
 
 the body of f is then turned into:
 let def1 = e_def1 in
-let def2 = e_def2 in … (* define default expression outside, they are evaluated only once *)
+let def2 = e_def2 in … (* define default expression outside,
+                          they are evaluated only once *)
 let f r =
     let p1 = if r in {#1:any} then r.#1 else def1 in (*if #r1 is optional*)
     let p2 = r#2 in                                  (* otherwise *)
     ...
-    let a1 = if r in {#k+1:any} then r.#k+1 else if r in { a1 : any} then r.a1 else defk+1 in
+    let a1 = if r in {#k+1:any} then r.#k+1
+             else if r in { a1 : any} then r.a1 else defk+1 in
     ...
     let kw1 = if r in {kw1:any} then r.kw1 else dkw1 in
     (* todo later va and kwargs*)
@@ -85,7 +89,7 @@ let pos_param_name i = Utils.mk_id "#%d" i
 let kw_param_name kw = Utils.mk_id ":%s" kw
 
 type proto = {
-  type_ : Types.Ty.t list;
+  type_    : Types.Ty.t list;
   pos_only : (Argument.t * int * Expression.t option * Types.TVar.t) list;
   args     : (Argument.t * int * Expression.t option * Types.TVar.t) list;
   kw_only  : (Argument.t * int * Expression.t option * Types.TVar.t) list;
@@ -101,17 +105,20 @@ let pp_arg fmt (a, i, eo, v) =
 
 let pp_arg_list fmt l =
   let open Format in
-  pp_print_list  ~pp_sep:(fun fmt () -> fprintf fmt ";@ ") pp_arg fmt l
+  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ") pp_arg fmt l
 
 let pp_proto fmt p =
   let open Format in
-  fprintf fmt "@[type:       @[%a@]@\n"   (pp_print_list ~pp_sep:pp_print_space Types.Ty.pp) p.type_;
-  fprintf fmt   "check_type: @[%a@]@\n"   Types.Ty.pp Types.Ty.(disj p.type_ |> Types.Ty.simplify);
+  fprintf fmt "@[type:       @[%a@]@\n"   (pp_print_list ~pp_sep:pp_print_space
+                                             Types.Ty.pp) p.type_;
+  fprintf fmt   "check_type: @[%a@]@\n"   Types.Ty.pp Types.Ty.(disj p.type_
+                                                                |> simplify);
   fprintf fmt   "pos_only:   @[%a@]@\n"   pp_arg_list p.pos_only;
   fprintf fmt   "args:       @[%a@]@\n"   pp_arg_list p.args;
   fprintf fmt   "kw_only:    @[%a@]@]@\n" pp_arg_list p.kw_only
 
 let interval i j = Types.Ty.interval (Some (Z.of_int i)) (Some (Z.of_int j))
+
 let translate_arguments (a : Arguments.t) =
   let open Types in
   let args, rem_init = zip_for (List.rev a.args) (List.rev a.defaults) in
@@ -170,8 +177,8 @@ let translate_arguments (a : Arguments.t) =
       let pos = interval min_pos max_pos in
       let kw = interval min_kw max_kw in
       Tuple.(mk [ mk [ pos; kw ]
-                ; Record.mk false (pos_only_fields @ pos_part @ fields @
-                                   dis_fields @ kw_part @ kw_only_fields)])
+                ; Record.mk false (pos_only_fields @ pos_part @ fields
+                                   @ dis_fields @ kw_part @ kw_only_fields)])
     ) args_recs
   in
   let () = Format.eprintf ">> %d\n%!" (List.length type_) in
@@ -187,12 +194,13 @@ let translate_arguments (a : Arguments.t) =
 
       ↓
           
-      let defc = fib(42) in (* initialize defaults once for all *)
-      let defd = 3 in       (* same order as in definition *)
-      let f (_, r) = 
-        let a = r.#0 in
-        let b = r.#1 in
-        let c = if r is { #2: Any; ..} ? r.#2 : defc in
-        let d = if r is { #3: Any; ..} ? r.#3 : defd in
-        〚...〛
+      let f = 
+        let defc = fib(42) in (* initialize defaults once for all *)
+        let defd = 3 in       (* same order as in definition *)
+        fun (_,r) ->
+          let a = r.#0 in
+          let b = r.#1 in
+          let c = if r is { #2: Any; ..} ? r.#2 : defc in
+          let d = if r is { #3: Any; ..} ? r.#3 : defd in
+          〚...〛
      *)
