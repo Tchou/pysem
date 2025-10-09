@@ -88,12 +88,11 @@ let join_slide f l1 l2 =
 let pos_param_name i = Utils.mk_id "#%d" i
 let kw_param_name kw = Utils.mk_id ":%s" kw
 
-type proto = {
-  type_    : Types.Ty.t list;
-  pos_only : (Argument.t * int * Expression.t option * Types.TVar.t) list;
-  args     : (Argument.t * int * Expression.t option * Types.TVar.t) list;
-  kw_only  : (Argument.t * int * Expression.t option * Types.TVar.t) list;
-}
+type proto =
+  { type_    : Types.Ty.t list
+  ; pos_only : (Argument.t * int * Expression.t option * Types.TVar.t) list
+  ; args     : (Argument.t * int * Expression.t option * Types.TVar.t) list
+  ; kw_only  : (Argument.t * int * Expression.t option * Types.TVar.t) list }
 
 let pp_arg fmt (a, i, eo, v) =
   let open Format in
@@ -183,10 +182,10 @@ let translate_arguments (a : Arguments.t) =
   in
   let () = Format.eprintf ">> %d\n%!" (List.length type_) in
 
-  { type_;
-    pos_only;
-    args;
-    kw_only}
+  { type_
+  ; pos_only
+  ; args
+  ; kw_only}
 
     (*
       def f(a,b,c=fib(42),d=3,/):
