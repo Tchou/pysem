@@ -1,6 +1,7 @@
 open Mlsem.Common
 open Mlsem.Types
 
+type annot = Mlsem.Common.Position.t
 type ast =
   | Var of string
   | Tuple of t list
@@ -10,12 +11,14 @@ type ast =
   | App of t * t
   | Ite of t * Ty.t * t * t
   | Let of string * t * t
-and t = Eid.t * ast
+and t = annot * ast
 
 type topl =
   | Def of (string * t)
   | Instruction of t
-type program = (Eid.t * topl) list
+type program = (annot * topl) list
+
+let dummy_annot = Mlsem.Common.Position.dummy
 
 let rec pp_ast fmt ast =
   let open Format in
