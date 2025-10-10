@@ -1,3 +1,41 @@
+open Mlsem.Common
+
+type ast =
+  | Var of string
+  | Tuple of t list
+  | Record of (string * t) list
+  | Field of string * t
+  | Lambda of string * t
+  | App of t * t
+  | Ite of t * t * t
+  | Let of string * t * t
+and t = Eid.t * ast
+
+let rec pp_ast fmt (ast:ast) : unit =
+  let open Format in
+  match ast with
+  | Var v -> fprintf fmt "%s" v
+  | Tuple l -> fprintf fmt "@[(%a)@]"
+                 (pp_print_list
+                    ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
+                    (fun fmt t -> fprintf fmt "@[%a@]" pp_t t))
+                 l
+  | Record l -> fprintf fmt "@[<hov 2>{%a}@]"
+                  (pp_print_list
+                     ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
+                     (fun fmt (x,t) -> fprintf fmt "@[<hov 2>%s=%a@]" x pp_t t))
+                  l
+  | Field (x,t) -> fprintf fmt "@[%a.%s@]" pp_t t x
+  | Lambda (x,t) -> fprintf fmt "@[<hov 2>fun %s ->@ %a@]" x pp_t t
+  | App (t1,t2) -> fprintf fmt "(@[%a@])@ (@[%a@])" pp_t t1 pp_t t2
+  | Ite (test,t1,t2) ->
+     fprintf fmt
+       "@[@[<hov 2>if %a@]@\n@[<hov 2>then@ %a@]@\n@[<hov 2>else@ %a@]@]@ "
+       pp_t test pp_t t1 pp_t t2
+  | Let (x,t1,t2) ->
+     fprintf fmt "@[@[<hov 2>let %s =@ @[%a@]@ in@]@\n%a@]" x pp_t t1 pp_t t2
+and pp_t fmt (_,a) : unit = pp_ast fmt a
+
 module PAstPrinter = struct
   open Mlsem_app.PAst
   open Format
