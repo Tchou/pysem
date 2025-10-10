@@ -1,6 +1,5 @@
 module PAstPrinter = struct
-  include Mlsem_lang.PAst
-  
+  open Mlsem_lang.PAst
   open Format
 
   let pp_const = Mlsem.System.Const.pp
@@ -8,7 +7,7 @@ module PAstPrinter = struct
 
   let rec pp_pattern fmt p : unit =
     let pp_var_pattern fmt (v,p) =
-      fprintf fmt "%s:@[%a@]" v pp_pattern p 
+      fprintf fmt "%s:@[%a@]" v pp_pattern p
     in
     let pp_list pp fmt l =
       pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
@@ -41,12 +40,12 @@ module PAstPrinter = struct
     | LambdaRec l ->
        pp_print_list
          ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
-         (fun fmt (v,_,t) -> fprintf fmt "@[@[<hov 2>rfun %s ->@ %a@]@]" v pp_t t)
+         (fun fmt (v,_,t) -> fprintf fmt "@[<hov 2>rfun %s ->@ %a@]" v pp_t t)
          fmt
          l
     | Ite (test,_,t1,t2) ->
        fprintf fmt
-         "@[@[<hov 2>if %a@]@\n@[<hov 2>then@ %a@]@\n@[<hov 2>else@ %a@]@]@\n"
+         "@[@[<hov 2>if %a@]@\n@[<hov 2>then@ %a@]@\n@[<hov 2>else@ %a@]@]@ "
          pp_t test pp_t t1 pp_t t2
     | App (t1,t2) -> fprintf fmt "(@[%a@])@ (@[%a@])" pp_t t1 pp_t t2
     | Let (v,t1,t2) -> fprintf fmt "@[@[<hov 2>let %s =@ @[%a@]@ in@]@\n%a@]"
@@ -57,7 +56,7 @@ module PAstPrinter = struct
                       (fun fmt t -> fprintf fmt "@[%a@]" pp_t t))
                    l
     | Cons (t1,t2) -> fprintf fmt "@[Cons(@[%a@],@[%a@])@]" pp_t t1 pp_t t2
-    | Projection (p,t) -> fprintf fmt "pr@[oj(@[%a@],@ @[%a@])@]"
+    | Projection (p,t) -> fprintf fmt "@[<hov 2>proj(@[%a@],@ @[%a@])@]"
                             pp_projection p pp_t t
     | RecordUpdate (t,s,ot) ->
        let none = fun _ _ -> () in
