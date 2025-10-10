@@ -1,9 +1,9 @@
 module PAstPrinter = struct
-  open Mlsem_lang.PAst
+  open Mlsem_app.PAst
   open Format
 
-  let pp_const = Mlsem.System.Const.pp
-  let pp_projection = Mlsem.System.Ast.pp_projection
+  let pp_const = Mlsem_lang.Const.pp
+  let pp_projection = Mlsem_system.Ast.pp_projection
 
   let rec pp_pattern fmt p : unit =
     let pp_var_pattern fmt (v,p) =
@@ -14,7 +14,7 @@ module PAstPrinter = struct
         pp fmt l in
     match p with
     | PatType _ -> fprintf fmt "PType"
-    | PatVar v -> fprintf fmt "@[%s@]" v
+    | PatVar (_,v) -> fprintf fmt "@[%s@]" v
     | PatLit c -> fprintf fmt "@[%a@]" pp_const c
     | PatTag _ -> fprintf fmt "PTag"
     | PatAnd (p1,p2) ->
@@ -27,8 +27,8 @@ module PAstPrinter = struct
        (fprintf fmt "{@[%a@]%s}"
           (pp_list pp_var_pattern) l
           (if b then " .." else ""))
-    | PatAssign (v,c) -> fprintf fmt "P(%s:=%a)" v pp_const c
-  and pp_ast (fmt:formatter) (ast:('a,'b,'c,'d,'e) Mlsem_lang.PAst.ast) :unit =
+    | PatAssign ((_,v),c) -> fprintf fmt "P(%s:=%a)" v pp_const c
+  and pp_ast (fmt:formatter) (ast:('a,'b,'c,'d,'e) Mlsem_app.PAst.ast) :unit =
     match ast with
     | Magic _ -> fprintf fmt "Magic"
     | Const c -> fprintf fmt "@[%a@]" pp_const c
@@ -48,8 +48,8 @@ module PAstPrinter = struct
          "@[@[<hov 2>if %a@]@\n@[<hov 2>then@ %a@]@\n@[<hov 2>else@ %a@]@]@ "
          pp_t test pp_t t1 pp_t t2
     | App (t1,t2) -> fprintf fmt "(@[%a@])@ (@[%a@])" pp_t t1 pp_t t2
-    | Let (v,t1,t2) -> fprintf fmt "@[@[<hov 2>let %s =@ @[%a@]@ in@]@\n%a@]"
-                         v pp_t t1 pp_t t2
+    | Let ((_,v),t1,t2) ->
+       fprintf fmt "@[@[<hov 2>let %s =@ @[%a@]@ in@]@\n%a@]" v pp_t t1 pp_t t2
     | Tuple l -> fprintf fmt "@[(%a)@]"
                    (pp_print_list
                       ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
@@ -74,5 +74,6 @@ module PAstPrinter = struct
        fprintf fmt "@[<hov 2>while @[%a@]@ isn't false do@ %a@]"
          pp_t test pp_t body
     | Seq (t1,t2) -> fprintf fmt "@[<hov 2>Seq(%a,@ %a)@]" pp_t t1 pp_t t2
+    | _ -> failwith "TODO"
   and pp_t fmt (_,ast) = pp_ast fmt ast
 end

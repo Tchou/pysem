@@ -1,4 +1,4 @@
-open Mlsem_lang
+open Mlsem_app
 open Mlsem
 
 module PC = PyreAst.Concrete
@@ -37,7 +37,9 @@ let translate_top env stmt : PAst.(annotation * parser_element) =
        PAst.Lambda (var, None, body) |> ast_to_t loc
      and mk_let loc id expin exp =
        (* TODO monadic: update environement *)
-       PAst.Let (PC.Identifier.to_string id, expin, exp) |> ast_to_t loc
+       PAst.Let ( (Immut, PC.Identifier.to_string id)
+                , expin
+                , exp) |> ast_to_t loc
      and _mk_ite loc test ty thn els =
        PAst.Ite (test, ty, thn, els) |> ast_to_t loc
      in
@@ -68,7 +70,8 @@ let translate_top env stmt : PAst.(annotation * parser_element) =
      let expr = default_init proto
                   (fun_def r.location r.name
                      (load_args proto body)) in
-     let defs = [(PC.Identifier.to_string r.name, expr)] in
+     let defs = [( (PAst.Immut, PC.Identifier.to_string r.name)
+                 , expr)] in
      let () = Format.printf "Function %s: @[%a@]@\n"
                 (PC.Identifier.to_string r.name)
                 Arguments.pp_proto proto in
