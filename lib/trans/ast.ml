@@ -12,6 +12,11 @@ type ast =
   | Let of string * t * t
 and t = Eid.t * ast
 
+type topl =
+  | Def of (string * t)
+  | Instruction of t
+type program = (Eid.t * topl) list
+
 let rec pp_ast fmt ast =
   let open Format in
   match ast with
@@ -35,6 +40,13 @@ let rec pp_ast fmt ast =
   | Let (x,t1,t2) -> fprintf fmt "@[<hov 2>let %s =@ %a@ in@]@\n%a"
                        x pp_t t1 pp_t t2
 and pp_t fmt (_,a) = Format.fprintf fmt "@[%a@]" pp_ast a
+
+let pp_topl fmt = function
+  | Def (x,t) -> Format.fprintf fmt "@[<hov 2>let %s =@ %a@]@\n" x pp_t t
+  | Instruction t -> Format.fprintf fmt "@[<hov2>%a@]@\n" pp_t t
+let pp_program fmt p =
+  Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+            pp_topl fmt p)
 
 module PAstPrinter = struct
   open Mlsem_app.PAst
