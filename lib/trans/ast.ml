@@ -1,55 +1,46 @@
-open Mlsem.Common
-open Mlsem.Types
+type 'a annot = Mlsem.Common.Position.t * 'a
 
-type annot = Mlsem.Common.Position.t
-type ast =
-  | Var of string
-  | Tuple of t list
-  | Record of (string * t) list
-  | Field of string * t
-  | Lambda of string * t
-  | App of t * t
-  | Ite of t * Ty.t * t * t
-  | Let of string * t * t
-and t = annot * ast
+type ident = string
+  (* { name : string *)
+  (* ; scope : Parsing.scope } *)
+type binop = Add | Sub | Mult | Div | Mod | Pow
+type const =
+  | Bool of bool
+  | Int of int
+  | String of string
 
-type topl =
-  | Def of (string * t)
-  | Instruction of t
-type program = (annot * topl) list
+type expr' =
+  | Var of ident
+  | Binop of expr * binop * expr
+  | Cst of const
+  | Apply of expr * params
+and expr = expr' annot
+and params =
+  { pos : expr list
+  ; kw : (string * expr) list }
+
+type spec =
+  { posonly : (ident * expr option) list
+  ; args    : (ident * expr option) list
+  ; vararg  : ident option
+  ; kwonly  : (ident * expr option) list
+  ; kwarg   : ident option }
+
+type instr' =
+  | Block of instr list
+  | Assign of ident * expr
+  | FunDef of ident * spec
+  | While of expr * instr
+  | If of expr * instr * instr option
+  | Iexpr of expr
+  | Return of expr option
+and instr = instr' annot
+
+type prog = instr list
 
 let dummy_annot = Mlsem.Common.Position.dummy
-
-let rec pp_ast fmt ast =
-  let open Format in
-  match ast with
-  | Var v -> fprintf fmt "%s" v
-  | Tuple l ->
-     fprintf fmt "(%a)"
-       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_t)
-       l
-  | Record l -> fprintf fmt "@[<hov 2>{%a}@]"
-                  (pp_print_list
-                     ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
-                     (fun fmt (x,t) -> fprintf fmt "@[<hov 2>%s=%a@]" x pp_t t))
-                  l
-  | Field (x,t) -> fprintf fmt "@[%a.%s@]" pp_t t x
-  | Lambda (x,t) -> fprintf fmt "@[<hov 2>fun %s ->@ %a@]" x pp_t t
-  | App (t1,t2) -> fprintf fmt "(%a)@ (%a)" pp_t t1 pp_t t2
-  | Ite (test,ty,t1,t2) ->
-     fprintf fmt "@[@[<hov 2>if %a is %a @]@\n@[<hov 2>\then@ %a@]@\n\
-                  @[<hov 2>else@ %a@]@]@ "
-       pp_t test Ty.pp ty pp_t t1 pp_t t2
-  | Let (x,t1,t2) -> fprintf fmt "@[<hov 2>let %s =@ %a@ in@]@\n%a"
-                       x pp_t t1 pp_t t2
-and pp_t fmt (_,a) = Format.fprintf fmt "@[%a@]" pp_ast a
-
-let pp_topl fmt = function
-  | Def (x,t) -> Format.fprintf fmt "@[<hov 2>let %s =@ %a@]@\n" x pp_t t
-  | Instruction t -> Format.fprintf fmt "@[<hov2>%a@]@\n" pp_t t
-let pp_program fmt p =
-  Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
-            pp_topl fmt p)
+let dannot : 'a -> 'a annot = fun x -> dummy_annot, x
+let env_annot env loc t = env.Env.to_loc loc, t
 
 module PAstPrinter = struct
   open Mlsem_app.PAst
