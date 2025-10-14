@@ -134,11 +134,11 @@ struct
       name : PyCo.Identifier.t;
       location : PyCo.Location.t }
   let mk ~kind ~name ~location = { kind; name=PyCo.Identifier.make_t name (); location }
-  let mk_fun    name location = mk ~kind:Fun      ~name ~location
-  and mk_afun   name location = mk ~kind:AsyncFun ~name ~location
-  and mk_lambda name location = mk ~kind:Lambda   ~name ~location
-  and mk_class  name location = mk ~kind:Class    ~name ~location
-  and mk_module name location = mk ~kind:Module   ~name ~location
+  let mk_fun    name location = mk ~name ~location ~kind:Fun
+  and mk_afun   name location = mk ~name ~location ~kind:AsyncFun
+  and mk_lambda name location = mk ~name ~location ~kind:Lambda
+  and mk_class  name location = mk ~name ~location ~kind:Class
+  and mk_module name location = mk ~name ~location ~kind:Module
 
   let hash = Hashtbl.hash
   let equal f1 f2 =
