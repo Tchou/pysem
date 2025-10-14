@@ -29,7 +29,7 @@ type spec =
 type instr' =
   | Block of instr list
   | Assign of ident * expr
-  | FunDef of ident * spec
+  | FunDef of ident * spec * instr list
   | While of expr * instr
   | If of expr * instr * instr option
   | Iexpr of expr
