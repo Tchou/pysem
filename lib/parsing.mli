@@ -28,6 +28,11 @@ type block_kind = Fun | AsyncFun | Lambda | Class | Module
 module BlockId : sig
   type t
   val mk : kind:block_kind -> name:string -> location:PyreAst.Concrete.Location.t -> t
+  val mk_fun : string -> PyreAst.Concrete.Location.t -> t
+  val mk_afun : string -> PyreAst.Concrete.Location.t -> t
+  val mk_lambda : string -> PyreAst.Concrete.Location.t -> t
+  val mk_class : string -> PyreAst.Concrete.Location.t -> t
+  val mk_module : string -> PyreAst.Concrete.Location.t -> t
   val equal : t -> t -> bool
   val hash : t -> int
 end
@@ -42,6 +47,9 @@ type block_info = {
   defines : (string * PyreAst.Concrete.Location.t * block_kind) list; (** name, location and kind of the blocks defined in this one. *)
 }
 (** Informations about blocks *)
+
+val dummy_loc : PyreAst.Concrete.Location.t
+(** Dummy location, used for modules and builtins variables. **)
 
 val pp_loc : Format.formatter -> PyreAst.Concrete.Location.t -> unit
 (** Pretty print a location, or nothing if the location is a dummy one. *)
