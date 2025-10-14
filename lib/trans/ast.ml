@@ -1,8 +1,8 @@
 type 'a annot = Mlsem.Common.Position.t * 'a
 
-type ident = string
-  (* { name : string *)
-  (* ; scope : Parsing.scope } *)
+type ident =
+  { name : string
+  ; scope : Parsing.scope }
 type binop = Add | Sub | Mult | Div | Mod | Pow
 type const =
   | Bool of bool
@@ -41,6 +41,7 @@ type prog = instr list
 let dummy_annot = Mlsem.Common.Position.dummy
 let dannot : 'a -> 'a annot = fun x -> dummy_annot, x
 let env_annot env loc t = env.Env.to_loc loc, t
+
 
 module PAstPrinter = struct
   open Mlsem_app.PAst
