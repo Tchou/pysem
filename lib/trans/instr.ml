@@ -1,7 +1,28 @@
 open Mlsem_app
 open Mlsem
+open Ast
 
 module PC = PyreAst.Concrete
+
+let ident_of_identifier env id : ident =
+  let open Env in let open Parsing in
+  { name = PC.Identifier.to_string id
+  ; scope = (IdentMap.find id env.current.identifiers).scope }
+
+let of_statement env (stmt:PC.Statement.t) : instr =
+  let _annot = env_annot env in
+  match stmt with
+  | FunctionDef r ->
+     FunDef ( ident_of_identifier env r.name
+            , { posonly = []
+              ; args    = []
+              ; vararg  = None
+              ; kwonly  = []
+              ; kwarg   = None } )
+     |> env_annot env r.location
+  | _ -> failwith "Not implemented"
+
+(* === === === === === === *)
 
 let dummy_def = PAst.Definitions []
 let dummy_ast = PAst.Tuple []
@@ -29,6 +50,7 @@ let translate_top env stmt : PAst.(annotation * parser_element) =
           in
           f
       *)
+
      let mlarg_str = "%#rec_arg" in
      let mlarg = PAst.(Var mlarg_str |> ast_to_t r.location) in
      let mk_var loc id =
