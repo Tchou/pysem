@@ -4,18 +4,43 @@ open Ast
 
 module PC = PyreAst.Concrete
 
-let of_statement env (stmt:PC.Statement.t) : instr =
+let zip_for l1 l2 =
+  let rec loop l1 l2 acc =
+    match l1, l2 with
+    | [], l2 -> acc, l2
+    | e1 :: ll1, e2 :: ll2 -> loop ll1 ll2 ((e1, Some e2)::acc)
+    | e1 :: ll1, []        -> loop ll1 []  ((e1, None   )::acc)
+  in
+  loop l1 l2 []
+
+let rec of_statement env (stmt:PC.Statement.t) : instr =
   let annot = env_annot env in
   match stmt with
   | FunctionDef r ->
+     let fenv = (* new scope → new environement *)
+       let open Parsing in
+       let bi = BlockId.mk_fun (PC.Identifier.to_string r.name) r.location in
+       { env with current = BidTable.find env.infos bi } in
+     let a : PC.Arguments.t = r.args in
+     let args, rem_args = zip_for (List.rev a.args) (List.rev a.defaults) in
+     let posonly, rem_pos = zip_for (List.rev a.posonlyargs) rem_args in
+     assert (rem_pos = []);
+     let kwonly = List.combine a.kwonlyargs a.kw_defaults in
+
+     let format (arg,eo) = Ident.of_argument fenv arg
+                         , Option.map (Expr.of_expression fenv) eo in
+
+     let body = List.map (of_statement fenv) r.body in
+
      FunDef ( Ident.of_identifier env r.name
-            , { posonly = []
-              ; args    = []
-              ; kwonly  = []
-              ; vararg  = None
-              ; kwarg   = None }
-            , [] )
+            , { posonly = List.map format posonly
+              ; args    = List.map format args
+              ; kwonly  = List.map format kwonly
+              ; vararg  = Option.map (Ident.of_argument fenv) a.vararg
+              ; kwarg   = Option.map (Ident.of_argument fenv) a.kwarg }
+            , body )
      |> annot r.location
+  | Expr r -> Iexpr (Expr.of_expression env r.value) |> annot r.location
   | _ -> failwith "Not implemented (Instr)."
 
 (* === === === === === === *)
