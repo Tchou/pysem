@@ -54,6 +54,7 @@ val dummy_loc : PyreAst.Concrete.Location.t
 val pp_loc : Format.formatter -> PyreAst.Concrete.Location.t -> unit
 (** Pretty print a location, or nothing if the location is a dummy one. *)
 
+val show_block_kind : block_kind -> string
 val pp_block_info : Format.formatter -> block_info -> unit
 (** Pretty print block informations. *)
 

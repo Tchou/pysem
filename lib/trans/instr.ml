@@ -4,22 +4,18 @@ open Ast
 
 module PC = PyreAst.Concrete
 
-let ident_of_identifier env id : ident =
-  let open Env in let open Parsing in
-  { name = PC.Identifier.to_string id
-  ; scope = (IdentMap.find id env.current.identifiers).scope }
-
 let of_statement env (stmt:PC.Statement.t) : instr =
-  let _annot = env_annot env in
+  let annot = env_annot env in
   match stmt with
   | FunctionDef r ->
-     FunDef ( ident_of_identifier env r.name
+     FunDef ( Ident.of_identifier env r.name
             , { posonly = []
               ; args    = []
-              ; vararg  = None
               ; kwonly  = []
-              ; kwarg   = None } )
-     |> env_annot env r.location
+              ; vararg  = None
+              ; kwarg   = None }
+            , [] )
+     |> annot r.location
   | _ -> failwith "Not implemented"
 
 (* === === === === === === *)

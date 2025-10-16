@@ -751,14 +751,15 @@ let pp_loc fmt (loc : PyCo.Location.t) =
       loc.stop.line
       loc.stop.column
 
+let show_block_kind = function
+  | Lambda -> "lambda"
+  | Fun -> "function"
+  | AsyncFun -> "coroutine"
+  | Class -> "class"
+  | Module -> "module"
+
 let pp_block_kind fmt k =
-  let s = match k with
-    | Lambda -> "lambda"
-    | Fun -> "function"
-    | AsyncFun -> "coroutine"
-    | Class -> "class"
-    | Module -> "module"
-  in
+  let s = show_block_kind k in
   Format.fprintf fmt "%s" s
 
 let pp_info fmt i = Format.fprintf fmt "%s,(del=%b,load=%b,store=%b)"
