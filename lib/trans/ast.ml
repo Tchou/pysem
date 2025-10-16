@@ -44,6 +44,89 @@ let dummy_annot = Mlsem.Common.Position.dummy
 let dannot : 'a -> 'a annot = fun x -> dummy_annot, x
 let env_annot env loc t = env.Env.to_loc loc, t
 
+let pp_ident fmt id =
+  Format.fprintf fmt "%s" (*Parsing.show_scope id.scope*) id.name
+let pp_binop fmt op =
+  Format.fprintf fmt "%s"
+    (match op with
+     | Add -> "+"
+     | Sub -> "-"
+     | Mult -> "*"
+     | Div -> "/"
+     | Mod -> "%"
+     | Pow -> "^")
+let pp_const fmt = function
+  | Bool b -> Format.fprintf fmt "%b" b
+  | Int i -> Format.fprintf fmt "%d" i
+  | Float f -> Format.fprintf fmt "%.2f" f
+  | String s -> Format.fprintf fmt "@[\"%s\"@]" s
+
+let pp_coma_list pp =
+  Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp)
+
+let rec pp_expr' fmt = function
+  | Var id -> pp_ident fmt id
+  | Binop (e1, b, e2) ->
+     Format.fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
+  | Cst c -> pp_const fmt c
+  | Apply (e,p) -> Format.fprintf fmt "@[%a%a@]" pp_expr e pp_params p
+and pp_expr fmt (_,e') = pp_expr' fmt e'
+and pp_params fmt {pos;kw} =
+  let open Format in
+  fprintf fmt "@[(%a, %a)@]"
+    (pp_coma_list pp_expr) pos
+    (pp_coma_list (fun fmt (k,e) -> fprintf fmt "@[%s=%a@]" k pp_expr e)) kw
+
+let pp_spec fmt s = (* should be simpler and correct*)
+  let open Format in
+  let pp_list_i_eo =
+    pp_coma_list (fun fmt (i,e) ->
+        fprintf fmt "%s%s%a" i.name (if e = None then "" else "=")
+          (pp_print_option pp_expr) e) in
+  let pos_arg = if s.posonly=[] && s.args=[] then ""
+                else sprintf "%s/%s" (if s.posonly=[] then "" else ", ")
+                       (if s.args=[] && s.kwonly=[] && s.vararg=None
+                        then "" else ", ") in
+  let arg_kw =
+    if (s.posonly=[] && s.args=[] && s.vararg=None) then ""
+    else sprintf "%s*%s%s"
+           (if s.args=[] && s.posonly=[] then "" else ", ")
+           (match s.vararg with None -> "" | Some i -> i.name)
+           (if s.kwonly=[] then "" else ", ")
+  in
+  let kwo_kwa = if s.kwonly=[] || s.kwarg=None then "" else ", " in
+  let kwarg = match s.kwarg with None -> "" | Some id -> "**" ^ id.name in
+  fprintf fmt "@[(%a%s%a%s%a%s%s)@]"
+    pp_list_i_eo s.posonly
+    pos_arg
+    pp_list_i_eo s.args
+    arg_kw
+    pp_list_i_eo s.kwonly
+    kwo_kwa
+    kwarg
+
+let rec pp_instr' fmt instr' : unit =
+  let open Format in
+  let pp_instr_list il =
+    pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr il in
+  match instr' with
+  | Block il -> pp_instr_list fmt il
+  | Assign (i,e) -> fprintf fmt "@[<hov 2>%a := %a@]" pp_ident i pp_expr e
+  | FunDef (i,s,il) -> fprintf fmt "@[<hov 2>def %a%a:@\n%a@]"
+                         pp_ident i pp_spec s pp_instr_list il
+  | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i
+  | If (e,i,io) -> fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"
+                     pp_expr e pp_instr i (pp_print_option pp_instr) io
+  | Iexpr e -> pp_expr fmt e
+  | Return eo -> pp_print_option pp_expr fmt eo
+  | Break -> fprintf fmt "break@\n"
+  | Continue -> fprintf fmt "continue@\n"
+and pp_instr fmt (_,instr') = pp_instr' fmt instr'
+
+let pp_prog prog =
+  Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+            pp_instr prog)
+
 module Ident = struct
   let of_identifier env id : ident =
     let open Env in
@@ -135,7 +218,7 @@ module PAstPrinter = struct
                             pp_projection p pp_t t
     | RecordUpdate (t,s,ot) ->
        let none = fun _ _ -> () in
-       fprintf fmt "@[{@[<hov 2>upd %a@ %s@ %a@]}@]"
+       fprintf fmt "@[<hov 2>{upd %a@ %s@ %a}@]"
          pp_t t s (pp_print_option none) ot
     | TypeCast (t,_) -> fprintf fmt "@[<hov 2>cast [%a]@]" pp_t t
     | TypeCoerce (t,_,_) -> fprintf fmt "@[<hov 2>coerce [%a]@]" pp_t t

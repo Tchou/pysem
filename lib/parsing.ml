@@ -72,7 +72,7 @@ type scope =
   Local | Parameter | Nonlocal | Global | Unknown
 
 
-let string_of_scope = function
+let show_scope = function
     Local -> "local"
   | Nonlocal -> "nonlocal"
   | Global -> "global"
@@ -111,7 +111,7 @@ let merge_scope locs var s1 s2 =
         [] -> dummy_loc
       | l :: _ -> l
     in
-    raise_ (IncompatibleScope (var, location, string_of_scope s1, string_of_scope s2))
+    raise_ (IncompatibleScope (var, location, show_scope s1, show_scope s2))
 
 let merge_context c1 c2  = { del = c1.del || c2.del; 
                              load = c1.load || c2.load;
@@ -763,7 +763,7 @@ let pp_block_kind fmt k =
   Format.fprintf fmt "%s" s
 
 let pp_info fmt i = Format.fprintf fmt "%s,(del=%b,load=%b,store=%b)"
-    (string_of_scope i.scope) i.context.del i.context.load i.context.store
+    (show_scope i.scope) i.context.del i.context.load i.context.store
 
 let pp_vars fmt vars = 
   let open Format in

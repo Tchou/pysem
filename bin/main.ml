@@ -23,7 +23,7 @@ let main () =
      printf "%a@\n"
        (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil;
      let env = Env.init bil to_loc in
-     Prog.of_module env m |> ignore
+     Prog.of_module env m |> Format.printf "%a" Ast.pp_prog
 
 
 let () =
