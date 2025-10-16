@@ -40,7 +40,15 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
               ; kwarg   = Option.map (Ident.of_argument fenv) a.kwarg }
             , body )
      |> annot r.location
+  (* | AsyncFunctionDef | ClassDef *)
+  | Return r -> Return (Option.map (Expr.of_expression env) r.value)
+                |> annot r.location
+  (* | Delete | Assign | TypeAlias | AugAssign | AnnAssign | For | AsyncFor
+     | While | If | With | AsyncWith | Match | Raise | Try | TryStar | Assert
+     | Import | ImportFrom  *)
+  | Global {location;_} | Nonlocal {location;_} -> Block [] |> annot location
   | Expr r -> Iexpr (Expr.of_expression env r.value) |> annot r.location
+  (* | Pass | Break | Continue *)
   | _ -> failwith "Not implemented (Instr)."
 
 (* === === === === === === *)
