@@ -35,6 +35,7 @@ type instr' =
   | If of expr * instr * instr option
   | Iexpr of expr
   | Return of expr option
+  | Break | Continue
 and instr = instr' annot
 
 type prog = instr list

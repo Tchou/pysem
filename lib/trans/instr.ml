@@ -48,7 +48,9 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
      | Import | ImportFrom  *)
   | Global {location;_} | Nonlocal {location;_} -> Block [] |> annot location
   | Expr r -> Iexpr (Expr.of_expression env r.value) |> annot r.location
-  (* | Pass | Break | Continue *)
+  (* | Pass *)
+  | Break {location} -> annot location Break
+  | Continue {location} -> annot location Continue
   | _ -> failwith "Not implemented (Instr)."
 
 (* === === === === === === *)
