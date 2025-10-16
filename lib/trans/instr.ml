@@ -16,7 +16,7 @@ let of_statement env (stmt:PC.Statement.t) : instr =
               ; kwarg   = None }
             , [] )
      |> annot r.location
-  | _ -> failwith "Not implemented"
+  | _ -> failwith "Not implemented (Instr)."
 
 (* === === === === === === *)
 

@@ -69,7 +69,7 @@ module Const = struct
     | Integer i -> Int i
     | Float f -> Float f
     | String s -> String s
-    | _ -> failwith "Not implemented"
+    | _ -> failwith "Not implemented (Const)."
 end
 
 module PAstPrinter = struct
