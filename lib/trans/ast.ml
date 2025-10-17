@@ -88,6 +88,7 @@ let pp_binop fmt op =
      | Mod -> "%"
      | Pow -> "^")
 let pp_const fmt = function
+  | None -> Format.fprintf fmt "None"
   | Bool b -> Format.fprintf fmt "%b" b
   | Int i -> Format.fprintf fmt "%d" i
   | Float f -> Format.fprintf fmt "%.2f" f
@@ -112,7 +113,7 @@ and pp_params fmt {pos;kw} =
 let pp_spec fmt s = (* should be simpler and correct*)
   let open Format in
   let pp_list_i_eo =
-    pp_coma_list (fun fmt (i,e) ->
+    pp_coma_list (fun fmt (i,(e:expr option)) ->
         fprintf fmt "%s%s%a" i.name (if e = None then "" else "=")
           (pp_print_option pp_expr) e) in
   let pos_arg = if s.posonly=[] && s.args=[] then ""
