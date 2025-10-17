@@ -49,7 +49,14 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
      let is = List.map (of_statement env) r.body in
      (* TODO orelse *)
      While (e,Block is |> annot r.location) |> annot r.location
-  (* | If | With | AsyncWith | Match | Raise | Try | TryStar | Assert | Import
+  | If r ->
+     let test = Expr.of_expression env r.test in
+     let thn = Block (List.map (of_statement env) r.body  ) |> annot r.location in
+     let els = match List.map (of_statement env) r.orelse with
+       | [] -> Option.None
+       | l -> Some (Block l |> annot r.location) in
+     If (test,thn,els) |> annot r.location
+  (* | With | AsyncWith | Match | Raise | Try | TryStar | Assert | Import
      | ImportFrom  *)
   | Global {location;_} | Nonlocal {location;_} | Pass {location}
     -> Block [] |> annot location (* or Expr.None ? *)
