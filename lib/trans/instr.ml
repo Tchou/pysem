@@ -46,9 +46,9 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
   (* | Delete | Assign | TypeAlias | AugAssign | AnnAssign | For | AsyncFor
      | While | If | With | AsyncWith | Match | Raise | Try | TryStar | Assert
      | Import | ImportFrom  *)
-  | Global {location;_} | Nonlocal {location;_} -> Block [] |> annot location
+  | Global {location;_} | Nonlocal {location;_} | Pass {location}
+    -> Block [] |> annot location (* or Expr.None ? *)
   | Expr r -> Iexpr (Expr.of_expression env r.value) |> annot r.location
-  (* | Pass *)
   | Break {location} -> annot location Break
   | Continue {location} -> annot location Continue
   | _ -> failwith "Not implemented (Instr)."
