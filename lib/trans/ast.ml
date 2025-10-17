@@ -5,6 +5,7 @@ type ident =
   ; scope : Parsing.scope }
 type binop = Add | Sub | Mult | Div | Mod | Pow
 type const =
+  | None
   | Bool of bool
   | Int of int
   | Float of float
