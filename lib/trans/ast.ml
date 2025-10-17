@@ -44,6 +44,37 @@ let dummy_annot = Mlsem.Common.Position.dummy
 let dannot : 'a -> 'a annot = fun x -> dummy_annot, x
 let env_annot env loc t = env.Env.to_loc loc, t
 
+module Ident = struct
+  let of_identifier env id : ident =
+    let open Env in
+    let open Parsing in
+    let open PyreAst.Concrete in
+    let info = match IdentMap.find_opt id env.current.identifiers with
+      | None -> failwith (Printf.sprintf "id %s not found in %s %s!"
+                            (Identifier.to_string id)
+                            (Parsing.show_block_kind env.current.kind)
+                            env.current.name)
+      | Some i -> i
+    in
+    { name = Identifier.to_string id
+    ; scope = info.scope }
+
+  let of_argument env arg : ident =
+    of_identifier env arg.PyreAst.Concrete.Argument.identifier
+end
+
+module Const = struct
+  let of_constant _env (c:PyreAst.Concrete.Constant.t) : const = match c with
+    | True -> Bool true
+    | False -> Bool false
+    | Integer i -> Int i
+    | Float f -> Float f
+    | String s -> String s
+    | _ -> failwith "Not implemented (Const)."
+end
+
+(*  ***  Pretty-printers  ***  *)
+
 let pp_ident fmt id =
   Format.fprintf fmt "%s" (*Parsing.show_scope id.scope*) id.name
 let pp_binop fmt op =
@@ -126,35 +157,6 @@ and pp_instr fmt (_,instr') = pp_instr' fmt instr'
 let pp_prog prog =
   Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
             pp_instr prog)
-
-module Ident = struct
-  let of_identifier env id : ident =
-    let open Env in
-    let open Parsing in
-    let open PyreAst.Concrete in
-    let info = match IdentMap.find_opt id env.current.identifiers with
-      | None -> failwith (Printf.sprintf "id %s not found in %s %s!"
-                            (Identifier.to_string id)
-                            (Parsing.show_block_kind env.current.kind)
-                            env.current.name)
-      | Some i -> i
-    in
-    { name = Identifier.to_string id
-    ; scope = info.scope }
-
-  let of_argument env arg : ident =
-    of_identifier env arg.PyreAst.Concrete.Argument.identifier
-end
-
-module Const = struct
-  let of_constant _env (c:PyreAst.Concrete.Constant.t) : const = match c with
-    | True -> Bool true
-    | False -> Bool false
-    | Integer i -> Int i
-    | Float f -> Float f
-    | String s -> String s
-    | _ -> failwith "Not implemented (Const)."
-end
 
 module PAstPrinter = struct
   open Mlsem_app.PAst
