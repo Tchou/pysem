@@ -30,12 +30,12 @@ type spec =
 
 type instr' =
   | Block of instr list
-  | Assign of ident * expr
   | FunDef of ident * spec * instr list
+  | Return of expr option
+  | Assign of ident * expr
   | While of expr * instr
   | If of expr * instr * instr option
   | Iexpr of expr
-  | Return of expr option
   | Break | Continue
 and instr = instr' annot
 
