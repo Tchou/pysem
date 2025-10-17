@@ -43,9 +43,14 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
   (* | AsyncFunctionDef | ClassDef *)
   | Return r -> Return (Option.map (Expr.of_expression env) r.value)
                 |> annot r.location
-  (* | Delete | Assign | TypeAlias | AugAssign | AnnAssign | For | AsyncFor
-     | While | If | With | AsyncWith | Match | Raise | Try | TryStar | Assert
-     | Import | ImportFrom  *)
+  (* | Delete | Assign | TypeAlias | AugAssign | AnnAssign | For | AsyncFor *)
+  | While r ->
+     let e = Expr.of_expression env r.test in
+     let is = List.map (of_statement env) r.body in
+     (* TODO orelse *)
+     While (e,Block is |> annot r.location) |> annot r.location
+  (* | If | With | AsyncWith | Match | Raise | Try | TryStar | Assert | Import
+     | ImportFrom  *)
   | Global {location;_} | Nonlocal {location;_} | Pass {location}
     -> Block [] |> annot location (* or Expr.None ? *)
   | Expr r -> Iexpr (Expr.of_expression env r.value) |> annot r.location
