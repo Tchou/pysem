@@ -27,12 +27,13 @@ type spec =
   ; vararg  : ident option
   ; kwonly  : (ident * expr option) list
   ; kwarg   : ident option }
+type target = ident
 
 type instr' =
   | Block of instr list
   | FunDef of ident * spec * instr list
   | Return of expr option
-  | Assign of expr list * expr
+  | Assign of target * expr
   | While of expr * instr
   | If of expr * instr * instr option
   | Iexpr of expr
@@ -155,8 +156,8 @@ let rec pp_instr' fmt instr' : unit =
     pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr il in
   match instr' with
   | Block il -> pp_instr_list fmt il
-  | Assign (es,e) -> fprintf fmt "@[<hov 2>%a := %a@]"
-                       (pp_coma_list pp_expr) es pp_expr e
+  | Assign (x,e) -> fprintf fmt "@[<hov 2>%a := %a@]"
+                       (pp_ident) x pp_expr e
   | FunDef (i,s,il) -> fprintf fmt "@[<hov 2>def %a%a:@\n%a@]"
                          pp_ident i pp_spec s pp_instr_list il
   | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i

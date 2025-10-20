@@ -44,10 +44,11 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
   | Return r -> Return (Option.map (Expr.of_expression env) r.value)
                 |> annot r.location
   (* | Delete *)
-  | Assign r ->
-     let el = List.map (Expr.of_expression env) r.targets in
+  | Assign ({targets=[Name {id=x;_}];_} as r) ->
+     let x = Ident.of_identifier env x in
      let e = Expr.of_expression env r.value in
-     Assign (el,e) |> annot r.location
+     Assign (x,e) |> annot r.location
+  | Assign _ -> failwith "Not implemented (Instr.Assign(several targets))."
   (* | TypeAlias | AugAssign | AnnAssign | For | AsyncFor *)
   | While ({orelse=[];_} as r) ->
      let e = Expr.of_expression env r.test in
