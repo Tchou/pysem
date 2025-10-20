@@ -46,11 +46,13 @@ let dummy_annot = Mlsem.Common.Position.dummy
 let dannot : 'a -> 'a annot = fun x -> dummy_annot, x
 let env_annot env loc t = env.Env.to_loc loc, t
 
+module PC = PyreAst.Concrete
+
 module Ident = struct
   let of_identifier env id : ident =
     let open Env in
     let open Parsing in
-    let open PyreAst.Concrete in
+    let open PC in
     let info = match IdentMap.find_opt id env.current.identifiers with
       | None -> failwith (Printf.sprintf "id %s not found in %s %s!"
                             (Identifier.to_string id)
@@ -62,11 +64,11 @@ module Ident = struct
     ; scope = info.scope }
 
   let of_argument env arg : ident =
-    of_identifier env arg.PyreAst.Concrete.Argument.identifier
+    of_identifier env arg.PC.Argument.identifier
 end
 
 module Const = struct
-  let of_constant _env (c:PyreAst.Concrete.Constant.t) : const = match c with
+  let of_constant _env (c:PC.Constant.t) : const = match c with
     | None -> None_
     | False -> Bool false
     | True -> Bool true
@@ -79,7 +81,7 @@ module Const = struct
 end
 
 module Binop = struct
-  let of_binop _env (op:PyreAst.Concrete.BinaryOperator.t):binop = match op with
+  let of_binop _env (op:PC.BinaryOperator.t) : binop = match op with
     | Add -> Add
     | Sub -> Sub
     | Mult -> Mult
@@ -90,7 +92,7 @@ module Binop = struct
     | MatMult | LShift | RShift | BitOr | BitXor | BitAnd | FloorDiv
       -> failwith "Not implemented (Binop)."
 
-  let of_boolop _env (op:PyreAst.Concrete.BooleanOperator.t):binop=match op with
+  let of_boolop _env (op:PC.BooleanOperator.t) : binop = match op with
     | And -> And
     | Or -> Or
 end
