@@ -19,7 +19,21 @@ let rec of_expression (env:Env.t) (e:PyreAst.Concrete.Expression.t) : expr =
            , Binop.of_comparisonoperator env op
            , of_expression env right) |> annot r.location
   | Compare _ -> failwith "Not implemented (Expr.Compare(¬ only 2 arguments))."
-  | Call _ -> failwith "TODO"
+  | Call ({func=Name _;_} as r) ->
+     let kw =
+       List.map
+         (fun kw ->
+           let open PC.Keyword in
+           match kw.arg with
+           | Some id -> ( Ident.of_identifier env id
+                        , of_expression env kw.value )
+           | None -> failwith "Not implemented (Expr.Call(several kw_args)).")
+         r.keywords in
+     Apply ( of_expression env r.func
+           , { pos = List.map (of_expression env) r.args
+             ; kw } )
+     |> annot r.location
+  | Call _ -> failwith "Not implemented (Expr.Call(complex expression))."
   (* | FormattedValue | JoinedStr *)
   | Constant r -> Cst (Const.of_constant env r.value) |> annot r.location
   (* | Attribute | Subscript | Starred *)

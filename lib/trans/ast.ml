@@ -21,7 +21,7 @@ type expr' =
 and expr = expr' annot
 and params =
   { pos : expr list
-  ; kw : (string * expr) list }
+  ; kw  : (ident * expr) list }
 
 type spec =
   { posonly : (ident * expr option) list
@@ -155,7 +155,8 @@ and pp_params fmt {pos;kw} =
   let open Format in
   fprintf fmt "@[(%a, %a)@]"
     (pp_coma_list pp_expr) pos
-    (pp_coma_list (fun fmt (k,e) -> fprintf fmt "@[%s=%a@]" k pp_expr e)) kw
+    (pp_coma_list (fun fmt (k,e) ->
+         fprintf fmt "@[%a=%a@]" pp_ident k pp_expr e)) kw
 
 let pp_spec fmt s = (* should be simpler and correct*)
   let open Format in
