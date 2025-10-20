@@ -285,6 +285,6 @@ module PAstPrinter = struct
        fprintf fmt "@[<hov 2>while @[%a@]@ isn't false do@ %a@]"
          pp_t test pp_t body
     | Seq (t1,t2) -> fprintf fmt "@[<hov 2>Seq(%a,@ %a)@]" pp_t t1 pp_t t2
-    | _ -> failwith "TODO"
+    | _ -> failwith "Not implemented (PAstPrinter)."
   and pp_t fmt (_,ast) = pp_ast fmt ast
 end
