@@ -3,7 +3,8 @@ type 'a annot = Mlsem.Common.Position.t * 'a
 type ident =
   { name : string
   ; scope : Parsing.scope }
-type binop = Add | Sub | Mult | Div | Mod | Pow | And | Or
+type binop =
+  | Add | Sub | Mult | Div | Mod | Pow | And | Or | Eq | Neq | Lt | Gt | Le | Ge
 type const =
   | None_
   | Bool of bool
@@ -95,6 +96,16 @@ module Binop = struct
   let of_boolop _env (op:PC.BooleanOperator.t) : binop = match op with
     | And -> And
     | Or -> Or
+
+  let of_comparisonoperator _env (op:PC.ComparisonOperator.t) = match op with
+    | Eq -> Eq
+    | NotEq -> Neq
+    | Lt -> Lt
+    | Lte -> Le
+    | Gt -> Gt
+    | Gte -> Ge
+
+    | Is | IsNot | In | NotIn -> failwith "Not implemented (Binop)."
 end
 
 (*  ***  Pretty-printers  ***  *)
@@ -111,7 +122,13 @@ let pp_binop fmt op =
      | Mod  -> "%"
      | Pow  -> "^"
      | And  -> "&&"
-     | Or   -> "||")
+     | Or   -> "||"
+     | Eq   -> "="
+     | Neq  -> "<>"
+     | Lt   -> "<"
+     | Gt   -> ">"
+     | Le   -> "<="
+     | Ge   -> ">=" )
 let pp_const fmt = function
   | None_ -> Format.fprintf fmt "None"
   | Bool b -> Format.fprintf fmt "%b" b
