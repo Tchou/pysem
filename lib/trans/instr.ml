@@ -48,7 +48,7 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
      let x = Ident.of_identifier env x in
      let e = Expr.of_expression env r.value in
      Assign (x,e) |> annot r.location
-  | Assign _ -> failwith "Not implemented (Instr.Assign(several targets))."
+  | Assign _ -> failwith "Not implemented (Instr.Assign(¬ only 1 target var))."
   (* | TypeAlias | AugAssign | AnnAssign | For | AsyncFor *)
   | While ({orelse=[];_} as r) ->
      let e = Expr.of_expression env r.test in
