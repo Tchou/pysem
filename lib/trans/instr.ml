@@ -52,7 +52,7 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
   | While r ->
      let e = Expr.of_expression env r.test in
      let is = List.map (of_statement env) r.body in
-     (* TODO orelse *)
+     (* TODO? orelse *)
      While (e,Block is |> annot r.location) |> annot r.location
   | If r ->
      let test = Expr.of_expression env r.test in

@@ -74,6 +74,17 @@ module Const = struct
     | _ -> failwith "Not implemented (Const)."
 end
 
+module Binop = struct
+  let of_binop _env (op:PyreAst.Concrete.BinaryOperator.t):binop = match op with
+    | Add -> Add
+    | Sub -> Sub
+    | Mult -> Mult
+    | Div -> Div
+    | Mod -> Mod
+    | Pow -> Pow
+    | _ -> failwith "Not implemented (Binop)."
+end
+
 (*  ***  Pretty-printers  ***  *)
 
 let pp_ident fmt id =

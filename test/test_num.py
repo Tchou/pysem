@@ -1,6 +1,6 @@
 @decor
 def f(a:int,j,/,b,c=1,d=2,e=3,*,g=6,h) -> str: # int -> string
-    return x
+    return x+5
     #5
     #x = 42
     #while True:
