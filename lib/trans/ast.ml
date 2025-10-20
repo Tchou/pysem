@@ -5,6 +5,7 @@ type ident =
   ; scope : Parsing.scope }
 type binop =
   | Add | Sub | Mult | Div | Mod | Pow | And | Or | Eq | Neq | Lt | Gt | Le | Ge
+  | Is | Isn
 type const =
   | None_
   | Bool of bool
@@ -104,8 +105,10 @@ module Binop = struct
     | Lte -> Le
     | Gt -> Gt
     | Gte -> Ge
+    | Is -> Is
+    | IsNot -> Isn
 
-    | Is | IsNot | In | NotIn -> failwith "Not implemented (Binop)."
+    | In | NotIn -> failwith "Not implemented (Binop)."
 end
 
 (*  ***  Pretty-printers  ***  *)
@@ -128,7 +131,9 @@ let pp_binop fmt op =
      | Lt   -> "<"
      | Gt   -> ">"
      | Le   -> "<="
-     | Ge   -> ">=" )
+     | Ge   -> ">="
+     | Is   -> "is"
+     | Isn  -> "isn't" )
 let pp_const fmt = function
   | None_ -> Format.fprintf fmt "None"
   | Bool b -> Format.fprintf fmt "%b" b
