@@ -5,7 +5,7 @@ type ident =
   ; scope : Parsing.scope }
 type binop = Add | Sub | Mult | Div | Mod | Pow
 type const =
-  | None
+  | None_
   | Bool of bool
   | Int of int
   | Float of float
@@ -67,6 +67,7 @@ end
 
 module Const = struct
   let of_constant _env (c:PyreAst.Concrete.Constant.t) : const = match c with
+    | None -> None_
     | True -> Bool true
     | False -> Bool false
     | Integer i -> Int i
@@ -100,7 +101,7 @@ let pp_binop fmt op =
      | Mod -> "%"
      | Pow -> "^")
 let pp_const fmt = function
-  | None -> Format.fprintf fmt "None"
+  | None_ -> Format.fprintf fmt "None"
   | Bool b -> Format.fprintf fmt "%b" b
   | Int i -> Format.fprintf fmt "%d" i
   | Float f -> Format.fprintf fmt "%.2f" f
