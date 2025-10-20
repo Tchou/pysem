@@ -68,12 +68,14 @@ end
 module Const = struct
   let of_constant _env (c:PyreAst.Concrete.Constant.t) : const = match c with
     | None -> None_
-    | True -> Bool true
     | False -> Bool false
+    | True -> Bool true
     | Integer i -> Int i
     | Float f -> Float f
     | String s -> String s
-    | _ -> failwith "Not implemented (Const)."
+
+    | Ellipsis | BigInteger _ | Complex _ | ByteString _
+      -> failwith "Not implemented (Const)."
 end
 
 module Binop = struct
@@ -84,7 +86,9 @@ module Binop = struct
     | Div -> Div
     | Mod -> Mod
     | Pow -> Pow
-    | _ -> failwith "Not implemented (Binop)."
+
+    | MatMult | LShift | RShift | BitOr | BitXor | BitAnd | FloorDiv
+      -> failwith "Not implemented (Binop)."
 end
 
 (*  ***  Pretty-printers  ***  *)

@@ -69,7 +69,11 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
   | Expr r -> Iexpr (Expr.of_expression env r.value) |> annot r.location
   | Break {location} -> annot location Break
   | Continue {location} -> annot location Continue
-  | _ -> failwith "Not implemented (Instr)."
+
+  | AsyncFunctionDef _ | ClassDef _ | Delete _ | TypeAlias _ | AugAssign _
+    | AnnAssign _ | For _ | AsyncFor _ | With _ | AsyncWith _ | Match _
+    | Raise _ | Try _ | TryStar _ | Assert _ | Import _ | ImportFrom _
+    -> failwith "Not implemented (Instr)."
 
 (* === === === === === === *)
 
