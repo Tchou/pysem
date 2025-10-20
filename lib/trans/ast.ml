@@ -3,7 +3,7 @@ type 'a annot = Mlsem.Common.Position.t * 'a
 type ident =
   { name : string
   ; scope : Parsing.scope }
-type binop = Add | Sub | Mult | Div | Mod | Pow
+type binop = Add | Sub | Mult | Div | Mod | Pow | And | Or
 type const =
   | None_
   | Bool of bool
@@ -89,6 +89,10 @@ module Binop = struct
 
     | MatMult | LShift | RShift | BitOr | BitXor | BitAnd | FloorDiv
       -> failwith "Not implemented (Binop)."
+
+  let of_boolop _env (op:PyreAst.Concrete.BooleanOperator.t):binop=match op with
+    | And -> And
+    | Or -> Or
 end
 
 (*  ***  Pretty-printers  ***  *)
@@ -98,12 +102,14 @@ let pp_ident fmt id =
 let pp_binop fmt op =
   Format.fprintf fmt "%s"
     (match op with
-     | Add -> "+"
-     | Sub -> "-"
+     | Add  -> "+"
+     | Sub  -> "-"
      | Mult -> "*"
-     | Div -> "/"
-     | Mod -> "%"
-     | Pow -> "^")
+     | Div  -> "/"
+     | Mod  -> "%"
+     | Pow  -> "^"
+     | And  -> "&&"
+     | Or   -> "||")
 let pp_const fmt = function
   | None_ -> Format.fprintf fmt "None"
   | Bool b -> Format.fprintf fmt "%b" b

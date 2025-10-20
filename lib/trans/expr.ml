@@ -3,7 +3,11 @@ open Ast
 let rec of_expression (env:Env.t) (e:PyreAst.Concrete.Expression.t) : expr =
   let annot = env_annot env in
   match e with
-  | BoolOp _ -> failwith "TODO"
+  | BoolOp ({values=[a;b];_} as r) ->
+     Binop ( of_expression env a
+           , Binop.of_boolop env r.op
+           , of_expression env b) |> annot r.location
+  | BoolOp _ -> failwith "Not implemented (Expr.BoolOp(values<>[a;b]))."
   (* | NamedExpr *)
   | BinOp r -> Binop ( of_expression env r.left
                      , Binop.of_binop env r.op
