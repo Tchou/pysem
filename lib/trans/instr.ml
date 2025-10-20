@@ -49,11 +49,11 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
      let e = Expr.of_expression env r.value in
      Assign (el,e) |> annot r.location
   (* | TypeAlias | AugAssign | AnnAssign | For | AsyncFor *)
-  | While r ->
+  | While ({orelse=[];_} as r) ->
      let e = Expr.of_expression env r.test in
      let is = List.map (of_statement env) r.body in
-     (* TODO? orelse *)
      While (e,Block is |> annot r.location) |> annot r.location
+  | While _ -> failwith "Not implemented (Instr.While(orelse))"
   | If r ->
      let test = Expr.of_expression env r.test in
      let thn = Block (List.map (of_statement env) r.body  ) |> annot r.location in
