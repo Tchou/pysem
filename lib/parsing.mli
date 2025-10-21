@@ -30,7 +30,7 @@ module BlockId : sig
   val mk : kind:block_kind -> name:string -> location:PyreAst.Concrete.Location.t -> t
   val mk_fun : string -> PyreAst.Concrete.Location.t -> t
   val mk_afun : string -> PyreAst.Concrete.Location.t -> t
-  val mk_lambda : string -> PyreAst.Concrete.Location.t -> t
+  val mk_lambda : PyreAst.Concrete.Location.t -> t
   val mk_class : string -> PyreAst.Concrete.Location.t -> t
   val mk_module : string -> PyreAst.Concrete.Location.t -> t
   val equal : t -> t -> bool

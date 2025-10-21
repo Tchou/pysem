@@ -18,18 +18,19 @@ type expr' =
   | Var of ident
   | Binop of expr * binop * expr
   | Cst of const
+  | Lambda of spec * expr
   | Apply of expr * params
 and expr = expr' annot
-and params =
-  { pos : expr list
-  ; kw  : (ident * expr) list }
-
-type spec =
+and spec =
   { posonly : (ident * expr option) list
   ; args    : (ident * expr option) list
   ; vararg  : ident option
   ; kwonly  : (ident * expr option) list
   ; kwarg   : ident option }
+and params =
+  { pos : expr list
+  ; kw  : (ident * expr) list }
+
 type target = ident
 
 type instr' =
@@ -115,6 +116,9 @@ end
 
 (*  ***  Pretty-printers  ***  *)
 
+let pp_coma_list pp =
+  Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp)
+
 let pp_ident fmt id =
   Format.fprintf fmt "%s" (*Parsing.show_scope id.scope*) id.name
 let pp_binop fmt op =
@@ -144,24 +148,16 @@ let pp_const fmt = function
   | Float f -> Format.fprintf fmt "%.2f" f
   | String s -> Format.fprintf fmt "@[\"%s\"@]" s
 
-let pp_coma_list pp =
-  Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp)
-
 let rec pp_expr' fmt = function
   | Var id -> pp_ident fmt id
   | Binop (e1, b, e2) ->
      Format.fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
   | Cst c -> pp_const fmt c
+  | Lambda (x,e) ->
+     Format.fprintf fmt "@[<hov 2>fun %a -> %a@]" pp_spec x pp_expr e
   | Apply (e,p) -> Format.fprintf fmt "@[%a%a@]" pp_expr e pp_params p
 and pp_expr fmt (_,e') = pp_expr' fmt e'
-and pp_params fmt {pos;kw} =
-  let open Format in
-  fprintf fmt "@[(%a, %a)@]"
-    (pp_coma_list pp_expr) pos
-    (pp_coma_list (fun fmt (k,e) ->
-         fprintf fmt "@[%a=%a@]" pp_ident k pp_expr e)) kw
-
-let pp_spec fmt s = (* should be simpler and correct*)
+and pp_spec fmt s = (* should be simpler and correct*)
   let open Format in
   let pp_list_i_eo =
     pp_coma_list (fun fmt (i,(e:expr option)) ->
@@ -188,6 +184,12 @@ let pp_spec fmt s = (* should be simpler and correct*)
     pp_list_i_eo s.kwonly
     kwo_kwa
     kwarg
+and pp_params fmt {pos;kw} =
+  let open Format in
+  fprintf fmt "@[(%a, %a)@]"
+    (pp_coma_list pp_expr) pos
+    (pp_coma_list (fun fmt (k,e) ->
+         fprintf fmt "@[%a=%a@]" pp_ident k pp_expr e)) kw
 
 let rec pp_instr' fmt instr' : unit =
   let open Format in

@@ -124,7 +124,8 @@ let merge_info var i1 i2 =
 let merge_vars vars1 vars2 =
   IdentMap.union (fun var i1 i2 -> Some (merge_info var i1 i2)) vars1 vars2
 
-let lambda_name = PyCo.Identifier.make_t "<LAMBDA>" ()
+let lambda_name = "<LAMBDA>"
+let lambda_id = PyCo.Identifier.make_t lambda_name ()
 type block_kind = Fun | AsyncFun | Lambda | Class | Module
 
 module BlockId =
@@ -136,7 +137,7 @@ struct
   let mk ~kind ~name ~location = { kind; name=PyCo.Identifier.make_t name (); location }
   let mk_fun    name location = mk ~name ~location ~kind:Fun
   and mk_afun   name location = mk ~name ~location ~kind:AsyncFun
-  and mk_lambda name location = mk ~name ~location ~kind:Lambda
+  and mk_lambda      location = mk ~name:lambda_name ~location ~kind:Lambda
   and mk_class  name location = mk ~name ~location ~kind:Class
   and mk_module name location = mk ~name ~location ~kind:Module
 
@@ -257,7 +258,7 @@ let compute_block_variables env location kind name args body =
       IdentTable.replace env.free v (bid::l));
   BidTable.replace env.global bid (nvars, idents);
   let rem_vars = IdentMap.of_list !free in
-  let rem_vars = if PyCo.Identifier.compare name lambda_name = 0 || kind = Module then rem_vars
+  let rem_vars = if PyCo.Identifier.compare name lambda_id = 0 || kind = Module then rem_vars
     else merge_vars rem_vars (ident ~location ~ctx:store_ctx name) (* functions bind their name *)
   in
   List.map get1 body, rem_vars, [bid]
@@ -405,7 +406,7 @@ let expression tbl =
   in
   let lambda ~location ~args ~body =
     let* _init and* args
-    and* body = compute_block_variables tbl location Lambda lambda_name (get1 args) [body] in
+    and* body = compute_block_variables tbl location Lambda lambda_id (get1 args) [body] in
     make_lambda_of_t ~location ~args ~body:(List.hd body) ()
   in
   let if_exp ~location ~test ~body ~orelse =
