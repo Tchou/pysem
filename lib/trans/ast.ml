@@ -8,6 +8,7 @@ type binop =
   | Is | Isn
 type const =
   | None_
+  | Ellipsis
   | Bool of bool
   | Int of int
   | Float of float
@@ -77,8 +78,9 @@ module Const = struct
     | Integer i -> Int i
     | Float f -> Float f
     | String s -> String s
+    | Ellipsis -> Ellipsis
 
-    | Ellipsis | BigInteger _ | Complex _ | ByteString _
+    | BigInteger _ | Complex _ | ByteString _
       -> failwith "Not implemented (Const)."
 end
 
@@ -136,6 +138,7 @@ let pp_binop fmt op =
      | Isn  -> "isn't" )
 let pp_const fmt = function
   | None_ -> Format.fprintf fmt "None"
+  | Ellipsis -> Format.fprintf fmt "..."
   | Bool b -> Format.fprintf fmt "%b" b
   | Int i -> Format.fprintf fmt "%d" i
   | Float f -> Format.fprintf fmt "%.2f" f
