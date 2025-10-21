@@ -2,4 +2,4 @@
  (public_name pysem)
  (name main)
  (package pysem-bin)
- (libraries pysem sexplib0 pyre-ast))
+ (libraries pysem mlsem-lang sexplib0 pyre-ast))

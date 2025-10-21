@@ -23,7 +23,9 @@ let main () =
      printf "%a@\n"
        (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil;
      let env = Env.init bil to_loc in
-     Prog.of_module env m |> Format.printf "%a" Ast.pp_prog
+     let p = Prog.of_module env m in
+     Format.printf "%a@." Ast.pp_prog p;
+     Prog.to_ml env p |> Format.printf "%a@." Mlsem_lang.Ast.pp
 
 let () =
   try main () with
