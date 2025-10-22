@@ -24,8 +24,11 @@ let main () =
        (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil;
      let env = Env.init bil to_loc in
      let p = Prog.of_module env m in
-     Format.printf "%a@." Ast.pp_prog p;
-     Prog.to_ml env p |> Format.printf "%a@." Mlsem_lang.Ast.pp
+     Format.printf "pysem ast:@.%a@.--@\n" Ast.pp_prog p;
+     Prog.to_ml env p
+     |> Format.(printf "mlsem ast:@\n%a@."
+                  (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+                     Mlsem_lang.Ast.pp))
 
 let () =
   try main () with

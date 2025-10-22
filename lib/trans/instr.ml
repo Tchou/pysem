@@ -53,6 +53,12 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
     | Raise _ | Try _ | TryStar _ | Assert _ | Import _ | ImportFrom _
     -> failwith "Not implemented (Instr)."
 
+let to_ml _env (p,instr:instr) :Mlsem_lang.Ast.t = match instr with
+  | FunDef _ -> failwith "TODO first"
+  | Break -> Mlsem.Common.Eid.unique_with_pos p
+           , Break
+  | _ -> failwith "TODO"
+
 (* === === === === === === *)
 
 let dummy_def = PAst.Definitions []
