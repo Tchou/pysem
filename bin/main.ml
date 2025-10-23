@@ -28,7 +28,7 @@ let main () =
      Prog.to_ml env p
      |> Format.(printf "mlsem ast:@\n%a@."
                   (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
-                     Mlsem_lang.Ast.pp))
+                     Ast.MlAstPrinter.pp_t))
 
 let () =
   try main () with

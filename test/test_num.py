@@ -6,7 +6,7 @@ def f(a:int,j,/,b,c=1,d=2,e=3,*,g=6,h) -> str: # int -> string
     #while True:
     #    y = 43
 
-return
+#return
 
 # zzz = f(2,2,3,e=4)
 

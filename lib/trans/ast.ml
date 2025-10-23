@@ -293,3 +293,105 @@ module PAstPrinter = struct
     | _ -> failwith "Not implemented (PAstPrinter)."
   and pp_t fmt (_,ast) = pp_ast fmt ast
 end
+
+module MlAstPrinter = struct
+  open Mlsem_lang.Ast
+  open Format
+
+  let pp_list pp fmt l =
+      pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
+        pp fmt l
+
+  let pp_nel str = function [] -> "" | _ -> str
+
+  let pp_variable = Mlsem.Common.Variable.pp
+  let pp_gty = Mlsem.Types.GTy.pp
+  let pp_ty = Mlsem.Types.Ty.pp
+  let pp_const = Mlsem_lang.Const.pp
+  let pp_projection = Mlsem_system.Ast.pp_projection
+  let pp_constructor = Mlsem.System.Ast.pp_constructor
+
+  let rec pp_pattern_constructor fmt pc : unit = match pc with
+    | PCTuple i -> fprintf fmt "PTuple(%d)" i
+    | PCCons -> fprintf fmt "PCCons"
+    | PCRec (sl,b) -> fprintf fmt "@[PCR(%a,%b)@]" (pp_list pp_print_string) sl b
+    | PCTag _ -> fprintf fmt "PCTag"
+    | PCEnum _ -> fprintf fmt "PCEnum"
+    | PCCustom _ -> fprintf fmt "PCCustom"
+  and pp_pattern fmt p : unit = match p with
+    | PType _ -> fprintf fmt "PType"
+    | PVar v -> fprintf fmt "@[%a@]" pp_variable v
+    | PConstructor (pc,pl) ->
+       fprintf fmt "@[<hov 2>PCtor(%a;@ %a)@]"
+         pp_pattern_constructor pc (pp_list pp_pattern) pl
+    | PAnd (p1,p2) ->
+       fprintf fmt "@[(%a) and (%a)@]" pp_pattern p1 pp_pattern p2
+    | POr (p1,p2) ->
+       fprintf fmt "@[(%a) or (%a)@]" pp_pattern p1 pp_pattern p2
+    | PAssign (v,_) -> fprintf fmt "P(%a:=GTy)" pp_variable v
+  and pp_e (fmt:formatter) (e:Mlsem_lang.Ast.e) :unit =
+    match e with
+    | Hole i -> fprintf fmt "Hole(%d)" i
+    | Exc -> fprintf fmt "Exc"
+    | Void -> fprintf fmt "Void"
+    | Voidify t -> fprintf fmt "@[<hov 2>Vdfy %a@]" pp_t t
+    | Isolate t -> fprintf fmt "@[<hov 2>Islt %a@]" pp_t t
+    | Value gty -> fprintf fmt "@[<hov 2>Val : %a@]" pp_gty gty
+    | Var v -> fprintf fmt "@[%a@]" pp_variable v
+    | Constructor (c,tl) ->
+       fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
+    | Lambda (tyl,_,v,t) ->
+       fprintf fmt "@[<hov 2>fun %a%s@[%a@] ->@ %a@]"
+         pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t
+    | LambdaRec l ->
+       pp_print_list
+         ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
+         (fun fmt (_,v,t) -> fprintf fmt "@[<hov 2>rfun %a ->@ %a@]"
+                               pp_variable v pp_t t)
+         fmt
+         l
+    | Ite (test,ty,t1,t2) ->
+       fprintf fmt
+         "@[@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n\
+          @[<hov 2>else@ %a@]@]@ "
+         pp_t test pp_ty ty pp_t t1 pp_t t2
+    | PatMatch (t,ptl) ->
+       fprintf fmt "@[match @[%a@]@ with@ | %a@]@\n"
+         pp_t t (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "")
+                   (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]@\n"
+                                       pp_pattern p pp_t t)) ptl
+    | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@])@ (@[%a@])@]" pp_t t1 pp_t t2
+    | Projection (p,t) -> fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
+                            pp_t t pp_projection p
+    | Declare (v,t) ->
+       fprintf fmt "@[<hov 2>val mut %a =@ %a@]@\n"
+         pp_variable v pp_t t
+    | Let (tyl,v,t1,t2) ->
+       fprintf fmt "@[@[<hov 2>let %a%s@[%a@] =@ @[%a@]@ in@]@\n%a@]"
+         pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t1 pp_t t2
+    | TypeCast (t,ty,_) ->
+       fprintf fmt "@[<hov 2>cast [%a]@ to @[%a@]@]" pp_t t pp_ty ty
+    | TypeCoerce (t,gty,_) ->
+       fprintf fmt "@[<hov 2>coerce [%a]@ to @[%a@]@]" pp_t t pp_gty gty
+    | VarAssign (v,t) -> fprintf fmt "@[<hov 2>%a :=@ %a@]"
+                           pp_variable v pp_t t
+    | Loop t -> fprintf fmt "@[<hov 2>loop:@ %a@]" pp_t t
+    | Try (t1,t2) -> fprintf fmt "@[<hov 2>try@ %a@]@ @[<hov 2>with@ %a@]"
+                       pp_t t1 pp_t t2
+    | Seq (t1,t2) -> fprintf fmt "@[<hov 2>%a;@ %a@]" pp_t t1 pp_t t2
+    | Alt (t1,t2) -> fprintf fmt "@[<hov 2>Alt(%a,@ %a)@]" pp_t t1 pp_t t2
+    | Block (_,t) -> fprintf fmt "@[<hov 2>Block:@ %a@]" pp_t t
+    | Ret (_,ot) -> fprintf fmt "@[<hov 2>Ret:@ %a@]"
+                     (pp_print_option pp_t) ot
+    | If (test,ty,t,ot) ->
+       fprintf fmt
+         "@[@[<hov 2>if: %a is %a@]@\n@[<hov 2>then@ %a@]@\n\
+          @[<hov 2>else:@ %a@]@]@ "
+         pp_t test pp_ty ty pp_t t (pp_print_option pp_t) ot
+    | While (test,ty,body) ->
+       fprintf fmt "@[<hov 2>while @[%a@]@ isn't @[%a@] do@ %a@]"
+         pp_t test pp_ty ty pp_t body
+    | Return t -> fprintf fmt "@[<hov 2>return %a@]" pp_t t
+    | Break -> fprintf fmt "break"
+  and pp_t fmt (_,e) = pp_e fmt e
+end
