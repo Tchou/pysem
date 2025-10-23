@@ -55,17 +55,32 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
     -> failwith "Not implemented (Instr)."
 
 module MC = Mlsem.Common
+module MlVar = MC.Variable
+module MlAst = Mlsem_lang.Ast
+module MlGTy = Mlsem.Types.GTy
 
-let to_ml _env (p,instr:instr) : Mlsem_lang.Ast.t = match instr with
+let ml_annot p (ast:MlAst.e) = (MC.Eid.unique_with_pos p, ast)
+
+let dummy_ml_ast = MlAst.Value (MlGTy.any) |> ml_annot MC.Position.dummy
+let ml_fun_arg = "%#rec_arg"
+
+let rec to_ml _env (p,instr:instr) : MlAst.t =
+  match instr with
   | Block _ -> failwith "TODO"
-  | FunDef _ -> failwith "TODO first"
+  | FunDef (f,_args,_body) ->
+     MlAst.Let ( []
+               , MlVar.create (Some f.name)
+               , MlAst.Lambda
+                   ([], MlGTy.any, MlVar.create (Some ml_fun_arg), dummy_ml_ast)
+                 |> ml_annot p
+               , dummy_ml_ast)
+     |> ml_annot p
   | Return _ -> failwith "TODO"
   | Assign _ -> failwith "TODO"
   | While _ -> failwith "TODO"
   | If _ -> failwith "TODO"
   | Iexpr _ -> failwith "TODO"
-  | Break -> MC.Eid.unique_with_pos p
-           , Break
+  | Break -> MlAst.Break |> ml_annot p
   | Continue -> failwith "TODO"
 
 (* === === === === === === *)
