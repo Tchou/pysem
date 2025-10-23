@@ -35,7 +35,7 @@ type target = ident
 
 type instr' =
   | Block of instr list
-  | FunDef of ident * spec * instr list
+  | FunDef of ident * spec * instr
   | Return of expr option
   | Assign of target * expr
   | While of expr * instr
@@ -199,8 +199,8 @@ let rec pp_instr' fmt instr' : unit =
   | Block il -> pp_instr_list fmt il
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a := %a@]"
                        (pp_ident) x pp_expr e
-  | FunDef (i,s,il) -> fprintf fmt "@[<hov 2>def %a%a:@\n%a@]"
-                         pp_ident i pp_spec s pp_instr_list il
+  | FunDef (i,s,b) -> fprintf fmt "@[<hov 2>def %a%a:@\n%a@]"
+                         pp_ident i pp_spec s pp_instr b
   | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i
   | If (e,i,io) -> fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"
                      pp_expr e pp_instr i (pp_print_option pp_instr) io

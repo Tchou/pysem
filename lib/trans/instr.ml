@@ -13,7 +13,8 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
        let bi = BlockId.mk_fun (PC.Identifier.to_string r.name) r.location in
        { env with current = BidTable.find env.infos bi } in
      let spec = Expr.spec_of_arguments fenv r.args in
-     let body = List.map (of_statement fenv) r.body in
+     let body = Block (List.map (of_statement fenv) r.body)
+                |> annot r.location in
      FunDef ( Ident.of_identifier env r.name
             , spec
             , body )
