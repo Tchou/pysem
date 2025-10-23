@@ -53,11 +53,19 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
     | Raise _ | Try _ | TryStar _ | Assert _ | Import _ | ImportFrom _
     -> failwith "Not implemented (Instr)."
 
-let to_ml _env (p,instr:instr) :Mlsem_lang.Ast.t = match instr with
+module MC = Mlsem.Common
+
+let to_ml _env (p,instr:instr) : Mlsem_lang.Ast.t = match instr with
+  | Block _ -> failwith "TODO"
   | FunDef _ -> failwith "TODO first"
-  | Break -> Mlsem.Common.Eid.unique_with_pos p
+  | Return _ -> failwith "TODO"
+  | Assign _ -> failwith "TODO"
+  | While _ -> failwith "TODO"
+  | If _ -> failwith "TODO"
+  | Iexpr _ -> failwith "TODO"
+  | Break -> MC.Eid.unique_with_pos p
            , Break
-  | _ -> failwith "TODO"
+  | Continue -> failwith "TODO"
 
 (* === === === === === === *)
 
