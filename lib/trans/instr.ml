@@ -67,7 +67,7 @@ let ml_annot p (ast:MlAst.e) = (MC.Eid.unique_with_pos p, ast)
 let dummy_ml_ast = MlAst.Value (MlGTy.any) |> ml_annot MC.Position.dummy
 let ml_fun_arg_name = "%#rec_arg"
 
-let to_ml _env (p,instr:instr) : MlAst.t =
+let to_ml (p,instr:instr) : MlAst.t =
   match instr with
   | Block _ -> failwith "TODO"
   | FunDef (f,args,_body) ->
