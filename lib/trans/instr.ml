@@ -56,25 +56,81 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
 
 module MC = Mlsem.Common
 module MlVar = MC.Variable
+module MlMVar = Mlsem_lang.MVariable
 module MlAst = Mlsem_lang.Ast
+module MSAst = Mlsem_system.Ast
+module MlT = Mlsem.Types
 module MlGTy = Mlsem.Types.GTy
 
 let ml_annot p (ast:MlAst.e) = (MC.Eid.unique_with_pos p, ast)
 
 let dummy_ml_ast = MlAst.Value (MlGTy.any) |> ml_annot MC.Position.dummy
-let ml_fun_arg = "%#rec_arg"
+let ml_fun_arg_name = "%#rec_arg"
 
-let rec to_ml _env (p,instr:instr) : MlAst.t =
+let to_ml _env (p,instr:instr) : MlAst.t =
   match instr with
   | Block _ -> failwith "TODO"
-  | FunDef (f,_args,_body) ->
-     MlAst.Let ( []
-               , MlVar.create (Some f.name)
-               , MlAst.Lambda
-                   ([], MlGTy.any, MlVar.create (Some ml_fun_arg), dummy_ml_ast)
-                 |> ml_annot p
-               , dummy_ml_ast)
-     |> ml_annot p
+  | FunDef (f,args,_body) ->
+     let mk_vart ?(kind=MlMVar.Mut) str = MlMVar.create kind (Some str) in
+     let mk_var ?(pos=p) str =
+       Var (mk_vart str) |> ml_annot pos in
+     let var_of_vart ?(pos=p) v = Var v |> ml_annot pos in
+     let mk_projection ?(pos=p) proj ast =
+       MlAst.Projection (proj, ast) |> ml_annot pos in
+     let mk_lambda ?(pos=p) ty ?(gty=MlGTy.any) id body =
+       MlAst.Lambda (ty, gty, id, body) |> ml_annot pos in
+     let mk_let ?(pos=p) ?(ty=[]) id ast_in ast_out =
+       MlAst.Let (ty,id,ast_in,ast_out) |> ml_annot pos in
+     let mk_ite ?(pos=p) test ty thn els =
+       MlAst.Ite (test,ty,thn,els) |> ml_annot pos in
+
+     let f_var = mk_vart f.name in
+     let f_rec_arg = mk_vart ~kind:MlMVar.Immut ml_fun_arg_name in
+     let f_arg = mk_var ml_fun_arg_name in
+
+     let arg_name_pos i = Utils.mk_id "#p%d" i
+     and arg_name_kw  k = Utils.mk_id "#k%s" k
+     and def_arg_name k = Utils.mk_id "#d%s" k in
+     let get_pos i = mk_projection (MSAst.Field (arg_name_pos i)) f_arg in
+     let get_kw id = mk_projection (MSAst.Field (arg_name_kw id)) f_arg in
+
+     let load_arg (pak:[`Pos|`Arg|`Kwd]) (i,d,l) (id,eo) =
+       let ast_in = match pak with
+         | `Pos -> get_pos i
+         | `Arg ->
+            mk_ite f_arg MlT.(
+             Record.mk true [ arg_name_pos i
+                            , (false, TVar.(mk KInfer (Some (arg_name_pos i))
+                                            |> typ))] )
+                     (get_pos i) (get_kw id.name)
+         | `Kwd -> get_kw id.name
+       in
+       let default = match eo with
+         | None -> d
+         | Some _e -> ( mk_vart ~kind:MlMVar.Immut (def_arg_name id.name)
+                      , failwith "Expr.to_ml _env e" )::d
+       in
+       ( i+1
+       , default
+       , ( mk_vart id.name
+         , ast_in
+         ) ::l )
+     in
+     let i, def_po, preamble_po =
+       List.fold_left (load_arg `Pos) (0,[],[]) args.posonly  in
+     let _, def_po_args, preamble_po_args =
+       List.fold_left (load_arg `Arg) (i,def_po, preamble_po) args.args in
+     let f_type = [] in
+
+     let join_let last var_in =
+       List.fold_left (fun body (v,e) -> mk_let v e body) last var_in in
+     let f_body = join_let dummy_ml_ast (* TODO:body *) preamble_po_args in
+     let f_anon = mk_lambda f_type f_rec_arg f_body in
+     let f_w_defaults = join_let f_anon def_po_args in
+     mk_let
+       f_var
+       f_w_defaults
+       (var_of_vart f_var)
   | Return _ -> failwith "TODO"
   | Assign _ -> failwith "TODO"
   | While _ -> failwith "TODO"
