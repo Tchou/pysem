@@ -79,7 +79,7 @@ and spec_of_arguments fenv (a:PC.Arguments.t) =
 module MC = Mlsem.Common
 module MlAst = Mlsem_lang.Ast
 
-let ml_annot p (ast:MlAst.e) = (MC.Eid.unique_with_pos p, ast)
+open Utils
 
 let to_ml (p,e:expr) : MlAst.t = match e with
   | Var _ -> failwith "TODO"

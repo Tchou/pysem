@@ -1,15 +1,21 @@
 let mk_id fmt = Format.kasprintf (fun s -> "%" ^ s) fmt
 
-let ty_cst_int i =
+let arg_name_pos i = mk_id "#p%d" i
+and arg_name_kw  k = mk_id "#k%s" k
+and def_arg_name k = mk_id "#d%s" k
+
+let mk_var_t ?(kind=Mlsem_lang.MVariable.Mut) str =
+  Mlsem_lang.MVariable.create kind (Some str)
+
+let ml_annot p (ast:Mlsem_lang.Ast.e) =
+  (Mlsem.Common.Eid.unique_with_pos p, ast)
+
+let ty_of_int i =
   let z = Z.of_int i in
   Mlsem.Types.Ty.interval (Some z) (Some z) 
 
 let count_if p l =
   List.fold_left (fun acc e -> if p e then acc + 1 else acc) 0 l
-
-let pp_py_expr fmt e =
-  Format.fprintf fmt "%a"
-    (Sexplib0.Sexp.pp) (PyreAst.Concrete.Expression.sexp_of_t e)
 
 let pos_converter filename text =
   let[@tail_mod_cons] rec loop i len =
@@ -30,3 +36,7 @@ let loc_converter filename text =
     let l1 = to_pos p.start in
     let l2 = to_pos p.stop in
     Mlsem.Common.Position.(with_poss l1 l2 () |> position)
+
+let pp_py_expr fmt e =
+  Format.fprintf fmt "%a"
+    (Sexplib0.Sexp.pp) (PyreAst.Concrete.Expression.sexp_of_t e)

@@ -90,7 +90,7 @@ module Const = struct
             | None_ -> failwith "Ty.None"
             | Ellipsis -> failwith "Ty.Ellipsis"
             | Bool b -> if b then Ty.tt else Ty.ff
-            | Int i -> let z = (Some (Z.of_int i)) in Ty.interval z z
+            | Int i -> Utils.ty_of_int i
             | Float _ -> Ty.float (* !! TODO !! *)
             | String s -> Ty.string_lit s )
 

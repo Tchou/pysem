@@ -61,7 +61,7 @@ module MSAst = Mlsem_system.Ast
 module MlT = Mlsem.Types
 module MlGTy = Mlsem.Types.GTy
 
-let ml_annot p (ast:MlAst.e) = (MC.Eid.unique_with_pos p, ast)
+open Utils
 
 let dummy_ml_ast = MlAst.Value (MlGTy.any) |> ml_annot MC.Position.dummy
 let ml_fun_arg_name = "%#rec_arg"
@@ -70,9 +70,8 @@ let to_ml (p,instr:instr) : MlAst.t =
   match instr with
   | Block _ -> failwith "TODO"
   | FunDef (f,args,_body) ->
-     let mk_vart ?(kind=MlMVar.Mut) str = MlMVar.create kind (Some str) in
      let mk_var ?(pos=p) ?(kind=MlMVar.Mut) str =
-       Var (mk_vart ~kind str) |> ml_annot pos in
+       Var (mk_var_t ~kind str) |> ml_annot pos in
      let var_of_vart ?(pos=p) v = Var v |> ml_annot pos in
      let mk_projection ?(pos=p) proj ast =
        MlAst.Projection (proj, ast) |> ml_annot pos in
@@ -83,13 +82,10 @@ let to_ml (p,instr:instr) : MlAst.t =
      let mk_ite ?(pos=p) test ty thn els =
        MlAst.Ite (test,ty,thn,els) |> ml_annot pos in
 
-     let f_var = mk_vart f.name in
-     let f_rec_arg = mk_vart ~kind:MlMVar.Immut ml_fun_arg_name in
+     let f_var = mk_var_t f.name in
+     let f_rec_arg = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
      let f_arg = mk_var ml_fun_arg_name in
 
-     let arg_name_pos i = Utils.mk_id "#p%d" i
-     and arg_name_kw  k = Utils.mk_id "#k%s" k
-     and def_arg_name k = Utils.mk_id "#d%s" k in
      let get_pos i = mk_projection (MSAst.Field (arg_name_pos i)) f_arg in
      let get_kw id = mk_projection (MSAst.Field (arg_name_kw id)) f_arg in
 
@@ -106,12 +102,12 @@ let to_ml (p,instr:instr) : MlAst.t =
        in
        let default = match eo with
          | None -> d
-         | Some e -> ( mk_vart ~kind:MlMVar.Immut (def_arg_name id.name)
+         | Some e -> ( mk_var_t ~kind:MlMVar.Immut (def_arg_name id.name)
                      , Expr.to_ml e )::d
        in
        ( i+1
        , default
-       , ( mk_vart id.name
+       , ( mk_var_t id.name
          , ast_in
          ) ::l )
      in
