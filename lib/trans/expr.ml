@@ -75,3 +75,15 @@ and spec_of_arguments fenv (a:PC.Arguments.t) =
   ; kwonly  = List.map format kwonly
   ; vararg  = Option.map (Ident.of_argument fenv) a.vararg
   ; kwarg   = Option.map (Ident.of_argument fenv) a.kwarg }
+
+module MC = Mlsem.Common
+module MlAst = Mlsem_lang.Ast
+
+let ml_annot p (ast:MlAst.e) = (MC.Eid.unique_with_pos p, ast)
+
+let to_ml (p,e:expr) : MlAst.t = match e with
+  | Var _ -> failwith "TODO"
+  | Binop _ -> failwith "TOOD"
+  | Cst c -> Value Const.(to_gty c) |> ml_annot p
+  | Lambda _ -> failwith "TOOD"
+  | Apply _ -> failwith "TOOD"

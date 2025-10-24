@@ -106,8 +106,8 @@ let to_ml (p,instr:instr) : MlAst.t =
        in
        let default = match eo with
          | None -> d
-         | Some _e -> ( mk_vart ~kind:MlMVar.Immut (def_arg_name id.name)
-                      , failwith "Expr.to_ml _env e" )::d
+         | Some e -> ( mk_vart ~kind:MlMVar.Immut (def_arg_name id.name)
+                     , Expr.to_ml e )::d
        in
        ( i+1
        , default

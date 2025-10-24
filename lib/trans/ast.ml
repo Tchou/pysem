@@ -83,6 +83,17 @@ module Const = struct
 
     | BigInteger _ | Complex _ | ByteString _
       -> failwith "Not implemented (Const)."
+
+  let to_gty c : Mlsem.Types.GTy.t =
+    let open Mlsem.Types in
+    GTy.mk (match c with
+            | None_ -> failwith "Ty.None"
+            | Ellipsis -> failwith "Ty.Ellipsis"
+            | Bool b -> if b then Ty.tt else Ty.ff
+            | Int i -> let z = (Some (Z.of_int i)) in Ty.interval z z
+            | Float _ -> Ty.float (* !! TODO !! *)
+            | String s -> Ty.string_lit s )
+
 end
 
 module Binop = struct
