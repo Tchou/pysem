@@ -99,7 +99,7 @@ let pp_arg fmt (a, i, eo, v) =
   fprintf fmt "(%s, %d, %a, %a)"
     (Identifier.to_string a.Argument.identifier)
     i
-    (pp_print_option Utils.pp_expr) eo
+    (pp_print_option Utils.pp_py_expr) eo
     Types.TVar.pp v
 
 let pp_arg_list fmt l =

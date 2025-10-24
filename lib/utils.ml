@@ -4,12 +4,12 @@ let ty_cst_int i =
   let z = Z.of_int i in
   Mlsem.Types.Ty.interval (Some z) (Some z) 
 
-let count_if p l = List.fold_left (fun acc e -> if p e then acc + 1 else acc) 0 l
+let count_if p l =
+  List.fold_left (fun acc e -> if p e then acc + 1 else acc) 0 l
 
-let pp_expr fmt e =
-  Format.fprintf fmt "%a" (Sexplib0.Sexp.pp) (PyreAst.Concrete.Expression.sexp_of_t e)
-
-
+let pp_py_expr fmt e =
+  Format.fprintf fmt "%a"
+    (Sexplib0.Sexp.pp) (PyreAst.Concrete.Expression.sexp_of_t e)
 
 let pos_converter filename text =
   let[@tail_mod_cons] rec loop i len =
