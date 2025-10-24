@@ -55,7 +55,6 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
     -> failwith "Not implemented (Instr)."
 
 module MC = Mlsem.Common
-module MlVar = MC.Variable
 module MlMVar = Mlsem_lang.MVariable
 module MlAst = Mlsem_lang.Ast
 module MSAst = Mlsem_system.Ast
@@ -72,8 +71,8 @@ let to_ml (p,instr:instr) : MlAst.t =
   | Block _ -> failwith "TODO"
   | FunDef (f,args,_body) ->
      let mk_vart ?(kind=MlMVar.Mut) str = MlMVar.create kind (Some str) in
-     let mk_var ?(pos=p) str =
-       Var (mk_vart str) |> ml_annot pos in
+     let mk_var ?(pos=p) ?(kind=MlMVar.Mut) str =
+       Var (mk_vart ~kind str) |> ml_annot pos in
      let var_of_vart ?(pos=p) v = Var v |> ml_annot pos in
      let mk_projection ?(pos=p) proj ast =
        MlAst.Projection (proj, ast) |> ml_annot pos in
