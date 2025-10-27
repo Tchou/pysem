@@ -70,34 +70,25 @@ let to_ml (p,instr:instr) : MlAst.t =
   match instr with
   | Block _ -> failwith "TODO"
   | FunDef (f,args,_body) ->
-     let mk_var ?(pos=p) ?(kind=MlMVar.Mut) str =
-       Var (mk_var_t ~kind str) |> ml_annot pos in
-     let var_of_vart ?(pos=p) v = Var v |> ml_annot pos in
-     let mk_projection ?(pos=p) proj ast =
-       MlAst.Projection (proj, ast) |> ml_annot pos in
-     let mk_lambda ?(pos=p) ty ?(gty=MlGTy.any) id body =
-       MlAst.Lambda (ty, gty, id, body) |> ml_annot pos in
-     let mk_let ?(pos=p) ?(ty=[]) id ast_in ast_out =
-       MlAst.Let (ty,id,ast_in,ast_out) |> ml_annot pos in
-     let mk_ite ?(pos=p) test ty thn els =
-       MlAst.Ite (test,ty,thn,els) |> ml_annot pos in
-
      let f_var = mk_var_t f.name in
      let f_rec_arg = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
-     let f_arg = mk_var ml_fun_arg_name in
+     let f_arg = mk_var p ml_fun_arg_name in
 
-     let get_pos i = mk_projection (MSAst.Field (arg_name_pos i)) f_arg in
-     let get_kw id = mk_projection (MSAst.Field (arg_name_kw id)) f_arg in
+     let get_pos i = mk_projection p (MSAst.Field (arg_name_pos i)) f_arg in
+     let get_kw id = mk_projection p (MSAst.Field (arg_name_kw id)) f_arg in
 
      let load_arg (pak:[`Pos|`Arg|`Kwd]) (i,d,l) (id,eo) =
        let ast_in = match pak with
          | `Pos -> get_pos i
          | `Arg ->
-            mk_ite f_arg MlT.(
-             Record.mk true [ arg_name_pos i
-                            , (false, TVar.(mk KInfer (Some (arg_name_pos i))
-                                            |> typ))] )
-                     (get_pos i) (get_kw id.name)
+            mk_ite p
+              f_arg
+              MlT.(Record.mk true
+                     [ arg_name_pos i
+                     , (false, TVar.(mk KInfer (Some (arg_name_pos i))
+                                     |> typ))] )
+              (get_pos i)
+              (get_kw id.name)
          | `Kwd -> get_kw id.name
        in
        let default = match eo with
@@ -118,14 +109,14 @@ let to_ml (p,instr:instr) : MlAst.t =
      let f_type = [] in
 
      let join_let last var_in =
-       List.fold_left (fun body (v,e) -> mk_let v e body) last var_in in
+       List.fold_left (fun body (v,e) -> mk_let p v e body) last var_in in
      let f_body = join_let dummy_ml_ast (* TODO:body *) preamble_po_args in
-     let f_anon = mk_lambda f_type f_rec_arg f_body in
+     let f_anon = mk_lambda p f_type f_rec_arg f_body in
      let f_w_defaults = join_let f_anon def_po_args in
-     mk_let
+     mk_let p
        f_var
        f_w_defaults
-       (var_of_vart f_var)
+       (var_of_vart p f_var)
   | Return _ -> failwith "TODO"
   | Assign _ -> failwith "TODO"
   | While _ -> failwith "TODO"

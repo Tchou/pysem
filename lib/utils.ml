@@ -1,14 +1,26 @@
 let mk_id fmt = Format.kasprintf (fun s -> "%" ^ s) fmt
 
-let arg_name_pos i = mk_id "#p%d" i
-and arg_name_kw  k = mk_id "#k%s" k
-and def_arg_name k = mk_id "#d%s" k
+let ml_annot p (ast:Mlsem_lang.Ast.e) =
+  (Mlsem.Common.Eid.unique_with_pos p, ast)
 
 let mk_var_t ?(kind=Mlsem_lang.MVariable.Mut) str =
   Mlsem_lang.MVariable.create kind (Some str)
 
-let ml_annot p (ast:Mlsem_lang.Ast.e) =
-  (Mlsem.Common.Eid.unique_with_pos p, ast)
+let mk_var pos ?(kind=Mlsem_lang.MVariable.Mut) str =
+  Mlsem_lang.Ast.Var (mk_var_t ~kind str) |> ml_annot pos
+let var_of_vart pos v = Var v |> ml_annot pos
+let mk_projection pos proj ast =
+  Mlsem_lang.Ast.Projection (proj, ast) |> ml_annot pos
+let mk_lambda pos ty ?(gty=Mlsem.Types.GTy.any) id body =
+  Mlsem_lang.Ast.Lambda (ty, gty, id, body) |> ml_annot pos
+let mk_let pos ?(ty=[]) id ast_in ast_out =
+  Mlsem_lang.Ast.Let (ty,id,ast_in,ast_out) |> ml_annot pos
+let mk_ite pos test ty thn els =
+  Mlsem_lang.Ast.Ite (test,ty,thn,els) |> ml_annot pos
+
+let arg_name_pos i = mk_id "#p%d" i
+and arg_name_kw  k = mk_id "#k%s" k
+and def_arg_name k = mk_id "#d%s" k
 
 let ty_of_int i =
   let z = Z.of_int i in
