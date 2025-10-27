@@ -216,7 +216,7 @@ let rec pp_instr' fmt instr' : unit =
   | If (e,i,io) -> fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"
                      pp_expr e pp_instr i (pp_print_option pp_instr) io
   | Iexpr e -> pp_expr fmt e
-  | Return eo -> pp_print_option pp_expr fmt eo
+  | Return eo -> fprintf fmt "@[<hov 2>return@ %a@]" (pp_print_option pp_expr) eo
   | Break -> fprintf fmt "break@\n"
   | Continue -> fprintf fmt "continue@\n"
 and pp_instr fmt (_,instr') = pp_instr' fmt instr'
