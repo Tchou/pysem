@@ -18,9 +18,9 @@ let mk_let pos ?(ty=[]) id ast_in ast_out =
 let mk_ite pos test ty thn els =
   Mlsem_lang.Ast.Ite (test,ty,thn,els) |> ml_annot pos
 
-let arg_name_pos i = mk_id "#p%d" i
-and arg_name_kw  k = mk_id "#k%s" k
-and def_arg_name k = mk_id "#d%s" k
+let arg_name_pos i = mk_id "p_%d" i
+and arg_name_kw  k = mk_id "k_%s" k
+and def_arg_name k = mk_id "d_%s" k
 
 let ty_of_int i =
   let z = Z.of_int i in
