@@ -8,10 +8,10 @@ type binop =
   | Is | Isn
 type const =
   | None_
-  | Ellipsis
+  (* | Ellipsis *)
   | Bool of bool
   | Int of int
-  | Float of float
+  (* | Float of float *)
   | String of string
 
 type expr' =
@@ -77,22 +77,22 @@ module Const = struct
     | False -> Bool false
     | True -> Bool true
     | Integer i -> Int i
-    | Float f -> Float f
+    (* | Float f -> Float f *)
     | String s -> String s
-    | Ellipsis -> Ellipsis
+    (* | Ellipsis -> Ellipsis *)
 
-    | BigInteger _ | Complex _ | ByteString _
+    | Float _ | Ellipsis | BigInteger _ | Complex _ | ByteString _
       -> failwith "Not implemented (Const)."
 
   let to_gty c : Mlsem.Types.GTy.t =
     let open Mlsem.Types in
     GTy.mk (match c with
             | None_ -> failwith "Ty.None"
-            | Ellipsis -> failwith "Ty.Ellipsis"
+            (* | Ellipsis -> failwith "Ty.Ellipsis" *)
             | Bool b -> if b then Ty.tt else Ty.ff
             | Int i -> Utils.ty_of_int i
-            | Float _ -> Ty.float (* !! TODO !! *)
-            | String s -> Ty.string_lit s )
+            (* | Float _ -> Ty.float (\* !! TODO !! *\) *)
+            | String _ -> Ty.string )
 
 end
 
@@ -153,10 +153,10 @@ let pp_binop fmt op =
      | Isn  -> "isn't" )
 let pp_const fmt = function
   | None_ -> Format.fprintf fmt "None"
-  | Ellipsis -> Format.fprintf fmt "..."
+  (* | Ellipsis -> Format.fprintf fmt "..." *)
   | Bool b -> Format.fprintf fmt "%b" b
   | Int i -> Format.fprintf fmt "%d" i
-  | Float f -> Format.fprintf fmt "%.2f" f
+  (* | Float f -> Format.fprintf fmt "%.2f" f *)
   | String s -> Format.fprintf fmt "@[\"%s\"@]" s
 
 let rec pp_expr' fmt = function
