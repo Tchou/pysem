@@ -1,8 +1,6 @@
-open Mlsem_app
-open Mlsem
 open Ast
-
-module PC = PyreAst.Concrete
+open Utils.Aliases
+open Utils
 
 let rec of_statement env (stmt:PC.Statement.t) : instr =
   let annot = env_annot env in
@@ -10,8 +8,23 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
   | FunctionDef r ->
      let fenv = (* new scope → new environement *)
        let open Parsing in
-       let bi = BlockId.mk_fun (PC.Identifier.to_string r.name) r.location in
-       { env with current = BidTable.find env.infos bi } in
+       let bi = BlockId.mk_fun (PCI.to_string r.name) r.location in
+       let current = BidTable.find env.infos bi in
+       let vars =
+         IdentMap.fold
+           ( fun py_ident py_info vmap ->
+             IdentMap.add py_ident
+               ( begin match py_info.scope with
+                 | Local | Parameter ->
+                    mk_var_t (PCI.to_string py_ident)
+                 | Nonlocal | Global ->
+                    IdentMap.find py_ident env.vars |> fst
+                 | Unknown -> assert false
+                 end
+               , py_info)
+               vmap)
+           current.identifiers env.vars in
+       { env with current; vars } in
      let spec = Expr.spec_of_arguments fenv r.args in
      let body = Block (List.map (of_statement fenv) r.body)
                 |> annot r.location in
@@ -54,25 +67,16 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
     | Raise _ | Try _ | TryStar _ | Assert _ | Import _ | ImportFrom _
     -> failwith "Not implemented (Instr)."
 
-module MC = Mlsem.Common
-module MlMVar = Mlsem_lang.MVariable
-module MlAst = Mlsem_lang.Ast
-module MSAst = Mlsem_system.Ast
-module MlT = Mlsem.Types
-module MlGTy = Mlsem.Types.GTy
-
-open Utils
 
 let dummy_ml_ast = MlAst.Value (MlGTy.any) |> ml_annot MC.Position.dummy
-let ml_fun_arg_name = "%#rec_arg"
+let ml_fun_arg_name = "%rec_arg"
 
 let to_ml (p,instr:instr) : MlAst.t =
   match instr with
   | Block _ -> failwith "TODO"
   | FunDef (f,args,_body) ->
-     let f_var = mk_var_t f.name in
      let f_rec_arg = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
-     let f_arg = mk_var p ml_fun_arg_name in
+     let f_arg = var_of_vart p f_rec_arg in
 
      let get_pos i = mk_projection p (MSAst.Field (arg_name_pos i)) f_arg in
      let get_kw id = mk_projection p (MSAst.Field (arg_name_kw id)) f_arg in
@@ -85,20 +89,21 @@ let to_ml (p,instr:instr) : MlAst.t =
               f_arg
               MlT.(Record.mk true
                      [ arg_name_pos i
-                     , (false, TVar.(mk KInfer (Some (arg_name_pos i))
-                                     |> typ))] )
+                     , (false
+                       , TVar.(mk KInfer (Some (arg_name_pos i)) |> typ))] )
               (get_pos i)
-              (get_kw id.name)
-         | `Kwd -> get_kw id.name
+              (get_kw (mlvar_get_name id.name))
+         | `Kwd -> get_kw (mlvar_get_name id.name)
        in
        let default = match eo with
          | None -> d
-         | Some e -> ( mk_var_t ~kind:MlMVar.Immut (def_arg_name id.name)
+         | Some e -> ( mk_var_t ~kind:MlMVar.Immut
+                         (MlVar.show id.name |> def_arg_name)
                      , Expr.to_ml e )::d
        in
        ( i+1
        , default
-       , ( mk_var_t id.name
+       , ( id.name
          , ast_in
          ) ::l )
      in
@@ -114,9 +119,9 @@ let to_ml (p,instr:instr) : MlAst.t =
      let f_anon = mk_lambda p f_type f_rec_arg f_body in
      let f_w_defaults = join_let f_anon def_po_args in
      mk_let p
-       f_var
+       f.name
        f_w_defaults
-       (var_of_vart p f_var)
+       (var_of_vart p f.name)
   | Return _ -> failwith "TODO"
   | Assign _ -> failwith "TODO"
   | While _ -> failwith "TODO"
@@ -126,6 +131,8 @@ let to_ml (p,instr:instr) : MlAst.t =
   | Continue -> failwith "TODO"
 
 (* === === === === === === *)
+open Mlsem_app
+open Mlsem
 
 let dummy_def = PAst.Definitions []
 let dummy_ast = PAst.Tuple []

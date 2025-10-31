@@ -1,4 +1,5 @@
 open Ast
+open Utils.Aliases
 
 let zip_for l1 l2 =
   let rec loop l1 l2 acc =
@@ -9,7 +10,7 @@ let zip_for l1 l2 =
   in
   loop l1 l2 []
 
-let rec of_expression (env:Env.t) (e:PyreAst.Concrete.Expression.t) : expr =
+let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
   let annot = env_annot env in
   match e with
   | BoolOp ({values=[a;b];_} as r) ->
@@ -75,9 +76,6 @@ and spec_of_arguments fenv (a:PC.Arguments.t) =
   ; kwonly  = List.map format kwonly
   ; vararg  = Option.map (Ident.of_argument fenv) a.vararg
   ; kwarg   = Option.map (Ident.of_argument fenv) a.kwarg }
-
-module MC = Mlsem.Common
-module MlAst = Mlsem_lang.Ast
 
 open Utils
 

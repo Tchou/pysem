@@ -1,7 +1,9 @@
-type 'a annot = Mlsem.Common.Position.t * 'a
+open Utils.Aliases
+
+type 'a annot = MC.Position.t * 'a
 
 type ident =
-  { name : string
+  { name : MlVar.t
   ; scope : Parsing.scope }
 type binop =
   | Add | Sub | Mult | Div | Mod | Pow | And | Or | Eq | Neq | Lt | Gt | Le | Ge
@@ -46,25 +48,24 @@ and instr = instr' annot
 
 type prog = instr list
 
-let dummy_annot = Mlsem.Common.Position.dummy
+let dummy_annot = MC.Position.dummy
 let dannot : 'a -> 'a annot = fun x -> dummy_annot, x
 let env_annot env loc t = env.Env.to_loc loc, t
 
-module PC = PyreAst.Concrete
-
 module Ident = struct
-  let of_identifier env id : ident =
+  let show ({name;_}:ident) = MlVar.show name
+
+  let of_identifier (env:Env.t) id : ident =
     let open Env in
     let open Parsing in
-    let open PC in
-    let info = match IdentMap.find_opt id env.current.identifiers with
+    let v, info = match IdentMap.find_opt id env.vars with
       | None -> failwith (Printf.sprintf "id %s not found in %s %s!"
-                            (Identifier.to_string id)
+                            (PCI.to_string id)
                             (Parsing.show_block_kind env.current.kind)
                             env.current.name)
-      | Some i -> i
+      | Some vi -> vi
     in
-    { name = Identifier.to_string id
+    { name = v
     ; scope = info.scope }
 
   let of_argument env arg : ident =
@@ -84,7 +85,7 @@ module Const = struct
     | Float _ | Ellipsis | BigInteger _ | Complex _ | ByteString _
       -> failwith "Not implemented (Const)."
 
-  let to_gty c : Mlsem.Types.GTy.t =
+  let to_gty c : MlGTy.t =
     let open Mlsem.Types in
     GTy.mk (match c with
             | None_ -> failwith "Ty.None"
@@ -131,7 +132,8 @@ let pp_coma_list pp =
   Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp)
 
 let pp_ident fmt id =
-  Format.fprintf fmt "%s" (*Parsing.show_scope id.scope*) id.name
+  Format.fprintf fmt "%s" (*Parsing.show_scope id.scope*)
+    (Ident.show id)
 let pp_binop fmt op =
   Format.fprintf fmt "%s"
     (match op with
@@ -172,7 +174,7 @@ and pp_spec fmt s = (* should be simpler and correct*)
   let open Format in
   let pp_list_i_eo =
     pp_coma_list (fun fmt (i,(e:expr option)) ->
-        fprintf fmt "%s%s%a" i.name (if e = None then "" else "=")
+        fprintf fmt "%s%s%a" Ident.(show i) (if e = None then "" else "=")
           (pp_print_option pp_expr) e) in
   let pos_arg = if s.posonly=[] && s.args=[] then ""
                 else sprintf "%s/%s" (if s.posonly=[] then "" else ", ")
@@ -182,11 +184,11 @@ and pp_spec fmt s = (* should be simpler and correct*)
     if (s.posonly=[] && s.args=[] && s.vararg=None) then ""
     else sprintf "%s*%s%s"
            (if s.args=[] && s.posonly=[] then "" else ", ")
-           (match s.vararg with None -> "" | Some i -> i.name)
+           (match s.vararg with None -> "" | Some i -> Ident.(show i))
            (if s.kwonly=[] then "" else ", ")
   in
   let kwo_kwa = if s.kwonly=[] || s.kwarg=None then "" else ", " in
-  let kwarg = match s.kwarg with None -> "" | Some id -> "**" ^ id.name in
+  let kwarg = match s.kwarg with None -> "" | Some id -> "**" ^ Ident.(show id) in
   fprintf fmt "@[(%a%s%a%s%a%s%s)@]"
     pp_list_i_eo s.posonly
     pos_arg
@@ -306,7 +308,7 @@ module PAstPrinter = struct
 end
 
 module MlAstPrinter = struct
-  open Mlsem_lang.Ast
+  open MlAst
   open Format
 
   let pp_list pp fmt l =
@@ -315,9 +317,11 @@ module MlAstPrinter = struct
 
   let pp_nel str = function [] -> "" | _ -> str
 
-  let pp_variable = Mlsem.Common.Variable.pp
-  let pp_gty = Mlsem.Types.GTy.pp
-  let pp_ty = Mlsem.Types.Ty.pp
+  let pp_variable fmt v =
+    let open MC.Variable in
+    Format.fprintf fmt "%s" (get_unique_name v)
+  let pp_gty = MlGTy.pp
+  let pp_ty = MlT.Ty.pp
   let pp_const = Mlsem_lang.Const.pp
   let pp_projection = Mlsem_system.Ast.pp_projection
   let pp_constructor = Mlsem.System.Ast.pp_constructor
@@ -340,7 +344,7 @@ module MlAstPrinter = struct
     | POr (p1,p2) ->
        fprintf fmt "@[(%a) or (%a)@]" pp_pattern p1 pp_pattern p2
     | PAssign (v,_) -> fprintf fmt "P(%a:=GTy)" pp_variable v
-  and pp_e (fmt:formatter) (e:Mlsem_lang.Ast.e) :unit =
+  and pp_e (fmt:formatter) (e:MlAst.e) :unit =
     match e with
     | Hole i -> fprintf fmt "Hole(%d)" i
     | Exc -> fprintf fmt "Exc"
