@@ -126,7 +126,7 @@ let to_ml (p,instr:instr) : MlAst.t =
   | Assign _ -> failwith "TODO"
   | While _ -> failwith "TODO"
   | If _ -> failwith "TODO"
-  | Iexpr _ -> failwith "TODO"
+  | Iexpr e -> Expr.to_ml e
   | Break -> MlAst.Break |> ml_annot p
   | Continue -> failwith "TODO"
 

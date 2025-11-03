@@ -80,8 +80,8 @@ and spec_of_arguments fenv (a:PC.Arguments.t) =
 open Utils
 
 let to_ml (p,e:expr) : MlAst.t = match e with
-  | Var _ -> failwith "TODO"
-  | Binop _ -> failwith "TOOD"
+  | Var v -> Var v.name |> ml_annot p
+  | Binop _ -> failwith "TODO"
   | Cst c -> Value Const.(to_gty c) |> ml_annot p
-  | Lambda _ -> failwith "TOOD"
-  | Apply _ -> failwith "TOOD"
+  | Lambda _ -> failwith "TODO"
+  | Apply _ -> failwith "TODO"
