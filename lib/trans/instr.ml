@@ -69,14 +69,15 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
 
 
 let dummy_ml_ast = MlAst.Value (MlGTy.any) |> ml_annot MC.Position.dummy
-let ml_fun_arg_name = "%rec_arg"
 
 let to_ml (p,instr:instr) : MlAst.t =
   match instr with
   | Block _ -> failwith "TODO"
   | FunDef (f,args,_body) ->
-     let f_rec_arg = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
-     let f_arg = var_of_vart p f_rec_arg in
+     let ml_fun_arg_name = "%rec_arg" in
+
+     let f_arg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
+     let f_arg = var_of_vart p f_arg_v in
 
      let get_pos i = mk_projection p (MSAst.Field (arg_name_pos i)) f_arg in
      let get_kw id = mk_projection p (MSAst.Field (arg_name_kw id)) f_arg in
@@ -98,7 +99,7 @@ let to_ml (p,instr:instr) : MlAst.t =
        let default = match eo with
          | None -> d
          | Some e -> ( mk_var_t ~kind:MlMVar.Immut
-                         (MlVar.show id.name |> def_arg_name)
+                         (Ident.show id |> def_arg_name)
                      , Expr.to_ml e )::d
        in
        ( i+1
@@ -113,11 +114,11 @@ let to_ml (p,instr:instr) : MlAst.t =
        List.fold_left (load_arg `Arg) (i,def_po, preamble_po) args.args in
      let f_type = [] in
 
-     let join_let last var_in =
-       List.fold_left (fun body (v,e) -> mk_let p v e body) last var_in in
-     let f_body = join_let dummy_ml_ast (* TODO:body *) preamble_po_args in
-     let f_anon = mk_lambda p f_type f_rec_arg f_body in
-     let f_w_defaults = join_let f_anon def_po_args in
+     let join_let_rev pos var_in last =
+       List.fold_left (fun body (v,e) -> mk_let pos v e body) last var_in in
+     let f_body = join_let_rev p preamble_po_args dummy_ml_ast (* TODO:body *) in
+     let f_anon = mk_lambda p f_type f_arg_v f_body in
+     let f_w_defaults = join_let_rev p def_po_args f_anon in
      mk_let p
        f.name
        f_w_defaults
