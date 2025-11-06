@@ -128,8 +128,7 @@ let to_ml (p,instr:instr) : MlAst.t =
   | While _ -> failwith "TODO"
   | If _ -> failwith "TODO"
   | Iexpr e -> Expr.to_ml e
-  | Break -> MlAst.Break |> ml_annot p
-  | Continue -> failwith "TODO"
+  | Break | Continue -> MlAst.Break |> ml_annot p
 
 (* === === === === === === *)
 open Mlsem_app
