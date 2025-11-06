@@ -82,25 +82,35 @@ let to_ml (p,instr:instr) : MlAst.t =
      let get_pos i = mk_projection p (MSAst.Field (arg_name_pos i)) f_arg in
      let get_kw id = mk_projection p (MSAst.Field (arg_name_kw id)) f_arg in
 
+     let mk_ite_rectest field thn els =
+       mk_ite p f_arg
+         MlT.(Record.mk true
+                [ field, (false, TVar.(mk KInfer (Some field) |> typ))])
+         thn els
+     in
+     let get_or_def mlget strget i_kw eo = match eo with
+       | None -> mlget i_kw
+       | Some (v,(pos,_)) -> mk_ite_rectest (strget i_kw)
+                               (mlget i_kw)
+                               (var_of_vart (MC.Eid.loc pos) v)
+     in
      let load_arg (pak:[`Pos|`Arg|`Kwd]) (i,d,l) (id,eo) =
+       let eo =
+         Option.map
+           (fun e -> mk_var_t ~kind:MlMVar.Immut (Ident.show id |> def_arg_name)
+                   , Expr.to_ml e) eo in
+       let id_kw = mlvar_get_name id.name in
        let ast_in = match pak with
-         | `Pos -> get_pos i
+         | `Pos -> get_or_def get_pos arg_name_pos i eo
          | `Arg ->
-            mk_ite p
-              f_arg
-              MlT.(Record.mk true
-                     [ arg_name_pos i
-                     , (false
-                       , TVar.(mk KInfer (Some (arg_name_pos i)) |> typ))] )
+            mk_ite_rectest (arg_name_pos i)
               (get_pos i)
-              (get_kw (mlvar_get_name id.name))
-         | `Kwd -> get_kw (mlvar_get_name id.name)
+              (get_or_def get_kw arg_name_kw id_kw eo)
+         | `Kwd -> get_or_def get_kw arg_name_kw id_kw eo
        in
        let default = match eo with
          | None -> d
-         | Some e -> ( mk_var_t ~kind:MlMVar.Immut
-                         (Ident.show id |> def_arg_name)
-                     , Expr.to_ml e )::d
+         | Some e -> e::d
        in
        ( i+1
        , default
