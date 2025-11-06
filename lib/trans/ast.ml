@@ -31,7 +31,7 @@ and spec =
   ; kwarg   : ident option }
 and params =
   { pos : expr list
-  ; kw  : (ident * expr) list }
+  ; kw  : (string * expr) list }
 
 type target = ident
 
@@ -202,7 +202,7 @@ and pp_params fmt {pos;kw} =
   fprintf fmt "@[(%a, %a)@]"
     (pp_coma_list pp_expr) pos
     (pp_coma_list (fun fmt (k,e) ->
-         fprintf fmt "@[%a=%a@]" pp_ident k pp_expr e)) kw
+         fprintf fmt "@[%a=%a@]" pp_print_string k pp_expr e)) kw
 
 let rec pp_instr' fmt instr' : unit =
   let open Format in

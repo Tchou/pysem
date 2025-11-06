@@ -24,6 +24,9 @@ let mk_var_t ?(kind=MlMVar.Mut) str =
 let mk_var pos ?(kind=MlMVar.Mut) str =
   MlAst.Var (mk_var_t ~kind str) |> ml_annot pos
 and var_of_vart pos v = Var v |> ml_annot pos
+let mk_record pos decl_l expr_l =
+  MlAst.Constructor ( MSAst.Rec (List.map (fun dec -> dec, false) decl_l, false)
+                    , expr_l) |> ml_annot pos
 let mk_projection pos proj ast =
   MlAst.Projection (proj, ast) |> ml_annot pos
 let mk_lambda pos ty ?(gty=MlGTy.any) id body =

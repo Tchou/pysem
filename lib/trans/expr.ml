@@ -43,7 +43,7 @@ let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
          (fun kw ->
            let open PC.Keyword in
            match kw.arg with
-           | Some id -> ( Ident.of_identifier env id
+           | Some id -> ( PCI.to_string id
                         , of_expression env kw.value )
            | None -> failwith "Not implemented (Expr.Call(several kw_args)).")
          r.keywords in
@@ -79,9 +79,18 @@ and spec_of_arguments fenv (a:PC.Arguments.t) =
 
 open Utils
 
-let to_ml (p,e:expr) : MlAst.t = match e with
+let rec to_ml (p,e:expr) : MlAst.t = match e with
   | Var v -> Var v.name |> ml_annot p
   | Binop _ -> failwith "TODO"
   | Cst c -> Value Const.(to_gty c) |> ml_annot p
   | Lambda _ -> failwith "TODO"
-  | Apply _ -> failwith "TODO"
+  | Apply (e,params) ->
+     let pos_n, pos_e =
+       List.(mapi (fun i expr -> arg_name_pos i, to_ml expr) params.pos
+             |> split)
+     and kw_n, kw_e =
+       List.(map (fun (str, expr) -> arg_name_kw str, to_ml expr) params.kw
+             |> split)
+     in
+     App (to_ml e, mk_record p (pos_n @ kw_n) (pos_e @ kw_e))
+     |> ml_annot p
