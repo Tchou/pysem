@@ -181,7 +181,9 @@ and pp_spec fmt s = (* should be simpler and correct*)
                        (if s.args=[] && s.kwonly=[] && s.vararg=None
                         then "" else ", ") in
   let arg_kw =
-    if (s.posonly=[] && s.args=[] && s.vararg=None) then ""
+    if (s.posonly=[] && s.args=[] && s.vararg=None)
+    then if s.kwonly=[] then ""
+         else "*, "
     else sprintf "%s*%s%s"
            (if s.args=[] && s.posonly=[] then "" else ", ")
            (match s.vararg with None -> "" | Some i -> Ident.(show i))
