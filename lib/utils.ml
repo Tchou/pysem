@@ -18,6 +18,13 @@ let mk_id fmt = Format.kasprintf (fun s -> "%" ^ s) fmt
 let ml_annot p (ast:MlAst.e) =
   (MC.Eid.unique_with_pos p, ast)
 
+let mk_tv ?(k=MlT.TVar.KInfer) str =
+  MlT.TVar.(mk k (Some str) |> typ)
+let mk_rec_disj opn (fbt_ll:(string * (bool * MlT.Ty.t)) list list) =
+  let open MlT in
+  List.map (MlT.Record.mk opn) fbt_ll
+  |> Ty.disj
+
 let mk_var_t ?(kind=MlMVar.Mut) str =
   MlMVar.create kind (Some str)
 
@@ -25,18 +32,20 @@ let mk_var pos ?(kind=MlMVar.Mut) str =
   MlAst.Var (mk_var_t ~kind str) |> ml_annot pos
 and var_of_vart pos v = Var v |> ml_annot pos
 let mk_record pos decl_l expr_l =
-  MlAst.Constructor ( MSAst.Rec (List.map (fun dec -> dec, false) decl_l, false)
-                    , expr_l) |> ml_annot pos
+  MlAst.Constructor
+    ( MSAst.Rec (List.map (fun dec -> dec, false) decl_l, false)
+    , expr_l) |> ml_annot pos
 let mk_projection pos proj ast =
   MlAst.Projection (proj, ast) |> ml_annot pos
-let mk_lambda pos ty ?(gty=MlGTy.any) id body =
+let mk_lambda pos ty gty id body =
   MlAst.Lambda (ty, gty, id, body) |> ml_annot pos
-let mk_let pos ?(ty=[]) id ast_in ast_out =
+let mk_let pos ty id ast_in ast_out =
   MlAst.Let (ty,id,ast_in,ast_out) |> ml_annot pos
 let mk_ite pos test ty thn els =
   MlAst.Ite (test,ty,thn,els) |> ml_annot pos
 
 let arg_name_pos i = mk_id "p_%d" i
+and arg_name_arg a = mk_id "a_%s" a
 and arg_name_kw  k = mk_id "k_%s" k
 and def_arg_name k = mk_id "d_%s" k
 

@@ -25,10 +25,31 @@ let main () =
      let env = Env.init bil to_loc in
      let p = Prog.of_module env m in
      Format.printf "pysem ast:@.%a@.--@\n" Ast.pp_prog p;
-     Prog.to_ml p
-     |> Format.(printf "mlsem ast:@\n%a@."
-                  (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
-                     Ast.MlAstPrinter.pp_t))
+     let ml = Prog.to_ml p in
+     Format.(printf "mlsem ast:@\n%a@."
+               (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
+                  Ast.MlAstPrinter.pp_t)) ml;
+     Format.printf "---@.%!";
+     let mlsys = List.map Mlsem_lang.Transform.transform ml in
+     let module MSC  = Mlsem.System.Checker in
+     let module MSRc = Mlsem.System.Reconstruction in
+     let module MSRf = Mlsem.System.Refinement in
+     let module MCE  = Mlsem.Common.Env in
+     let module MCRE = Mlsem.Common.REnvSet in
+     let typed =
+       try
+         List.map (fun ast ->
+             Format.printf ">>@\n%a@." Mlsem.System.Ast.pp ast;
+             MSC.typeof MCE.empty
+               MSRc.(infer MCE.empty (MSRf.refinement_envs MCE.empty ast) ast)
+               ast) mlsys
+       with
+       | MSC.Untypeable err ->
+          Format.printf "%s : %a@.%!" err.title
+            (Format.pp_print_option pp_print_string) err.descr;
+          raise (MSC.Untypeable err)
+     in
+     List.iter (Format.printf "%a@." Mlsem.Types.GTy.pp) typed
 
 let () =
   try main () with

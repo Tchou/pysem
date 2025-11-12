@@ -74,62 +74,104 @@ let to_ml (p,instr:instr) : MlAst.t =
   match instr with
   | Block _ -> failwith "TODO"
   | FunDef (f,args,_body) ->
+     let print_recty (fbt_ll:(string * (bool * MlT.Ty.t)) list list) =
+       Format.(
+         printf ">> rectype:@\n  @[%a@]@.--@\n"
+           (fun fmt fbt_l ->
+             fprintf fmt "%a"
+               (pp_print_list
+                  ~pp_sep:(fun fmt () -> fprintf fmt ";@\n")
+                  (fun fmt fbtl ->
+                    fprintf fmt "@[<hov 2>[%a]@]"
+                      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
+                         (fun fmt (f,(b,t)) ->
+                           fprintf fmt "@[%s:(%a,%a)@]" f
+                             pp_print_bool b MlT.Ty.pp t) )
+                      fbtl) )
+               fbt_l)
+           fbt_ll)
+     in
      let ml_fun_arg_name = "%rec_arg" in
 
      let f_arg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
      let f_arg = var_of_vart p f_arg_v in
+     let nb_pos = List.length args.posonly
+     and nb_arg = List.length args.args in
 
      let get_pos i = mk_projection p (MSAst.Field (arg_name_pos i)) f_arg in
      let get_kw id = mk_projection p (MSAst.Field (arg_name_kw id)) f_arg in
 
-     let mk_ite_rectest field thn els =
+     let mk_ite_rectest field tv thn els =
        mk_ite p f_arg
          MlT.(Record.mk true
-                [ field, (false, TVar.(mk KInfer (Some field) |> typ))])
+                [ field, (false,tv) ])
          thn els
      in
-     let get_or_def mlget strget i_kw eo = match eo with
+     let get_or_def mlget strget i_kw otv eo = match eo with
        | None -> mlget i_kw
-       | Some (v,(pos,_)) -> mk_ite_rectest (strget i_kw)
+       | Some (v,(pos,_)) -> mk_ite_rectest (strget i_kw) otv
                                (mlget i_kw)
                                (var_of_vart (MC.Eid.loc pos) v)
      in
-     let load_arg (pak:[`Pos|`Arg|`Kwd]) (i,d,l) (id,eo) =
-       let eo =
-         Option.map
-           (fun e -> mk_var_t ~kind:MlMVar.Immut (Ident.show id |> def_arg_name)
-                   , Expr.to_ml e) eo in
+     let load_arg (pak:[`Pos|`Arg|`Kwd]) (i,d,l,t) (id,eo) =
+       let opt, eo, default = match eo with
+         | None -> false, None, d
+         | Some e ->
+            let e = mk_var_t ~kind:MlMVar.Immut
+                      (Ident.show id |> def_arg_name)
+                  , Expr.to_ml e in
+            true, Some e, e::d in
        let id_kw = mlvar_get_name id.name in
-       let ast_in = match pak with
-         | `Pos -> get_or_def get_pos arg_name_pos i eo
+       let t, ast_in = match pak with
+         | `Pos ->
+            let field = arg_name_pos i in
+            let tv = field |> mk_tv in
+            ( List.map (fun rec_t -> (field,(opt,tv))::rec_t) t
+            , get_or_def get_pos arg_name_pos i tv eo )
          | `Arg ->
-            mk_ite_rectest (arg_name_pos i)
-              (get_pos i)
-              (get_or_def get_kw arg_name_kw id_kw eo)
-         | `Kwd -> get_or_def get_kw arg_name_kw id_kw eo
-       in
-       let default = match eo with
-         | None -> d
-         | Some e -> e::d
+            let field_p = arg_name_pos i in
+            let field_k = arg_name_kw id_kw in
+            let tv = arg_name_arg id_kw |> mk_tv in
+            ( List.(mapi (fun j rec_t ->
+                        if j < length t - (i-nb_pos) - 1
+                        then (field_p,(opt,tv))::rec_t
+                        else (field_k,(opt,tv))::rec_t)
+                      t)
+            , mk_ite_rectest (arg_name_pos i) tv
+                (get_pos i)
+                (get_or_def get_kw arg_name_kw id_kw tv eo) )
+         | `Kwd ->
+            let field = arg_name_kw id_kw in
+            let tv = field |> mk_tv in
+            ( List.map (fun rec_t -> (field,(opt,tv))::rec_t) t
+            , get_or_def get_kw arg_name_kw id_kw tv eo )
        in
        ( i+1
        , default
-       , ( id.name
-         , ast_in
-         ) ::l )
+       , (id.name, ast_in)
+         ::l
+       , t )
      in
-     let i, def_po, preamble_po =
-       List.fold_left (load_arg `Pos) (0,[],[]) args.posonly  in
-     let _, def_po_args, preamble_po_args =
-       List.fold_left (load_arg `Arg) (i,def_po, preamble_po) args.args in
-     let f_type = [] in
+     let ty = List.init (nb_arg+1) (fun _ -> []) in
+     let i, def, preamble, ty =
+       List.fold_left (load_arg `Pos) (0, [] , []      , ty) args.posonly in
+     let i, def, preamble, ty =
+       List.fold_left (load_arg `Arg) (i, def, preamble, ty) args.args    in
+     let _, def, preamble, ty =
+       List.fold_left (load_arg `Kwd) (i, def, preamble, ty) args.kwonly  in
+     let ty = List.(map rev ty) in
+     let () = print_recty ty in
+     let sstt_ty = mk_rec_disj false ty in
+     let () = Format.printf ">> sstt_ty:@.  @[%a@]@." MlT.Ty.pp sstt_ty in
+     let f_type = MlGTy.mk sstt_ty in
+     let () = Format.printf ">> gty:@.  @[%a@]@." MlGTy.pp f_type in
 
      let join_let_rev pos var_in last =
-       List.fold_left (fun body (v,e) -> mk_let pos v e body) last var_in in
-     let f_body = join_let_rev p preamble_po_args dummy_ml_ast (* TODO:body *) in
-     let f_anon = mk_lambda p f_type f_arg_v f_body in
-     let f_w_defaults = join_let_rev p def_po_args f_anon in
-     mk_let p
+       List.fold_left (fun body (v,e) -> mk_let pos [] v e body) last var_in in
+     let f_body = join_let_rev p preamble dummy_ml_ast (* TODO:body *) in
+     let f_anon = mk_lambda p [] f_type f_arg_v f_body in
+     let f_w_defaults = join_let_rev p def f_anon in
+     mk_let p []
        f.name
        f_w_defaults
        (var_of_vart p f.name)
