@@ -13,6 +13,8 @@ end
 
 open Aliases
 
+let debug = ref true
+
 let mk_id fmt = Format.kasprintf (fun s -> "%" ^ s) fmt
 
 let ml_annot p (ast:MlAst.e) =

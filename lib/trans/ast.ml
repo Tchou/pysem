@@ -190,7 +190,8 @@ and pp_spec fmt s = (* should be simpler and correct*)
            (if s.kwonly=[] then "" else ", ")
   in
   let kwo_kwa = if s.kwonly=[] || s.kwarg=None then "" else ", " in
-  let kwarg = match s.kwarg with None -> "" | Some id -> "**" ^ Ident.(show id) in
+  let kwarg =
+    match s.kwarg with None -> "" | Some id -> "**" ^ Ident.(show id) in
   fprintf fmt "@[(%a%s%a%s%a%s%s)@]"
     pp_list_i_eo s.posonly
     pos_arg
@@ -220,7 +221,8 @@ let rec pp_instr' fmt instr' : unit =
   | If (e,i,io) -> fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"
                      pp_expr e pp_instr i (pp_print_option pp_instr) io
   | Iexpr e -> pp_expr fmt e
-  | Return eo -> fprintf fmt "@[<hov 2>return@ %a@]" (pp_print_option pp_expr) eo
+  | Return eo -> fprintf fmt "@[<hov 2>return@ %a@]"
+                   (pp_print_option pp_expr) eo
   | Break -> fprintf fmt "break@\n"
   | Continue -> fprintf fmt "continue@\n"
 and pp_instr fmt (_,instr') = pp_instr' fmt instr'
@@ -321,17 +323,21 @@ module MlAstPrinter = struct
 
   let pp_variable fmt v =
     let open MC.Variable in
-    Format.fprintf fmt "%s" (get_unique_name v)
+    Format.fprintf fmt "%s"
+      (if !Utils.debug then get_unique_name v else show v)
   let pp_gty = MlGTy.pp
   let pp_ty = MlT.Ty.pp
   let pp_const = Mlsem_lang.Const.pp
-  let pp_projection = Mlsem_system.Ast.pp_projection
+  let pp_projection fmt p = match p with
+    | MSAst.Field str -> Format.pp_print_string fmt str
+    | _ -> MSAst.pp_projection fmt p
   let pp_constructor = Mlsem.System.Ast.pp_constructor
 
   let rec pp_pattern_constructor fmt pc : unit = match pc with
     | PCTuple i -> fprintf fmt "PTuple(%d)" i
     | PCCons -> fprintf fmt "PCCons"
-    | PCRec (sl,b) -> fprintf fmt "@[PCR(%a,%b)@]" (pp_list pp_print_string) sl b
+    | PCRec (sl,b) ->
+       fprintf fmt "@[PCR(%a,%b)@]" (pp_list pp_print_string) sl b
     | PCTag _ -> fprintf fmt "PCTag"
     | PCEnum _ -> fprintf fmt "PCEnum"
     | PCCustom _ -> fprintf fmt "PCCustom"
@@ -357,14 +363,14 @@ module MlAstPrinter = struct
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
     | Constructor (c,tl) ->
        fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
-    | Lambda (tyl,_,v,t) ->
-       fprintf fmt "@[<hov 2>fun %a%s@[%a@] ->@ %a@]"
-         pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t
+    | Lambda (_,gty,v,t) ->
+       fprintf fmt "@[<hov 2>fun %a@ : @[%a@] ->@ %a@]"
+         pp_variable v pp_gty gty pp_t t
     | LambdaRec l ->
        pp_print_list
          ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
-         (fun fmt (_,v,t) -> fprintf fmt "@[<hov 2>rfun %a ->@ %a@]"
-                               pp_variable v pp_t t)
+         (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ : @[%a@] ->@ %a@]"
+                                 pp_variable v pp_gty gty pp_t t)
          fmt
          l
     | Ite (test,ty,t1,t2) ->
