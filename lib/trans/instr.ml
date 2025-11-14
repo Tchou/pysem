@@ -74,9 +74,9 @@ let to_ml (p,instr:instr) : MlAst.t =
   match instr with
   | Block _ -> failwith "TODO"
   | FunDef (f,args,_body) ->
-     let print_recty (fbt_ll:(string * (bool * MlT.Ty.t)) list list) =
+     let pp_recty fmt (fbt_ll:(string * (bool * MlT.Ty.t)) list list) =
        Format.(
-         printf ">> rectype:@\n  @[%a@]@.--@\n"
+         fprintf fmt ">> rectype:@\n  @[%a@]@.--@\n"
            (fun fmt fbt_l ->
              fprintf fmt "%a"
                (pp_print_list
@@ -160,12 +160,11 @@ let to_ml (p,instr:instr) : MlAst.t =
      let _, def, preamble, ty =
        List.fold_left (load_arg `Kwd) (i, def, preamble, ty) args.kwonly  in
      let ty = List.(map rev ty) in
-     let () = print_recty ty in
+     dbg_pr "rectype" pp_recty ty;
      let sstt_ty = mk_rec_disj false ty in
-     let () = Format.printf ">> sstt_ty:@.  @[%a@]@." MlT.Ty.pp sstt_ty in
+     dbg_pr "sstt_ty" MlT.Ty.pp sstt_ty;
      let f_type = MlGTy.mk sstt_ty in
-     let () = Format.printf ">> gty:@.  @[%a@]@." MlGTy.pp f_type in
-
+     dbg_pr "gty" MlGTy.pp f_type;
      let join_let_rev pos var_in last =
        List.fold_left (fun body (v,e) -> mk_let pos [] v e body) last var_in in
      let f_body = join_let_rev p preamble dummy_ml_ast (* TODO:body *) in

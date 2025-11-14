@@ -38,8 +38,9 @@ let main () =
      let module MCRE = Mlsem.Common.REnvSet in
      let typed =
        try
-         List.map (fun ast ->
-             Format.printf ">>@\n%a@." Mlsem.System.Ast.pp ast;
+         List.mapi (fun i ast ->
+             Utils.dbg_pr ("typed_"^(string_of_int i))
+               Ast.MSAstPrinter.pp_t ast;
              MSC.typeof MCE.empty
                MSRc.(infer MCE.empty (MSRf.refinement_envs MCE.empty ast) ast)
                ast) mlsys
