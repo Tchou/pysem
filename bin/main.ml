@@ -1,4 +1,6 @@
 open Pysem
+open Utils.Aliases
+
 let usage_message = Format.sprintf "%s <file.py>" Sys.argv.(0)
 let input_file = ref None
 
@@ -19,41 +21,45 @@ let main () =
      let m, bil, to_loc = Parsing.parse ~file in
      let open Format in
      printf "%a@\n--@\n"
-       Sexplib0.Sexp.pp_hum (PyreAst.Concrete.Module.sexp_of_t m);
+       Sexplib0.Sexp.pp_hum (PC.Module.sexp_of_t m);
      printf "%a@\n"
        (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil;
      let env = Env.init bil to_loc in
      let p = Prog.of_module env m in
      Format.printf "pysem ast:@.%a@.--@\n" Ast.pp_prog p;
      let ml = Prog.to_ml p in
-     Format.(printf "mlsem ast:@\n%a@."
+     Format.(printf "mlsem ast:@.%a@."
                (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
                   Ast.MlAstPrinter.pp_t)) ml;
      Format.printf "---@.%!";
-     let mlsys = List.map Mlsem_lang.Transform.transform ml in
-     let module MSC  = Mlsem.System.Checker in
-     let module MSRc = Mlsem.System.Reconstruction in
-     let module MSRf = Mlsem.System.Refinement in
-     let module MCE  = Mlsem.Common.Env in
-     let module MCRE = Mlsem.Common.REnvSet in
-     let typed =
+     let ms_exprs = List.map ML.Transform.transform ml in
+     let module MSC = MS.Checker in
+     let module MTS = MlT.TyScheme in
+
+     let tyschemes, _ =
        try
-         List.mapi (fun i ast ->
-             Utils.dbg_pr ("typed_"^(string_of_int i))
-               Ast.MSAstPrinter.pp_t ast;
-             MSC.typeof MCE.empty
-               MSRc.(infer MCE.empty (MSRf.refinement_envs MCE.empty ast) ast)
-               ast) mlsys
+         List.fold_left (fun (tsl,mce) ast ->
+             (* Utils.dbg_pr ("typed_"^(string_of_int _i)) *)
+             (* Ast.MSAstPrinter.pp_t ast; *)
+             let annot = MS.Reconstruction.infer mce
+                           (MS.Refinement.refinement_envs mce ast) ast in
+             let tvs, gty = MSC.typeof_def mce annot ast
+                            |> MTS.norm_and_simpl
+                            |> MTS.get in
+             let ts = MTS.mk tvs MlGTy.(ub gty |> mk) in
+             ( ts::tsl, mce ))
+           ([], MC.Env.empty)
+           ms_exprs
        with
        | MSC.Untypeable err ->
           Format.printf "%s : %a@.%!" err.title
             (Format.pp_print_option pp_print_string) err.descr;
           raise (MSC.Untypeable err)
      in
-     List.iter (Format.printf "%a@." Mlsem.Types.GTy.pp) typed
+     List.iter (Format.printf "type :@.%a@." MTS.pp) tyschemes
 
 let () =
-  try main () with
+  try fst MlT.PEnv.(sequential_handler empty main ()) with
   | Parsing.Syntax (file, e) -> 
      Format.eprintf "%s: %d:%d-%d:%d : %s@\n"
        file e.line e.column e.end_line e.end_column e.message;
