@@ -3,10 +3,12 @@ module Aliases = struct
   module PCI = PC.Identifier
 
   module MC = Mlsem.Common
+  module MS = Mlsem.System
+  module ML = Mlsem.Lang
   module MlVar = Mlsem.Common.Variable
-  module MlMVar = Mlsem_lang.MVariable
-  module MlAst = Mlsem_lang.Ast
-  module MSAst = Mlsem_system.Ast
+  module MlMVar = Mlsem.Lang.MVariable
+  module MlAst = Mlsem.Lang.Ast
+  module MSAst = Mlsem.System.Ast
   module MlT = Mlsem.Types
   module MlGTy = Mlsem.Types.GTy
 end
@@ -16,7 +18,7 @@ open Aliases
 let debug = ref true
 let dbg_pr str pp_t t =
   if !debug
-  then Format.printf ">> %s:@.  @[%a@]@." str pp_t t
+  then Format.printf ">> %s:@.  @[%a@]@.%!" str pp_t t
 
 let mk_id fmt = Format.kasprintf (fun s -> "%" ^ s) fmt
 
