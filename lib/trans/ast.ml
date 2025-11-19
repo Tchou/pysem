@@ -325,7 +325,7 @@ module MlAstPrinter = struct
     Format.fprintf fmt "%s"
       (if !Utils.debug then get_unique_name v else show v)
   let pp_gty = MlGTy.pp
-  let pp_ty = MlT.Ty.pp
+  let pp_ty = MT.Ty.pp
   let pp_const = ML.Const.pp
   let pp_projection = PAstPrinter.pp_projection
   let pp_constructor = Mlsem.System.Ast.pp_constructor
@@ -422,7 +422,7 @@ module MSAstPrinter = struct
 
   let pp_variable = MlAstPrinter.pp_variable
   let pp_gty = MlGTy.pp
-  let pp_ty = MlT.Ty.pp
+  let pp_ty = MT.Ty.pp
   let pp_const = ML.Const.pp
   let pp_projection = MlAstPrinter.pp_projection
   let pp_constructor = MSAst.pp_constructor

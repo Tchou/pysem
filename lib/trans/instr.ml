@@ -86,7 +86,7 @@ let to_ml (p,instr:instr) : MlAst.t =
                       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
                          (fun fmt (f,(b,_t)) ->
                            fprintf fmt "@[%s:(%a,type)@]" f
-                             pp_print_bool b (*MlT.Ty.pp _t*)) )
+                             pp_print_bool b (*MT.Ty.pp _t*)) )
                       fbtl) )
                fbt_l)
            fbt_ll)
@@ -103,8 +103,8 @@ let to_ml (p,instr:instr) : MlAst.t =
 
      let mk_ite_rectest field _tv thn els =
        mk_ite p f_arg
-         MlT.(Record.mk true
-                [ field, (false,MlT.Ty.any) ])
+         MT.(Record.mk true
+                [ field, (false,MT.Ty.any) ])
          thn els
      in
      let get_or_def mlget strget i_kw otv eo = match eo with
@@ -162,7 +162,7 @@ let to_ml (p,instr:instr) : MlAst.t =
      let ty = List.(map rev ty) in
      (* dbg_pr "rectype" pp_recty ty; *)
      let sstt_ty = mk_rec_disj false ty in
-     (* dbg_pr "sstt_ty" MlT.Ty.pp sstt_ty; *)
+     (* dbg_pr "sstt_ty" MT.Ty.pp sstt_ty; *)
      let f_type = MlGTy.mk sstt_ty in
      (* dbg_pr "gty" MlGTy.pp f_type; *)
      let join_let_rev pos var_in last =

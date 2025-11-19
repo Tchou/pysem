@@ -5,11 +5,11 @@ module Aliases = struct
   module MC = Mlsem.Common
   module MS = Mlsem.System
   module ML = Mlsem.Lang
+  module MT = Mlsem.Types
   module MlVar = Mlsem.Common.Variable
   module MlMVar = Mlsem.Lang.MVariable
   module MlAst = Mlsem.Lang.Ast
   module MSAst = Mlsem.System.Ast
-  module MlT = Mlsem.Types
   module MlGTy = Mlsem.Types.GTy
 end
 
@@ -25,11 +25,11 @@ let mk_id fmt = Format.kasprintf (fun s -> "%" ^ s) fmt
 let ml_annot p (ast:MlAst.e) =
   (MC.Eid.unique_with_pos p, ast)
 
-let mk_tv ?(k=MlT.TVar.KInfer) str =
-  MlT.TVar.(mk k (Some str) |> typ)
-let mk_rec_disj opn (fbt_ll:(string * (bool * MlT.Ty.t)) list list) =
-  let open MlT in
-  List.map (MlT.Record.mk opn) fbt_ll
+let mk_tv ?(k=MT.TVar.KInfer) str =
+  MT.TVar.(mk k (Some str) |> typ)
+let mk_rec_disj opn (fbt_ll:(string * (bool * MT.Ty.t)) list list) =
+  let open MT in
+  List.map (MT.Record.mk opn) fbt_ll
   |> Ty.disj
 
 let mk_var_t ?(kind=MlMVar.Mut) str =
@@ -62,7 +62,7 @@ let mlvar_get_name v = match MlVar.get_name v with
 
 let ty_of_int i =
   let z = Z.of_int i in
-  MlT.Ty.interval (Some z) (Some z)
+  MT.Ty.interval (Some z) (Some z)
 
 let count_if p l =
   List.fold_left (fun acc e -> if p e then acc + 1 else acc) 0 l

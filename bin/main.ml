@@ -34,7 +34,7 @@ let main () =
      Format.printf "---@.%!";
      let ms_exprs = List.map ML.Transform.transform ml in
      let module MSC = MS.Checker in
-     let module MTS = MlT.TyScheme in
+     let module MTS = MT.TyScheme in
 
      let tyschemes, _ =
        try
@@ -59,7 +59,7 @@ let main () =
      List.iter (Format.printf "type :@.%a@." MTS.pp) tyschemes
 
 let () =
-  try fst MlT.PEnv.(sequential_handler empty main ()) with
+  try fst MT.PEnv.(sequential_handler empty main ()) with
   | Parsing.Syntax (file, e) -> 
      Format.eprintf "%s: %d:%d-%d:%d : %s@\n"
        file e.line e.column e.end_line e.end_column e.message;
