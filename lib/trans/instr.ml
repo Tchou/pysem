@@ -74,19 +74,19 @@ let to_ml (p,instr:instr) : MlAst.t =
   match instr with
   | Block _ -> failwith "TODO"
   | FunDef (f,args,_body) ->
-     let pp_recty fmt (fbt_ll:(string * (bool * MlT.Ty.t)) list list) =
+     let [@warning "-26"] pp_recty fmt fbt_ll =
        Format.(
-         fprintf fmt ">> rectype:@\n  @[%a@]@.--@\n"
+         fprintf fmt "@[<hov 2>%a@]"
            (fun fmt fbt_l ->
              fprintf fmt "%a"
                (pp_print_list
                   ~pp_sep:(fun fmt () -> fprintf fmt ";@\n")
                   (fun fmt fbtl ->
-                    fprintf fmt "@[<hov 2>[%a]@]"
+                    fprintf fmt "@[<hov 2>[ %a@ ]@]"
                       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
-                         (fun fmt (f,(b,t)) ->
-                           fprintf fmt "@[%s:(%a,%a)@]" f
-                             pp_print_bool b MlT.Ty.pp t) )
+                         (fun fmt (f,(b,_t)) ->
+                           fprintf fmt "@[%s:(%a,type)@]" f
+                             pp_print_bool b (*MlT.Ty.pp _t*)) )
                       fbtl) )
                fbt_l)
            fbt_ll)
@@ -101,10 +101,10 @@ let to_ml (p,instr:instr) : MlAst.t =
      let get_pos i = mk_projection p (MSAst.Field (arg_name_pos i)) f_arg in
      let get_kw id = mk_projection p (MSAst.Field (arg_name_kw id)) f_arg in
 
-     let mk_ite_rectest field tv thn els =
+     let mk_ite_rectest field _tv thn els =
        mk_ite p f_arg
          MlT.(Record.mk true
-                [ field, (false,tv) ])
+                [ field, (false,MlT.Ty.any) ])
          thn els
      in
      let get_or_def mlget strget i_kw otv eo = match eo with
@@ -160,11 +160,11 @@ let to_ml (p,instr:instr) : MlAst.t =
      let _, def, preamble, ty =
        List.fold_left (load_arg `Kwd) (i, def, preamble, ty) args.kwonly  in
      let ty = List.(map rev ty) in
-     dbg_pr "rectype" pp_recty ty;
+     (* dbg_pr "rectype" pp_recty ty; *)
      let sstt_ty = mk_rec_disj false ty in
-     dbg_pr "sstt_ty" MlT.Ty.pp sstt_ty;
+     (* dbg_pr "sstt_ty" MlT.Ty.pp sstt_ty; *)
      let f_type = MlGTy.mk sstt_ty in
-     dbg_pr "gty" MlGTy.pp f_type;
+     (* dbg_pr "gty" MlGTy.pp f_type; *)
      let join_let_rev pos var_in last =
        List.fold_left (fun body (v,e) -> mk_let pos [] v e body) last var_in in
      let f_body = join_let_rev p preamble dummy_ml_ast (* TODO:body *) in

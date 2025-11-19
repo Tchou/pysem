@@ -1,5 +1,7 @@
-let of_module (env : Env.t) (m : PyreAst.Concrete.Module.t) : Ast.prog =
+open Utils.Aliases
+
+let of_module (env : Env.t) (m : PC.Module.t) : Ast.prog =
   List.map (Instr.of_statement env) m.body
 
-let to_ml (prog : Ast.prog) : Mlsem_lang.Ast.t list =
+let to_ml (prog : Ast.prog) : ML.Ast.t list =
   List.map Instr.to_ml prog
