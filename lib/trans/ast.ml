@@ -241,7 +241,7 @@ module PAstPrinter = struct
   open Mlsem_app.PAst
   open Format
 
-  let pp_const = Mlsem_lang.Const.pp
+  let pp_const = ML.Const.pp
   let pp_projection fmt p = match p with
     | MSAst.Field str -> Format.pp_print_string fmt str
     | _ -> MSAst.pp_projection fmt p
@@ -326,7 +326,7 @@ module MlAstPrinter = struct
       (if !Utils.debug then get_unique_name v else show v)
   let pp_gty = MlGTy.pp
   let pp_ty = MlT.Ty.pp
-  let pp_const = Mlsem_lang.Const.pp
+  let pp_const = ML.Const.pp
   let pp_projection = PAstPrinter.pp_projection
   let pp_constructor = Mlsem.System.Ast.pp_constructor
 
@@ -340,7 +340,7 @@ module MlAstPrinter = struct
     | PCCustom _ -> fprintf fmt "PCCustom"
   and pp_pattern fmt p : unit = match p with
     | PType _ -> fprintf fmt "PType"
-    | PVar v -> fprintf fmt "@[%a@]" pp_variable v
+    | PVar (_,v) -> fprintf fmt "@[%a@]" pp_variable v
     | PConstructor (pc,pl) ->
        fprintf fmt "@[<hov 2>PCtor(%a;@ %a)@]"
          pp_pattern_constructor pc (pp_list pp_pattern) pl
@@ -348,7 +348,7 @@ module MlAstPrinter = struct
        fprintf fmt "@[(%a) and (%a)@]" pp_pattern p1 pp_pattern p2
     | POr (p1,p2) ->
        fprintf fmt "@[(%a) or (%a)@]" pp_pattern p1 pp_pattern p2
-    | PAssign (v,_) -> fprintf fmt "P(%a:=GTy)" pp_variable v
+    | PAssign (_,v,gty) -> fprintf fmt "P(%a:=%a)" pp_variable v pp_gty gty
   and pp_e (fmt:formatter) (e:MlAst.e) :unit =
     match e with
     | Hole i -> fprintf fmt "Hole(%d)" i
@@ -423,7 +423,7 @@ module MSAstPrinter = struct
   let pp_variable = MlAstPrinter.pp_variable
   let pp_gty = MlGTy.pp
   let pp_ty = MlT.Ty.pp
-  let pp_const = Mlsem_lang.Const.pp
+  let pp_const = ML.Const.pp
   let pp_projection = MlAstPrinter.pp_projection
   let pp_constructor = MSAst.pp_constructor
 
