@@ -94,7 +94,6 @@ module Const = struct
             | Int i -> Utils.ty_of_int i
             (* | Float _ -> Ty.float (\* !! TODO !! *\) *)
             | String _ -> Ty.string )
-
 end
 
 module Binop = struct
@@ -170,28 +169,22 @@ let rec pp_expr' fmt = function
      Format.fprintf fmt "@[<hov 2>fun %a -> %a@]" pp_spec x pp_expr e
   | Apply (e,p) -> Format.fprintf fmt "@[%a%a@]" pp_expr e pp_params p
 and pp_expr fmt (_,e') = pp_expr' fmt e'
-and pp_spec fmt s = (* should be simpler and correct*)
+and pp_spec fmt s =
   let open Format in
+  let pr_if b str = if b then str else "" in
+  let po, ar, va, ko, ka =
+    s.posonly<>[], s.args<>[], s.vararg<>None, s.kwonly<>[], s.kwarg<>None in
+  let pos_arg = (pr_if po ", /") ^ (pr_if (po && (ar||va||ko||ka)) ", ") in
+  let var = match s.vararg with None -> "" | Some id -> Ident.show id in
+  let arg_kw = (pr_if (ar && (va || ko)) ", ") ^ (pr_if (va || ko) "*") ^ var
+               ^ (pr_if ko ", ") in
+  let kwo_kwa = pr_if (ka && (ko || va || ar)) ", " in
+  let kwarg =
+    match s.kwarg with None -> "" | Some id -> "**" ^ Ident.(show id) in
   let pp_list_i_eo =
     pp_coma_list (fun fmt (i,(e:expr option)) ->
         fprintf fmt "%s%s%a" Ident.(show i) (if e = None then "" else "=")
           (pp_print_option pp_expr) e) in
-  let pos_arg = if s.posonly=[] && s.args=[] then ""
-                else sprintf "%s/%s" (if s.posonly=[] then "" else ", ")
-                       (if s.args=[] && s.kwonly=[] && s.vararg=None
-                        then "" else ", ") in
-  let arg_kw =
-    if (s.posonly=[] && s.args=[] && s.vararg=None)
-    then if s.kwonly=[] then ""
-         else "*, "
-    else sprintf "%s*%s%s"
-           (if s.args=[] && s.posonly=[] then "" else ", ")
-           (match s.vararg with None -> "" | Some i -> Ident.(show i))
-           (if s.kwonly=[] then "" else ", ")
-  in
-  let kwo_kwa = if s.kwonly=[] || s.kwarg=None then "" else ", " in
-  let kwarg =
-    match s.kwarg with None -> "" | Some id -> "**" ^ Ident.(show id) in
   fprintf fmt "@[(%a%s%a%s%a%s%s)@]"
     pp_list_i_eo s.posonly
     pos_arg
