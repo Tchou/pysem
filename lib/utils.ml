@@ -18,7 +18,7 @@ open Aliases
 let debug = ref true
 let dbg_pr str pp_t t =
   if !debug
-  then Format.printf ">> %s:@.  @[%a@]@.%!" str pp_t t
+  then Format.printf "\027[1m%s:\027[0m@.  @[%a@]@.--@\n%!" str pp_t t
 
 let mk_id fmt = Format.kasprintf (fun s -> "%" ^ s) fmt
 

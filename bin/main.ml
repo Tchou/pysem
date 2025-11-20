@@ -1,5 +1,6 @@
 open Pysem
 open Utils.Aliases
+open Utils
 
 let usage_message = Format.sprintf "%s <file.py>" Sys.argv.(0)
 let input_file = ref None
@@ -20,18 +21,17 @@ let main () =
   | Some file ->
      let m, bil, to_loc = Parsing.parse ~file in
      let open Format in
-     printf "%a@\n--@\n"
+     dbg_pr "pyre-parsed expression"
        Sexplib0.Sexp.pp_hum (PC.Module.sexp_of_t m);
-     printf "%a@\n"
+     dbg_pr "block_infos"
        (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil;
      let env = Env.init bil to_loc in
      let p = Prog.of_module env m in
-     Format.printf "pysem ast:@.%a@.--@\n" Ast.pp_prog p;
+     dbg_pr "pysem ast" Ast.pp_prog p;
      let ml = Prog.to_ml p in
-     Format.(printf "mlsem ast:@.%a@."
-               (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
-                  Ast.MlAstPrinter.pp_t)) ml;
-     Format.printf "---@.%!";
+     dbg_pr "mlsem ast"
+       (pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
+          Ast.MlAstPrinter.pp_t) ml;
      let ms_exprs = List.map ML.Transform.transform ml in
      let module MSC = MS.Checker in
      let module MTS = MT.TyScheme in
