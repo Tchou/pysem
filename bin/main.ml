@@ -23,19 +23,20 @@ let main () =
      let open Format in
      dbg_pr "pyre-parsed expression"
        Sexplib0.Sexp.pp_hum (PC.Module.sexp_of_t m);
-     dbg_pr "block_infos"
+     pr "block_infos"
        (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil;
+
      let env = Env.init bil to_loc in
      let p = Prog.of_module env m in
-     dbg_pr "pysem ast" Ast.pp_prog p;
+     pr "pysem ast" Ast.pp_prog p;
+
      let ml = Prog.to_ml p in
-     dbg_pr "mlsem ast"
-       (pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n")
-          Ast.MlAstPrinter.pp_t) ml;
+     pr "mlsem ast"
+       (pp_print_list ~pp_sep:pp_print_newline Ast.MlAstPrinter.pp_t) ml;
+
      let ms_exprs = List.map ML.Transform.transform ml in
      let module MSC = MS.Checker in
      let module MTS = MT.TyScheme in
-
      let tyschemes, _ =
        try
          List.fold_left (fun (tsl,mce) ast ->
@@ -56,7 +57,9 @@ let main () =
             (Format.pp_print_option pp_print_string) err.descr;
           raise (MSC.Untypeable err)
      in
-     List.iter (Format.printf "type :@.%a@." MTS.pp) tyschemes
+     pr "types"
+       (pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") MTS.pp)
+       tyschemes
 
 let () =
   try fst MT.PEnv.(sequential_handler empty main ()) with

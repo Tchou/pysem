@@ -349,7 +349,7 @@ module MlAstPrinter = struct
     | Void -> fprintf fmt "Void"
     | Voidify t -> fprintf fmt "@[<hov 2>Vdfy %a@]" pp_t t
     | Isolate t -> fprintf fmt "@[<hov 2>Islt %a@]" pp_t t
-    | Value gty -> fprintf fmt "@[<hov 2>Val : %a@]" pp_gty gty
+    | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
     | Constructor (c,tl) ->
        fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
