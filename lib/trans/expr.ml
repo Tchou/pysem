@@ -80,9 +80,9 @@ and spec_of_arguments fenv (a:PC.Arguments.t) =
 open Utils
 
 let rec to_ml (p,e:expr) : MlAst.t = match e with
-  | Var v -> Var v.name |> ml_annot p
+  | Var v -> var_of_vart p v.name
   | Binop _ -> failwith "TODO"
-  | Cst c -> Value Const.(to_gty c) |> ml_annot p
+  | Cst c -> mk_value p Const.(to_gty c)
   | Lambda _ -> failwith "TODO"
   | Apply (e,params) ->
      let pos_n, pos_e =
@@ -92,5 +92,4 @@ let rec to_ml (p,e:expr) : MlAst.t = match e with
        List.(map (fun (str, expr) -> arg_name_kw str, to_ml expr) params.kw
              |> split)
      in
-     App (to_ml e, mk_record p (pos_n @ kw_n) (pos_e @ kw_e))
-     |> ml_annot p
+     mk_app p (to_ml e) (mk_record p (pos_n @ kw_n) (pos_e @ kw_e))
