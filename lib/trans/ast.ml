@@ -195,8 +195,9 @@ and pp_spec fmt s =
     kwarg
 and pp_params fmt {pos;kw} =
   let open Format in
-  fprintf fmt "@[(%a, %a)@]"
+  fprintf fmt "@[(%a%s%a)@]"
     (pp_coma_list pp_expr) pos
+    (if pos<>[] && kw<>[] then ", " else "")
     (pp_coma_list (fun fmt (k,e) ->
          fprintf fmt "@[%a=%a@]" pp_print_string k pp_expr e)) kw
 
@@ -205,7 +206,7 @@ let rec pp_instr' fmt instr' : unit =
   let pp_instr_list il =
     pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr il in
   match instr' with
-  | Block il -> fprintf fmt "@[# Block [@\n%a# ] Block@\n@]" pp_instr_list il
+  | Block il -> fprintf fmt "@[# Block [@\n%a@\n# ] Block@\n@]" pp_instr_list il
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a := %a@]"
                        (pp_ident) x pp_expr e
   | FunDef (i,s,b) -> fprintf fmt "@[<hov 2>def %a%a:@\n%a@]"
