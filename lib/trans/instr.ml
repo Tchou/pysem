@@ -70,10 +70,10 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
 
 let dummy_ml_ast = MlAst.Value (MlGTy.any) |> ml_annot MC.Position.dummy
 
-let to_ml (p,instr:instr) : MlAst.t =
+let rec to_ml (p,instr:instr) : MlAst.t =
   match instr with
   | Block _ -> failwith "TODO"
-  | FunDef (f,args,_body) ->
+  | FunDef (f,args,body) ->
      let [@warning "-26"] pp_recty fmt fbt_ll =
        Format.(
          fprintf fmt "@[%a@]"
@@ -164,7 +164,7 @@ let to_ml (p,instr:instr) : MlAst.t =
      (* dbg_pr "gty" MlGTy.pp f_type; *)
      let join_let_rev pos var_in last =
        List.fold_left (fun body (v,e) -> mk_let pos [] v e body) last var_in in
-     let f_body = join_let_rev p preamble dummy_ml_ast (* TODO:body *) in
+     let f_body = join_let_rev p preamble (to_ml body) in
      let f_anon = mk_lambda p [] f_type f_arg_v f_body in
      let f_w_defaults = join_let_rev p def f_anon in
      mk_let p []
