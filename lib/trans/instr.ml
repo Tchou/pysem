@@ -72,7 +72,12 @@ let dummy_ml_ast = MlAst.Value (MlGTy.any) |> ml_annot MC.Position.dummy
 
 let rec to_ml (p,instr:instr) : MlAst.t =
   match instr with
-  | Block _ -> failwith "TODO"
+  | Block l ->
+     begin match l with
+     | [] -> mk_unit p
+     | [i] -> to_ml i
+     | _ -> failwith "TODO"
+     end
   | FunDef (f,args,body) ->
      let [@warning "-26"] pp_recty fmt fbt_ll =
        Format.(
