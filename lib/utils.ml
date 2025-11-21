@@ -64,6 +64,7 @@ let mk_seq pos a1 a2 = MlAst.Seq (a1, a2) |> ml_annot pos
 
 let mk_return pos ast = MlAst.Return ast |> ml_annot pos
 
+let mk_break pos = MlAst.Break |> ml_annot pos
 
 let arg_name_pos i = mk_id "p_%d" i
 and arg_name_arg a = mk_id "a_%s" a

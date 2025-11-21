@@ -181,7 +181,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
   | While _ -> failwith "TODO"
   | If _ -> failwith "TODO"
   | Iexpr e -> Expr.to_ml e |> no_var
-  | Break | Continue -> MlAst.Break |> ml_annot p |> no_var
+  | Break | Continue -> mk_break p |> no_var
 
 (* === === === === === === *)
 open Mlsem_app
