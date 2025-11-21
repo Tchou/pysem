@@ -171,7 +171,9 @@ let to_ml (p,instr:instr) : MlAst.t =
        f.name
        f_w_defaults
        (var_of_vart p f.name)
-  | Return _ -> failwith "TODO"
+  | Return eo ->
+     ( match eo with None -> mk_unit p | Some e -> Expr.to_ml e )
+     |> mk_return p
   | Assign _ -> failwith "TODO"
   | While _ -> failwith "TODO"
   | If _ -> failwith "TODO"

@@ -38,6 +38,8 @@ let mk_var_t ?(kind=MlMVar.Mut) str =
 let mk_var pos ?(kind=MlMVar.Mut) str =
   MlAst.Var (mk_var_t ~kind str) |> ml_annot pos
 and var_of_vart pos v = Var v |> ml_annot pos
+let mk_value pos gty = MlAst.Value gty |> ml_annot pos
+let mk_unit pos = mk_value pos (MlGTy.mk MT.Ty.unit)
 let mk_record pos decl_l expr_l =
   MlAst.Constructor
     ( MSAst.Rec (List.map (fun dec -> dec, false) decl_l, false)
@@ -50,6 +52,8 @@ let mk_let pos ty id ast_in ast_out =
   MlAst.Let (ty,id,ast_in,ast_out) |> ml_annot pos
 let mk_ite pos test ty thn els =
   MlAst.Ite (test,ty,thn,els) |> ml_annot pos
+let mk_return pos ast =
+  MlAst.Return ast |> ml_annot pos
 
 let arg_name_pos i = mk_id "p_%d" i
 and arg_name_arg a = mk_id "a_%s" a
