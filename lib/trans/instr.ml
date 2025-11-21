@@ -76,19 +76,16 @@ let to_ml (p,instr:instr) : MlAst.t =
   | FunDef (f,args,_body) ->
      let [@warning "-26"] pp_recty fmt fbt_ll =
        Format.(
-         fprintf fmt "@[<hov 2>%a@]"
-           (fun fmt fbt_l ->
-             fprintf fmt "%a"
-               (pp_print_list
-                  ~pp_sep:(fun fmt () -> fprintf fmt ";@\n")
-                  (fun fmt fbtl ->
-                    fprintf fmt "@[<hov 2>[ %a@ ]@]"
-                      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
-                         (fun fmt (f,(b,_t)) ->
-                           fprintf fmt "@[%s:(%a,type)@]" f
-                             pp_print_bool b (*MT.Ty.pp _t*)) )
-                      fbtl) )
-               fbt_l)
+         fprintf fmt "@[%a@]"
+           (pp_print_list
+              ~pp_sep:(fun fmt () -> fprintf fmt ";@\n")
+              (fun fmt fbt_l ->
+                fprintf fmt "@[<hov 2>[ %a@ ]@]"
+                  (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
+                     (fun fmt (f,(b,_t)) ->
+                       fprintf fmt "@[%s:(%a,%a)@]" f
+                         pp_print_bool b MT.Ty.pp _t) )
+                  fbt_l) )
            fbt_ll)
      in
      let ml_fun_arg_name = "%rec_arg" in
