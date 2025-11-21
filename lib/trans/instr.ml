@@ -68,13 +68,14 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
     -> failwith "Not implemented (Instr)."
 
 
-let dummy_ml_ast = MlAst.Value (MlGTy.any) |> ml_annot MC.Position.dummy
+let dummy_ml_ast = mk_value MC.Position.dummy MlGTy.any
+let no_var ast = mk_var_t "_", ast
 
-let rec to_ml (p,instr:instr) : MlAst.t =
+let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
   match instr with
   | Block l ->
      begin match l with
-     | [] -> mk_unit p
+     | [] -> mk_unit p |> no_var
      | [i] -> to_ml i
      | _ -> failwith "TODO"
      end
@@ -169,21 +170,18 @@ let rec to_ml (p,instr:instr) : MlAst.t =
      (* dbg_pr "gty" MlGTy.pp f_type; *)
      let join_let_rev pos var_in last =
        List.fold_left (fun body (v,e) -> mk_let pos [] v e body) last var_in in
-     let f_body = join_let_rev p preamble (to_ml body) in
+     let f_body = join_let_rev p preamble (to_ml body |> snd) in
      let f_anon = mk_lambda p [] f_type f_arg_v f_body in
-     let f_w_defaults = join_let_rev p def f_anon in
-     mk_let p []
-       f.name
-       f_w_defaults
-       (var_of_vart p f.name)
+     ( f.name
+     , join_let_rev p def f_anon )
   | Return eo ->
      ( match eo with None -> mk_unit p | Some e -> Expr.to_ml e )
-     |> mk_return p
+     |> mk_return p |> no_var
   | Assign _ -> failwith "TODO"
   | While _ -> failwith "TODO"
   | If _ -> failwith "TODO"
-  | Iexpr e -> Expr.to_ml e
-  | Break | Continue -> MlAst.Break |> ml_annot p
+  | Iexpr e -> Expr.to_ml e |> no_var
+  | Break | Continue -> MlAst.Break |> ml_annot p |> no_var
 
 (* === === === === === === *)
 open Mlsem_app

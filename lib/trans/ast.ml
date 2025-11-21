@@ -454,3 +454,12 @@ module MSAstPrinter = struct
     | Alt (t1,t2) -> fprintf fmt "@[<hov 2>Alt(%a,@ %a)@]" pp_t t1 pp_t t2
   and pp_t fmt (_,e) = pp_e fmt e
 end
+
+let pp_ml_top fmt (v,ml) =
+  let open MlAstPrinter in
+  Format.fprintf fmt "@[<hov 2>let %a =@ %a@]@\n" pp_variable v pp_t ml
+
+let pp_ml_tys fmt (v,tys) =
+  let open MlAstPrinter in
+  Format.fprintf fmt "@[<hov 2>val %a :@ %a@]@\n"
+    pp_variable v MT.TyScheme.pp tys

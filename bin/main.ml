@@ -32,25 +32,27 @@ let main () =
 
      let ml = Prog.to_ml p in
      pr "mlsem ast"
-       (pp_print_list ~pp_sep:pp_print_newline Ast.MlAstPrinter.pp_t) ml;
+       (pp_print_list ~pp_sep:pp_print_newline Ast.pp_ml_top) ml;
 
-     let ms_exprs = List.map ML.Transform.transform ml in
+     let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
      let module MSC = MS.Checker in
      let module MTS = MT.TyScheme in
-     let tyschemes, _ =
+     let v_tys, _ =
        try
-         List.fold_left (fun (tsl,mce) ast ->
-             (* Utils.dbg_pr ("typed_"^(string_of_int _i)) *)
-             (* Ast.MSAstPrinter.pp_t ast; *)
-             let annot = MS.Reconstruction.infer mce
-                           (MS.Refinement.refinement_envs mce ast) ast in
-             let tvs, gty = MSC.typeof_def mce annot ast
-                            |> MTS.norm_and_simpl
-                            |> MTS.get in
-             let ts = MTS.mk tvs MlGTy.(ub gty |> mk) in
-             ( ts::tsl, mce ))
-           ([], MC.Env.empty)
-           ms_exprs
+         let t,e =
+           List.fold_left (fun (tsl,mce) (v,ast) ->
+               (* Utils.dbg_pr ("typed_"^(string_of_int _i)) *)
+               (* Ast.MSAstPrinter.pp_t ast; *)
+               let annot = MS.Reconstruction.infer mce
+                             (MS.Refinement.refinement_envs mce ast) ast in
+               let tvs, gty = MSC.typeof_def mce annot ast
+                              |> MTS.norm_and_simpl
+                              |> MTS.get in
+               let ts = MTS.mk tvs MlGTy.(ub gty |> mk) in
+               ( (v,ts)::tsl, MlMVar.add_to_env v ts mce ))
+             ([], MC.Env.empty)
+             ms_exprs in
+         List.rev t, e (* keep definition order *)
        with
        | MSC.Untypeable err ->
           Format.printf "%s : %a@.%!" err.title
@@ -58,8 +60,9 @@ let main () =
           raise (MSC.Untypeable err)
      in
      pr "types"
-       (pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "@\n") MTS.pp)
-       tyschemes
+       (pp_print_list ~pp_sep:(fun _ () -> ())
+          Ast.pp_ml_tys)
+       v_tys
 
 let () =
   try fst MT.PEnv.(sequential_handler empty main ()) with
