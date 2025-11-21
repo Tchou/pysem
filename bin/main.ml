@@ -60,7 +60,7 @@ let main () =
           raise (MSC.Untypeable err)
      in
      pr "types"
-       (pp_print_list ~pp_sep:(fun _ () -> ())
+       (pp_print_list ~pp_sep:pp_print_nothing
           Ast.pp_ml_tys)
        v_tys
 
