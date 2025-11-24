@@ -236,14 +236,15 @@ module PAstPrinter = struct
   open Format
 
   let pp_const = ML.Const.pp
-  let pp_projection fmt p = match p with
-    | MSAst.Field str -> Format.pp_print_string fmt str
-    | _ -> MSAst.pp_projection fmt p
+  let pp_projection fmt p =
+    let open MSAst in
+    match p with
+    | Field str -> pp_print_string fmt str
+    | FieldOpt str -> fprintf fmt "?%s" str
+    | _ -> pp_projection fmt p
 
   let rec pp_pattern fmt p : unit =
-    let pp_var_pattern fmt (v,p) =
-      fprintf fmt "%s:@[%a@]" v pp_pattern p
-    in
+    let pp_var_pattern fmt (v,p) = fprintf fmt "%s:@[%a@]" v pp_pattern p in
     match p with
     | PatType _ -> fprintf fmt "PType"
     | PatVar (_,v) -> fprintf fmt "@[%s@]" v
@@ -324,6 +325,16 @@ module MlAstPrinter = struct
   let pp_projection = PAstPrinter.pp_projection
   let pp_constructor = Mlsem.System.Ast.pp_constructor
 
+  let pp_Constructor_arg fmt ((c:MSAst.constructor),tl) pp_t = match c with
+    | Rec (sb_l,b) ->
+       fprintf fmt "@[<hov 2>{ %a%s }@]"
+         (pp_list (fun fmt ((f,opt),t) ->
+              fprintf fmt "@[%s :%s %a@]"
+                f (if opt then "?" else "") pp_t t))
+         (List.combine sb_l tl)
+         (if b then "; .." else "")
+    | _ -> fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
+
   let rec pp_pattern_constructor fmt pc : unit = match pc with
     | PCTuple i -> fprintf fmt "PTuple(%d)" i
     | PCCons -> fprintf fmt "PCCons"
@@ -352,8 +363,7 @@ module MlAstPrinter = struct
     | Isolate t -> fprintf fmt "@[<hov 2>Islt %a@]" pp_t t
     | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
-    | Constructor (c,tl) ->
-       fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
+    | Constructor (c,tl) -> pp_Constructor_arg fmt (c,tl) pp_t
     | Lambda (_,gty,v,t) ->
        fprintf fmt "@[<hov 2>fun %a@ : @[%a@] ->@ %a@]"
          pp_variable v pp_gty gty pp_t t
@@ -371,10 +381,10 @@ module MlAstPrinter = struct
          pp_t test pp_ty ty pp_t t1 pp_t t2
     | PatMatch (t,ptl) ->
        fprintf fmt "@[match @[%a@]@ with@ | %a@]@\n"
-         pp_t t (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "")
+         pp_t t (pp_print_list ~pp_sep:pp_print_nothing
                    (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]@\n"
                                        pp_pattern p pp_t t)) ptl
-    | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@])@ (@[%a@])@]" pp_t t1 pp_t t2
+    | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
     | Projection (p,t) -> fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
                             pp_t t pp_projection p
     | Declare (v,t) ->
@@ -423,10 +433,9 @@ module MSAstPrinter = struct
 
   let rec pp_e (fmt:formatter) (e:MSAst.e) :unit =
     match e with
-    | Value gty -> fprintf fmt "@[<hov 2>Val : %a@]" pp_gty gty
+    | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
-    | Constructor (c,tl) ->
-       fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
+    | Constructor (c,tl) -> MlAstPrinter.pp_Constructor_arg fmt (c,tl) pp_t
     | Lambda (gty,v,t) ->
        fprintf fmt "@[<hov 2>fun %a@ : @[%a@] ->@ %a@]"
          pp_variable v pp_gty gty pp_t t
@@ -442,7 +451,7 @@ module MSAstPrinter = struct
          "@[@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n\
           @[<hov 2>else@ %a@]@]@ "
          pp_t test pp_ty ty pp_t t1 pp_t t2
-    | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@])@ (@[%a@])@]" pp_t t1 pp_t t2
+    | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
     | Projection (p,t) -> fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
                             pp_t t pp_projection p
     | Let (tyl,v,t1,t2) ->

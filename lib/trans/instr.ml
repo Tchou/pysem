@@ -83,14 +83,13 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
      let [@warning "-26"] pp_recty fmt fbt_ll =
        Format.(
          fprintf fmt "@[%a@]"
-           (pp_print_list
-              ~pp_sep:(fun fmt () -> fprintf fmt ";@\n")
+           (Ast.pp_list
               (fun fmt fbt_l ->
                 fprintf fmt "@[<hov 2>[ %a@ ]@]"
-                  (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
+                  (Ast.pp_list
                      (fun fmt (f,(b,_t)) ->
-                       fprintf fmt "@[%s:(%a,%a)@]" f
-                         pp_print_bool b MT.Ty.pp _t) )
+                       fprintf fmt "@[%s :%s %a@]" f
+                         (if b then "?" else "") MT.Ty.pp _t) )
                   fbt_l) )
            fbt_ll)
      in
