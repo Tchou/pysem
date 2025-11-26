@@ -103,10 +103,10 @@ let dummy_pos = MC.Position.dummy
 let dummy_ml_ast = mk_value dummy_pos MlGTy.any
 let dummy_var_t = mk_var_t "_"
 
-let mk_ite_rectest pos record field opn ty thn els =
+let mk_ite_rectest pos record field opn thn els =
   mk_ite pos record
     MT.(Record.mk opn
-          [ field, (false,ty) ])
+          [ field, (false,MT.Ty.any) ])
     thn els
 
 let mk_getter_pk field =
@@ -116,7 +116,7 @@ let mk_getter_pk field =
   let f_arg = var_of_vart dummy_pos f_arg_v in
   let f_darg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_darg_name in
   let f_darg = var_of_vart dummy_pos f_darg_v in
-  mk_ite_rectest dummy_pos f_arg field true tv
+  mk_ite_rectest dummy_pos f_arg field true
     (mk_projection dummy_pos (MSAst.Field field) f_arg)
     (f_darg)
   |> mk_lambda dummy_pos [] (mk_tv ml_fun_darg_name |> MlGTy.mk) f_darg_v
@@ -133,12 +133,12 @@ let mk_getter_a f_p f_k f_a d =
     if d
     then let f_darg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_darg_name in
          let f_darg = var_of_vart dummy_pos f_darg_v in
-         mk_ite_rectest dummy_pos f_arg f_p true tv
+         mk_ite_rectest dummy_pos f_arg f_p true
            proj_p
-           (mk_ite_rectest dummy_pos f_arg f_k true tv
+           (mk_ite_rectest dummy_pos f_arg f_k true
               proj_k f_darg)
          |> mk_lambda dummy_pos [] (mk_tv ml_fun_darg_name |> MlGTy.mk) f_darg_v
-    else mk_ite_rectest dummy_pos f_arg f_p true tv
+    else mk_ite_rectest dummy_pos f_arg f_p true
            proj_p proj_k in
   mk_lambda dummy_pos [] gty f_arg_v body
 
