@@ -26,7 +26,7 @@ let init bil to_loc =
              (fun ident info vmap ->
                IdentMap.add
                  ident
-                 ( Utils.mk_var_t (PCI.to_string ident)
+                 ( Utils.mk_var_t ~kind:MlMVar.Immut (PCI.to_string ident)
                  , info )
                  vmap )
              current.identifiers
