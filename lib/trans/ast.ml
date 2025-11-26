@@ -281,7 +281,7 @@ module PAstPrinter = struct
        fprintf fmt
          "@[<hov 2>if %a@]@\n@[<hov 2>then@ %a@]@\n"
          pp_t test pp_t t1;
-       fprintf fmt (match t2 with (_, Ite _) -> "@[else@ %a@]@ "
+       fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
                                 | _ -> "@[<hov 2>else@ %a@]@ ")
          pp_t t2
     | App (t1,t2) -> fprintf fmt "(@[%a@])@ (@[%a@])" pp_t t1 pp_t t2
@@ -379,7 +379,7 @@ module MlAstPrinter = struct
        fprintf fmt
          "@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n"
          pp_t test pp_ty ty pp_t t1;
-       fprintf fmt (match t2 with (_, Ite _) -> "@[else@ %a@]@ "
+       fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
                                 | _ -> "@[<hov 2>else@ %a@]@ ")
          pp_t t2
     | PatMatch (t,ptl) ->
@@ -453,7 +453,7 @@ module MSAstPrinter = struct
        fprintf fmt
          "@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n"
          pp_t test pp_ty ty pp_t t1;
-       fprintf fmt (match t2 with (_, Ite _) -> "@[else@ %a@]@ "
+       fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
                                 | _ -> "@[<hov 2>else@ %a@]@ ")
          pp_t t2
     | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
