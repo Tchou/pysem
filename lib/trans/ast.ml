@@ -53,7 +53,8 @@ let dannot : 'a -> 'a annot = fun x -> dummy_annot, x
 let env_annot env loc t = env.Env.to_loc loc, t
 
 module Ident = struct
-  let show ({name;_}:ident) = MlVar.show name
+  let var_show = MlVar.(if !Utils.debug then get_unique_name else show)
+  let show ({name;_}:ident) = var_show name
 
   let of_identifier (env:Env.t) id : ident =
     let open Env in
@@ -278,8 +279,11 @@ module PAstPrinter = struct
          l
     | Ite (test,_,t1,t2) ->
        fprintf fmt
-         "@[@[<hov 2>if %a@]@\n@[<hov 2>then@ %a@]@\n@[<hov 2>else@ %a@]@]@ "
-         pp_t test pp_t t1 pp_t t2
+         "@[<hov 2>if %a@]@\n@[<hov 2>then@ %a@]@\n"
+         pp_t test pp_t t1;
+       fprintf fmt (match t2 with (_, Ite _) -> "@[else@ %a@]@ "
+                                | _ -> "@[<hov 2>else@ %a@]@ ")
+         pp_t t2
     | App (t1,t2) -> fprintf fmt "(@[%a@])@ (@[%a@])" pp_t t1 pp_t t2
     | Let ((_,v),t1,t2) ->
        fprintf fmt "@[@[<hov 2>let %s =@ @[%a@]@ in@]@\n%a@]" v pp_t t1 pp_t t2
@@ -295,7 +299,7 @@ module PAstPrinter = struct
        let none = fun _ _ -> () in
        fprintf fmt "@[<hov 2>{upd %a@ %s@ %a}@]"
          pp_t t s (pp_print_option none) ot
-    | TypeCast (t,_) -> fprintf fmt "@[<hov 2>cast [%a]@]" pp_t t
+    | TypeCast (t,_,_) -> fprintf fmt "@[<hov 2>cast [%a]@]" pp_t t
     | TypeCoerce (t,_,_) -> fprintf fmt "@[<hov 2>coerce [%a]@]" pp_t t
     | PatMatch (t,ptl) ->
        fprintf fmt "@[match @[%a@]@ with@\n| %a@]@\n"
@@ -315,10 +319,7 @@ module MlAstPrinter = struct
   open MlAst
   open Format
 
-  let pp_variable fmt v =
-    let open MC.Variable in
-    Format.fprintf fmt "%s"
-      (if !Utils.debug then get_unique_name v else show v)
+  let pp_variable fmt v = Format.fprintf fmt "%s" (Ident.var_show v)
   let pp_gty = MlGTy.pp
   let pp_ty = MT.Ty.pp
   let pp_const = ML.Const.pp
@@ -376,9 +377,11 @@ module MlAstPrinter = struct
          l
     | Ite (test,ty,t1,t2) ->
        fprintf fmt
-         "@[@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n\
-          @[<hov 2>else@ %a@]@]@ "
-         pp_t test pp_ty ty pp_t t1 pp_t t2
+         "@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n"
+         pp_t test pp_ty ty pp_t t1;
+       fprintf fmt (match t2 with (_, Ite _) -> "@[else@ %a@]@ "
+                                | _ -> "@[<hov 2>else@ %a@]@ ")
+         pp_t t2
     | PatMatch (t,ptl) ->
        fprintf fmt "@[match @[%a@]@ with@ | %a@]@\n"
          pp_t t (pp_print_list ~pp_sep:pp_print_nothing
@@ -433,7 +436,7 @@ module MSAstPrinter = struct
 
   let rec pp_e (fmt:formatter) (e:MSAst.e) :unit =
     match e with
-    | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
+    | Value gty -> fprintf fmt "@[<hov 2>(%a)@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
     | Constructor (c,tl) -> MlAstPrinter.pp_Constructor_arg fmt (c,tl) pp_t
     | Lambda (gty,v,t) ->
@@ -448,9 +451,11 @@ module MSAstPrinter = struct
          l
     | Ite (test,ty,t1,t2) ->
        fprintf fmt
-         "@[@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n\
-          @[<hov 2>else@ %a@]@]@ "
-         pp_t test pp_ty ty pp_t t1 pp_t t2
+         "@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n"
+         pp_t test pp_ty ty pp_t t1;
+       fprintf fmt (match t2 with (_, Ite _) -> "@[else@ %a@]@ "
+                                | _ -> "@[<hov 2>else@ %a@]@ ")
+         pp_t t2
     | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
     | Projection (p,t) -> fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
                             pp_t t pp_projection p

@@ -86,10 +86,10 @@ let rec to_ml (p,e:expr) : MlAst.t = match e with
   | Lambda _ -> failwith "TODO"
   | Apply (e,params) ->
      let pos_n, pos_e =
-       List.(mapi (fun i expr -> arg_name_pos i, to_ml expr) params.pos
+       List.(mapi (fun i expr -> field_name_pos i, to_ml expr) params.pos
              |> split)
      and kw_n, kw_e =
-       List.(map (fun (str, expr) -> arg_name_kw str, to_ml expr) params.kw
+       List.(map (fun (str, expr) -> field_name_kw str, to_ml expr) params.kw
              |> split)
      in
      mk_app p (to_ml e) (mk_record p (pos_n @ kw_n) (pos_e @ kw_e))

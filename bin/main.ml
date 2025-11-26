@@ -37,12 +37,13 @@ let main () =
      let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
      let module MSC = MS.Checker in
      let module MTS = MT.TyScheme in
+     (* MS.Config.infer_overload := false; *)
      let v_tys, _ =
        try
          let t,e =
            List.fold_left (fun (tsl,mce) (v,ast) ->
-               (* Utils.dbg_pr ("typed_"^(string_of_int _i)) *)
-               (* Ast.MSAstPrinter.pp_t ast; *)
+               Utils.dbg_pr ("typed \""^(Ast.Ident.var_show v)^"\"")
+                 Ast.MSAstPrinter.pp_t ast;
                let annot = MS.Reconstruction.infer mce
                              (MS.Refinement.refinement_envs mce ast) ast in
                let tvs, gty = MSC.typeof_def mce annot ast
@@ -65,7 +66,17 @@ let main () =
        v_tys
 
 let () =
-  try fst MT.PEnv.(sequential_handler empty main ()) with
+  let main = MT.PEnv.(sequential_handler empty main) in
+  try
+    if true
+    then begin
+        MT.Recording.start_recording ();
+        main () |> fst;
+        MT.Recording.stop_recording ();
+        MT.Recording.(tally_calls () |> save_to_file "tally_calls");
+      end
+    else main () |> fst
+  with
   | Parsing.Syntax (file, e) -> 
      Format.eprintf "%s: %d:%d-%d:%d : %s@\n"
        file e.line e.column e.end_line e.end_column e.message;

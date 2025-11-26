@@ -68,8 +68,38 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
     -> failwith "Not implemented (Instr)."
 
 
-let dummy_ml_ast = mk_value MC.Position.dummy MlGTy.any
-let no_var ast = mk_var_t "_", ast
+let gen_builtins : (string, (MlVar.t * ML.Ast.t)) Hashtbl.t =
+  (Hashtbl.create 16)
+
+let add_builtin vname body =
+  let open Hashtbl in
+  if mem gen_builtins vname
+  then find gen_builtins vname |> fst
+  else
+    let v = Utils.mk_var_t ~kind:MlMVar.Immut vname in
+    add gen_builtins vname (v,body);
+    v
+
+let builtin_getter_pk field =
+  let open Hashtbl in
+  let gname = getter_pk_name field in
+  if mem gen_builtins gname
+  then find gen_builtins gname |> fst
+  else let g = mk_getter_pk field in
+       let v = mk_var_t ~kind:MlMVar.Immut gname in
+       add gen_builtins gname (v,g);
+       v
+and builtin_getter_a i k f_p f_k f_a d =
+  let open Hashtbl in
+  let gname = getter_a_name i k d in
+  if mem gen_builtins gname
+  then find gen_builtins gname |> fst
+  else let g = mk_getter_a f_p f_k f_a d in
+       let v = mk_var_t ~kind:MlMVar.Immut gname in
+       add gen_builtins gname (v,g);
+       v
+
+let no_var ast = dummy_var_t, ast
 
 let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
   match instr with
@@ -93,60 +123,79 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
                   fbt_l) )
            fbt_ll)
      in
-     let ml_fun_arg_name = "%rec_arg" in
 
      let f_arg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
      let f_arg = var_of_vart p f_arg_v in
      let nb_pos = List.length args.posonly
      and nb_arg = List.length args.args in
 
-     let get_pos i = mk_projection p (MSAst.Field (arg_name_pos i)) f_arg in
-     let get_kw id = mk_projection p (MSAst.Field (arg_name_kw id)) f_arg in
+     let get_pos i = mk_projection p (MSAst.Field (field_name_pos i)) f_arg in
+     let get_kw id = mk_projection p (MSAst.Field (field_name_kw id)) f_arg in
 
-     let mk_ite_rectest field _tv thn els =
-       mk_ite p f_arg
-         MT.(Record.mk true
-                [ field, (false,MT.Ty.any) ])
-         thn els
-     in
+     (* let mk_ite_rectest field _tv =
+       mk_ite_rectest p f_arg field true MT.Ty.any in
      let get_or_def mlget strget i_kw otv eo = match eo with
        | None -> mlget i_kw
-       | Some (v,(pos,_)) -> mk_ite_rectest (strget i_kw) otv
-                               (mlget i_kw)
-                               (var_of_vart (MC.Eid.loc pos) v)
-     in
+       | Some (v,(pos,_)) ->
+          mk_ite_rectest (strget i_kw) otv
+            (mlget i_kw)
+            (var_of_vart (MC.Eid.loc pos) v)
+     in *)
      let load_arg (pak:[`Pos|`Arg|`Kwd]) (i,d,l,t) (id,eo) =
        let opt, eo, default = match eo with
          | None -> false, None, d
          | Some e ->
             let e = mk_var_t ~kind:MlMVar.Immut
-                      (Ident.show id |> def_arg_name)
+                      (Ident.show id |> def_var_name)
                   , Expr.to_ml e in
             true, Some e, e::d in
        let id_kw = mlvar_get_name id.name in
        let t, ast_in = match pak with
          | `Pos ->
-            let field = arg_name_pos i in
+            let field = field_name_pos i in
             let tv = field |> mk_tv in
+            (* let _getter = add_builtin (getter_name field)
+                           (mk_getter field) in *)
             ( List.map (fun rec_t -> (field,(opt,tv))::rec_t) t
-            , get_or_def get_pos arg_name_pos i tv eo )
+            , match eo with
+              | None -> get_pos i
+              | Some (v,(pos,_)) ->
+                 let g = builtin_getter_pk field |> var_of_vart p in
+                 mk_2app p g f_arg (var_of_vart (MC.Eid.loc pos) v)
+            (* get_or_def get_pos field_name_pos i tv eo *)
+            )
          | `Arg ->
-            let field_p = arg_name_pos i in
-            let field_k = arg_name_kw id_kw in
-            let tv = arg_name_arg id_kw |> mk_tv in
+            let field_p = field_name_pos i in
+            let field_k = field_name_kw id_kw in
+            let field_a = field_name_arg i id_kw in
+            let tv = mk_tv field_a in
+            let g = builtin_getter_a i id_kw field_p field_k field_a opt
+                      |> var_of_vart p in
+            let get = match eo with
+              | None -> mk_app p g f_arg
+              | Some (v,(pos,_)) ->
+                 mk_2app p g f_arg (var_of_vart (MC.Eid.loc pos) v) in
             ( List.(mapi (fun j rec_t ->
                         if j < length t - (i-nb_pos) - 1
                         then (field_p,(opt,tv))::rec_t
                         else (field_k,(opt,tv))::rec_t)
                       t)
-            , mk_ite_rectest (arg_name_pos i) tv
+            , get
+            (* mk_ite_rectest (field_name_pos i) tv
                 (get_pos i)
-                (get_or_def get_kw arg_name_kw id_kw tv eo) )
+                (get_or_def get_kw field_name_kw id_kw tv eo) *)
+            )
          | `Kwd ->
-            let field = arg_name_kw id_kw in
+            let field = field_name_kw id_kw in
             let tv = field |> mk_tv in
             ( List.map (fun rec_t -> (field,(opt,tv))::rec_t) t
-            , get_or_def get_kw arg_name_kw id_kw tv eo )
+            , match eo with
+              | None -> get_kw id_kw
+              | Some (v,(pos,_)) ->
+                 let g = builtin_getter_pk field |> var_of_vart p in
+                 mk_2app p g f_arg (var_of_vart (MC.Eid.loc pos) v)
+            (* get_or_def get_kw field_name_kw id_kw tv eo *)
+            )
        in
        ( i+1
        , default
