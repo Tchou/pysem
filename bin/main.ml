@@ -68,7 +68,7 @@ let main () =
 let () =
   let main = MT.PEnv.(sequential_handler empty main) in
   try
-    if true
+    if !Utils.debug
     then begin
         MT.Recording.start_recording ();
         main () |> fst;
