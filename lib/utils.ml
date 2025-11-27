@@ -40,9 +40,9 @@ and field_name_arg i k = mk_id "a_%d_%s" i k
 and field_name_kw  k = mk_id "k_%s" k
 and def_var_name k = mk_id "d_%s" k
 
-let getter_pk_name field = mk_id "get_%s_d" field
+let getter_pk_name field = mk_id "get_%s_?" field
 and getter_a_name i k d =
-  mk_id "geta_%d_%s%s" i k (if d then "_d" else "")
+  mk_id "get_%d_%s%s" i k (if d then "_?" else "")
 
 
 (* MAKE TYPES *)
