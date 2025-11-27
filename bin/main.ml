@@ -23,8 +23,8 @@ let main () =
      let open Format in
      dbg_pr "pyre-parsed expression"
        Sexplib0.Sexp.pp_hum (PC.Module.sexp_of_t m);
-     pr "block_infos"
-       (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil;
+     (* pr "block_infos" *)
+       (* (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil; *)
 
      let env = Env.init bil to_loc in
      let p = Prog.of_module env m in
