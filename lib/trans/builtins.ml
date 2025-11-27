@@ -1,29 +1,33 @@
-open Mlsem.Types
+open Utils.Aliases
+open Utils
 
-(*
-The base construct for the object hierarchy is open records
-each record has a __dict__ field and a __class__ field
+let builtins : (string, (MlVar.t * ML.Ast.t)) Hashtbl.t =
+  (Hashtbl.create 16)
 
-when looking for a property, it is looked for in 
-__dict__, if absent, it is looked for in
-__class__.__mro__ in order
+let add vname body =
+  let open Hashtbl in
+  if mem builtins vname
+  then find builtins vname |> fst
+  else
+    let v = mk_var_t ~kind:MlMVar.Immut vname in
+    add builtins vname (v,body);
+    v
 
-val attribute_error : string -> empty
-
-let get_x_from_mro mro =
-  match mro with
-  [] -> attribute_error "x"
-  | cls::mro -> 
-    if cls is { __dict__ : { x : any .. } .. } then (cls.__dict__).x else
-    get_x_from_mro mro
- end
-
- let get_x o = 
-  if o is { __dict__ : { x : any .. } .. } then (o.__dict__).x else
-  get_x_from_mro ((o.__class__).__mro__)
-
-*)
-
-let base : Builder.type_expr =
-  let open TyExpr in
-  TRecord (true, [])
+let getter_pk field =
+  let open Hashtbl in
+  let gname = getter_pk_name field in
+  if mem builtins gname
+  then find builtins gname |> fst
+  else let g = mk_getter_pk field in
+       let v = mk_var_t ~kind:MlMVar.Immut gname in
+       add builtins gname (v,g);
+       v
+and getter_a i k fp fk fa d =
+  let open Hashtbl in
+  let gname = getter_a_name i k d in
+  if mem builtins gname
+  then find builtins gname |> fst
+  else let g = mk_getter_a fp fk fa d in
+       let v = mk_var_t ~kind:MlMVar.Immut gname in
+       add builtins gname (v,g);
+       v

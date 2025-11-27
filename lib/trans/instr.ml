@@ -68,37 +68,6 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
     -> failwith "Not implemented (Instr)."
 
 
-let gen_builtins : (string, (MlVar.t * ML.Ast.t)) Hashtbl.t =
-  (Hashtbl.create 16)
-
-let add_builtin vname body =
-  let open Hashtbl in
-  if mem gen_builtins vname
-  then find gen_builtins vname |> fst
-  else
-    let v = Utils.mk_var_t ~kind:MlMVar.Immut vname in
-    add gen_builtins vname (v,body);
-    v
-
-let builtin_getter_pk field =
-  let open Hashtbl in
-  let gname = getter_pk_name field in
-  if mem gen_builtins gname
-  then find gen_builtins gname |> fst
-  else let g = mk_getter_pk field in
-       let v = mk_var_t ~kind:MlMVar.Immut gname in
-       add gen_builtins gname (v,g);
-       v
-and builtin_getter_a i k f_p f_k f_a d =
-  let open Hashtbl in
-  let gname = getter_a_name i k d in
-  if mem gen_builtins gname
-  then find gen_builtins gname |> fst
-  else let g = mk_getter_a f_p f_k f_a d in
-       let v = mk_var_t ~kind:MlMVar.Immut gname in
-       add gen_builtins gname (v,g);
-       v
-
 let no_var ast = dummy_var_t, ast
 
 let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
@@ -132,8 +101,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
      let get_pos i = mk_projection p (MSAst.Field (field_name_pos i)) f_arg in
      let get_kw id = mk_projection p (MSAst.Field (field_name_kw id)) f_arg in
 
-     (* let mk_ite_rectest field _tv =
-       mk_ite_rectest p f_arg field true MT.Ty.any in
+     (* let mk_ite_rectest field = mk_ite_rectest p f_arg field true in
      let get_or_def mlget strget i_kw otv eo = match eo with
        | None -> mlget i_kw
        | Some (v,(pos,_)) ->
@@ -160,7 +128,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
             , match eo with
               | None -> get_pos i
               | Some (v,(pos,_)) ->
-                 let g = builtin_getter_pk field |> var_of_vart p in
+                 let g = Builtins.getter_pk field |> var_of_vart p in
                  mk_2app p g f_arg (var_of_vart (MC.Eid.loc pos) v)
             (* get_or_def get_pos field_name_pos i tv eo *)
             )
@@ -169,7 +137,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
             let field_k = field_name_kw id_kw in
             let field_a = field_name_arg i id_kw in
             let tv = mk_tv field_a in
-            let g = builtin_getter_a i id_kw field_p field_k field_a opt
+            let g = Builtins.getter_a i id_kw field_p field_k field_a opt
                       |> var_of_vart p in
             let get = match eo with
               | None -> mk_app p g f_arg
@@ -181,7 +149,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
                         else (field_k,(opt,tv))::rec_t)
                       t)
             , get
-            (* mk_ite_rectest (field_name_pos i) tv
+            (* mk_ite_rectest (field_name_pos i)
                 (get_pos i)
                 (get_or_def get_kw field_name_kw id_kw tv eo) *)
             )
@@ -192,7 +160,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
             , match eo with
               | None -> get_kw id_kw
               | Some (v,(pos,_)) ->
-                 let g = builtin_getter_pk field |> var_of_vart p in
+                 let g = Builtins.getter_pk field |> var_of_vart p in
                  mk_2app p g f_arg (var_of_vart (MC.Eid.loc pos) v)
             (* get_or_def get_kw field_name_kw id_kw tv eo *)
             )
@@ -230,85 +198,3 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
   | If _ -> failwith "TODO"
   | Iexpr e -> Expr.to_ml e |> no_var
   | Break | Continue -> mk_break p |> no_var
-
-(* === === === === === === *)
-open Mlsem_app
-open Mlsem
-
-let dummy_def = PAst.Definitions []
-let dummy_ast = PAst.Tuple []
-let dummy_exp = (PAst.new_annot Common.Position.dummy, dummy_ast)
-
-let translate_stmt _env _stmt : PAst.parser_expr = failwith "TODO"
-
-let translate_top env stmt : PAst.(annotation * parser_element) =
-  let ast_to_t loc ast = env.Env.to_loc loc |> PAst.new_annot, ast in
-  let open PC.Statement in
-  match stmt with
-  | FunctionDef r ->
-     (* def f(a,b=bdef,*,k=kdef):
-            ...
-        ↓
-
-        let f = (* or let env = {env with f = … } *)
-          let b_ = [bdef] in
-          let k_ = [kdef] in
-          let f = fun r ->
-            let a = r.#0 in
-            let b = (r∈{#1;..})? r.#1 : (r∈{b;..})?r.b:b_ in
-            let k = (r∈{ k;..})? r.k  : k_ in
-            [...]
-          in
-          f
-      *)
-
-     let mlarg_str = "%#rec_arg" in
-     let mlarg = PAst.(Var mlarg_str |> ast_to_t r.location) in
-     let mk_var loc id =
-       PAst.Var (PC.Identifier.to_string id) |> ast_to_t loc
-     and mk_lambda loc var body =
-       PAst.Lambda (var, None, body) |> ast_to_t loc
-     and mk_let loc id expin exp =
-       (* TODO monadic: update environement *)
-       PAst.Let ( (Immut, PC.Identifier.to_string id)
-                , expin
-                , exp) |> ast_to_t loc
-     and _mk_ite loc test ty thn els =
-       PAst.Ite (test, ty, thn, els) |> ast_to_t loc
-     in
-     let load_args (p_args:Arguments.proto) body =
-       let add_varinit expr (a,i,_eo,_tv) =
-         let loc = a.PC.Argument.location in
-         mk_let loc
-           a.PC.Argument.identifier
-           PAst.(Projection (Field (Arguments.pos_param_name i), mlarg)
-                 |> ast_to_t loc)
-           expr
-       in
-       let rpos, _rargs, _rkw = List.( rev p_args.pos_only
-                                     , rev p_args.args
-                                     , rev p_args.kw_only) in
-       List.fold_left add_varinit body rpos
-     and fun_def loc f_id preamble_and_body =
-       mk_let loc
-         f_id
-         (mk_lambda loc mlarg_str preamble_and_body)
-         (mk_var loc f_id)
-     and default_init _p_args f_def : PAst.parser_expr =
-       f_def
-     in
-     let body = dummy_exp in
-     let proto = Arguments.translate_arguments r.args in
-     let annot = PAst.new_annot (env.Env.to_loc r.location) in
-     let expr = default_init proto
-                  (fun_def r.location r.name
-                     (load_args proto body)) in
-     let defs = [( (PAst.Immut, PC.Identifier.to_string r.name)
-                 , expr)] in
-     let () = Format.printf "Function %s: @[%a@]@\n"
-                (PC.Identifier.to_string r.name)
-                Arguments.pp_proto proto in
-     let () = Format.printf "result:@.  @[%a@]@\n%!"
-                Ast.PAstPrinter.pp_t expr in
-     (annot, PAst.Definitions defs)
-  | _ -> PAst.new_annot Common.Position.dummy, dummy_def
