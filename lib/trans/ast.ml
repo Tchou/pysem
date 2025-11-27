@@ -53,7 +53,8 @@ let dannot : 'a -> 'a annot = fun x -> dummy_annot, x
 let env_annot env loc t = env.Env.to_loc loc, t
 
 module Ident = struct
-  let var_show = MlVar.(if !Utils.debug then get_unique_name else show)
+  let var_show = MlVar.(if !Utils.debug && not !Utils.export
+                        then get_unique_name else show)
   let show ({name;_}:ident) = var_show name
 
   let of_identifier (env:Env.t) id : ident =

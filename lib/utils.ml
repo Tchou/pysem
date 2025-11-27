@@ -18,7 +18,7 @@ open Aliases
 
 (* DEBUG *)
 
-let debug = ref false
+let debug = ref true
 and export = ref true
 
 let pr str pp_t t =
