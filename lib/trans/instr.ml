@@ -138,11 +138,12 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
             let field_a = field_name_arg i id_kw in
             let tv = mk_tv field_a in
             let g = Builtins.getter_a i id_kw field_p field_k field_a opt
-                      |> var_of_vart p in
+                    |> var_of_vart p in
             let get = match eo with
               | None -> mk_app p g f_arg
               | Some (v,(pos,_)) ->
-                 mk_2app p g f_arg (var_of_vart (MC.Eid.loc pos) v) in
+                 mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
+                 |> mk_app p g in
             ( List.(mapi (fun j rec_t ->
                         if j < length t - (i-nb_pos) - 1
                         then (field_p,(opt,tv))::rec_t

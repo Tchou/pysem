@@ -27,7 +27,7 @@ and getter_a i k fp fk fa d =
   let gname = getter_a_name i k d in
   if mem builtins gname
   then find builtins gname |> fst
-  else let g = mk_getter_a fp fk fa d in
+  else let g = (if d then mk_getter_a_d else mk_getter_a) fp fk fa in
        let v = mk_var_t ~kind:MlMVar.Immut gname in
        add builtins gname (v,g);
        v
