@@ -1,5 +1,5 @@
 open Pysem
-open Utils.Aliases
+open Aliases
 open Utils
 
 let usage_message = Format.sprintf "%s <file.py>" Sys.argv.(0)

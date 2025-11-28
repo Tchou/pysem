@@ -1,4 +1,4 @@
-open Utils.Aliases
+open Aliases
 
 let of_module (env : Env.t) (m : PC.Module.t) : Ast.prog =
   List.map (Instr.of_statement env) m.body

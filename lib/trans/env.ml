@@ -1,5 +1,5 @@
 open Parsing
-open Utils.Aliases
+open Aliases
 
 type t =
   { current : block_info

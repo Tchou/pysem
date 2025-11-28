@@ -1,5 +1,5 @@
+open Aliases
 open Ast
-open Utils.Aliases
 
 let zip_for l1 l2 =
   let rec loop l1 l2 acc =

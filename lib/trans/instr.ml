@@ -1,6 +1,6 @@
-open Ast
-open Utils.Aliases
+open Aliases
 open Utils
+open Ast
 
 let rec of_statement env (stmt:PC.Statement.t) : instr =
   let annot = env_annot env in

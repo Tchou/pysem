@@ -1,4 +1,4 @@
-open Utils.Aliases
+open Aliases
 open Utils
 
 let builtins : (string, (MlVar.t * ML.Ast.t)) Hashtbl.t =

@@ -1,4 +1,4 @@
-open Utils.Aliases
+open Aliases
 
 type 'a annot = MC.Position.t * 'a
 
