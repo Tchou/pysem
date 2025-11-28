@@ -47,8 +47,8 @@ let main () =
                             |> MTS.norm_and_simpl
                             |> MTS.get in
              let ts = MTS.mk tvs MlGTy.(ub gty |> mk) in
-             Utils.dbg_pr ("…typing "^(Ast.Ident.var_show v))
-               "@{<bold>ast@}: @[%a@]@\n@{<blue>tys@}: @[%a@]"
+             Utils.dbg_pr ("typing "^(Ast.Ident.var_show v))
+               "@{<bold>ast@}: @[%a@]@\n@{<bold>tys@}: @[%a@]"
                Ast.MSAstPrinter.pp_t ast MTS.pp ts;
              ((v,ts)::tsl, MlMVar.add_to_env v ts mce) )
            ([], MC.Env.empty)
@@ -60,12 +60,13 @@ let main () =
             (Format.pp_print_option pp_print_string) err.descr;
           raise (MSC.Untypeable err)
      in
-     pr "types" "%a"
+     pr "all types" "%a"
        (pp_print_list ~pp_sep:pp_print_nothing
           Ast.pp_ml_tys)
        v_tys
 
 let () =
+  if Unix.isatty Unix.stdout then Colors.add_ansi_marking Format.std_formatter;
   let main = MT.PEnv.(sequential_handler empty main) in
   try
     if !Utils.debug

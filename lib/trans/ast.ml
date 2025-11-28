@@ -129,8 +129,10 @@ end
 
 (*  ***  Pretty-printers  ***  *)
 
-let pp_coma_list pp =
-  Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp)
+let pp_list ?(sep=";") pp fmt l =
+  Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "%s@ "sep)
+    pp fmt l
+let pp_nel str = function [] -> "" | _ -> str
 
 let pp_ident fmt id =
   Format.fprintf fmt "%s" (*Parsing.show_scope id.scope*)
@@ -184,7 +186,7 @@ and pp_spec fmt s =
   let kwarg =
     match s.kwarg with None -> "" | Some id -> "**" ^ Ident.(show id) in
   let pp_list_i_eo =
-    pp_coma_list (fun fmt (i,(e:expr option)) ->
+    pp_list ~sep:"," (fun fmt (i,(e:expr option)) ->
         fprintf fmt "%s%s%a" Ident.(show i) (if e = None then "" else "=")
           (pp_print_option pp_expr) e) in
   fprintf fmt "@[(%a%s%a%s%a%s%s)@]"
@@ -198,9 +200,9 @@ and pp_spec fmt s =
 and pp_params fmt {pos;kw} =
   let open Format in
   fprintf fmt "@[(%a%s%a)@]"
-    (pp_coma_list pp_expr) pos
+    (pp_list ~sep:"," pp_expr) pos
     (if pos<>[] && kw<>[] then ", " else "")
-    (pp_coma_list (fun fmt (k,e) ->
+    (pp_list ~sep:"," (fun fmt (k,e) ->
          fprintf fmt "@[%a=%a@]" pp_print_string k pp_expr e)) kw
 
 let rec pp_instr' fmt instr' : unit =
@@ -227,12 +229,6 @@ let pp_prog prog =
   Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
             pp_instr prog)
 
-(* pp_utils *)
-let pp_list pp fmt l =
-  Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@ ")
-    pp fmt l
-let pp_nel str = function [] -> "" | _ -> str
-
 module PAstPrinter = struct
   open Mlsem_app.PAst
   open Format
@@ -243,6 +239,7 @@ module PAstPrinter = struct
     match p with
     | Field str -> pp_print_string fmt str
     | FieldOpt str -> fprintf fmt "?%s" str
+    | Pi (_,i) -> fprintf fmt "[%d]" i
     | _ -> pp_projection fmt p
 
   let rec pp_pattern fmt p : unit =
@@ -289,9 +286,7 @@ module PAstPrinter = struct
     | Let ((_,v),t1,t2) ->
        fprintf fmt "@[@[<hov 2>let %s =@ @[%a@]@ in@]@\n%a@]" v pp_t t1 pp_t t2
     | Tuple l -> fprintf fmt "@[(%a)@]"
-                   (pp_print_list
-                      ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
-                      (fun fmt t -> fprintf fmt "@[%a@]" pp_t t))
+                   (pp_list ~sep:"," pp_t)
                    l
     | Cons (t1,t2) -> fprintf fmt "@[Cons(@[%a@],@[%a@])@]" pp_t t1 pp_t t2
     | Projection (p,t) -> fprintf fmt "@[<hov 2>proj(@[%a@],@ @[%a@])@]"
@@ -335,6 +330,9 @@ module MlAstPrinter = struct
                 f (if opt then "?" else "") pp_t t))
          (List.combine sb_l tl)
          (if b then "; .." else "")
+    | Tuple i ->
+       if List.length tl <> i then failwith "Wrong tuple constructor!"
+       else fprintf fmt "@[<hov 2>(%a)@]" (pp_list ~sep:"," pp_t) tl
     | _ -> fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
 
   let rec pp_pattern_constructor fmt pc : unit = match pc with

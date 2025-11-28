@@ -1,6 +1,6 @@
 (library
  (name pysem)
  (public_name pysem)
- (libraries mlsem mlsem-app pyre-ast zarith sexplib0))
+ (libraries mlsem mlsem-app pyre-ast str zarith sexplib0))
 
 (include_subdirs unqualified)

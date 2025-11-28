@@ -21,13 +21,16 @@ open Aliases
 let debug = ref true
 and export = ref true
 
+let pr_title str =
+  Format.(fprintf std_formatter "@{<bold>%s:@}@." str)
+
 let pr str =
-  Format.kasprintf (fun s ->
-      Format.printf "\027[1m%s:\027[0m@.@[%s@]@.--@\n%!" str s)
-let dbg_pr str =
-  Format.kasprintf (fun s ->
-      if !debug
-      then Format.printf "\027[1m%s:\027[0m@.@[%s@]@.--@\n%!" str s)
+  pr_title str;
+  Format.(kfprintf (fun fmt -> fprintf fmt "@.--@\n") std_formatter)
+and dbg_pr str =
+  pr_title str;
+  Format.(kfprintf (fun fmt ->
+              if !debug then fprintf fmt "@.--@\n") std_formatter)
 
 
 (* STRINGS *)
