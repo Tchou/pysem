@@ -95,8 +95,8 @@ let mk_getter_pk field =
             |> MT.Tuple.mk |> MlGTy.mk in
   let f_arg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
   let f_arg = var_of_vart dummy_pos f_arg_v in
-  let recarg = mk_projection dummy_pos (MSAst.Pi (2,1)) f_arg in
-  let defdarg = mk_projection dummy_pos (MSAst.Pi (2,2)) f_arg in
+  let recarg = mk_projection dummy_pos (MSAst.Pi (2,0)) f_arg in
+  let defdarg = mk_projection dummy_pos (MSAst.Pi (2,1)) f_arg in
   mk_ite_rectest dummy_pos f_arg field true
     (mk_projection dummy_pos (MSAst.Field field) recarg)
     (defdarg)

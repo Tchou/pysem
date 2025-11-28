@@ -129,7 +129,8 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
               | None -> get_pos i
               | Some (v,(pos,_)) ->
                  let g = Builtins.getter_pk field |> var_of_vart p in
-                 mk_2app p g f_arg (var_of_vart (MC.Eid.loc pos) v)
+                 mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
+                 |> mk_app p g
             (* get_or_def get_pos field_name_pos i tv eo *)
             )
          | `Arg ->
@@ -162,7 +163,8 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
               | None -> get_kw id_kw
               | Some (v,(pos,_)) ->
                  let g = Builtins.getter_pk field |> var_of_vart p in
-                 mk_2app p g f_arg (var_of_vart (MC.Eid.loc pos) v)
+                 mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
+                 |> mk_app p g
             (* get_or_def get_kw field_name_kw id_kw tv eo *)
             )
        in
