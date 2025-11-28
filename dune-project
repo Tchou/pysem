@@ -7,9 +7,13 @@
 (source
  (github Tchou/pysem))
 
-(authors "Kim Nguyễn <kn@lmf.cnrs.fr>")
+(authors
+ "Kim Nguyễn <kn@lmf.cnrs.fr>"
+ "Philippe Volte--Vieira <pvv@lmf.cnrs.fr>")
 
-(maintainers "Kim Nguyễn <kn@lmf.cnrs.fr>")
+(maintainers
+ "Kim Nguyễn <kn@lmf.cnrs.fr>"
+ "Philippe Volte--Vieira <pvv@lmf.cnrs.fr>")
 
 (license LICENSE)
 
