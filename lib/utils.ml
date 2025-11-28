@@ -21,11 +21,13 @@ open Aliases
 let debug = ref true
 and export = ref true
 
-let pr str pp_t t =
-  Format.printf "\027[1m%s:\027[0m@.@[%a@]@.--@\n%!" str pp_t t
-let dbg_pr str pp_t t =
-  if !debug
-  then pr str pp_t t
+let pr str =
+  Format.kasprintf (fun s ->
+      Format.printf "\027[1m%s:\027[0m@.@[%s@]@.--@\n%!" str s)
+let dbg_pr str =
+  Format.kasprintf (fun s ->
+      if !debug
+      then Format.printf "\027[1m%s:\027[0m@.@[%s@]@.--@\n%!" str s)
 
 
 (* STRINGS *)
