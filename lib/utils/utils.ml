@@ -5,21 +5,6 @@ open Aliases
 let debug = ref true
 and export = ref true
 
-let pp_sep fmt = Format.fprintf fmt "@.——@\n"
-
-let pr str =
-  let open Format in
-  printf "@{<bold>@{<cyan>%s@}:@}@." str;
-  kfprintf pp_sep std_formatter
-and dbg_pr str =
-  let open Format in
-  if !debug
-  then (
-    printf "@{<bold>@{<yellow>%s@}:@}@." str;
-    kfprintf pp_sep std_formatter
-  ) else ikfprintf ignore std_formatter
-
-
 (* STRINGS *)
 
 let mk_id fmt =
@@ -53,42 +38,42 @@ let ty_of_int i =
 
 (* MAKE System.Ast *)
 
-let ml_annot p (ast:MlAst.e) =
+let ml_annot p (ast:MLAst.e) =
   (MC.Eid.unique_with_pos p, ast)
 
-let mk_value pos gty = MlAst.Value gty |> ml_annot pos
+let mk_value pos gty = MLAst.Value gty |> ml_annot pos
 let mk_unit pos = mk_value pos (MlGTy.mk MT.Ty.unit)
 
 let mk_var_t ?(kind=MlMVar.Mut) str = MlMVar.create kind (Some str)
 let mk_var pos ?(kind=MlMVar.Mut) str =
-  MlAst.Var (mk_var_t ~kind str) |> ml_annot pos
+  MLAst.Var (mk_var_t ~kind str) |> ml_annot pos
 and var_of_vart pos v = Var v |> ml_annot pos
 
 let mk_tuple pos l =
-  MlAst.Constructor (MSAst.Tuple (List.length l), l) |> ml_annot pos
+  MLAst.Constructor (MSAst.Tuple (List.length l), l) |> ml_annot pos
 let mk_record pos decl_l expr_l =
-  MlAst.Constructor
+  MLAst.Constructor
     ( MSAst.Rec (List.map (fun dec -> dec, false) decl_l, false)
     , expr_l) |> ml_annot pos
 
 let mk_lambda pos ty gty id body =
-  MlAst.Lambda (ty, gty, id, body) |> ml_annot pos
+  MLAst.Lambda (ty, gty, id, body) |> ml_annot pos
 
-let mk_ite pos test ty thn els = MlAst.Ite (test,ty,thn,els) |> ml_annot pos
+let mk_ite pos test ty thn els = MLAst.Ite (test,ty,thn,els) |> ml_annot pos
 
-let mk_app pos f x = MlAst.App (f,x) |> ml_annot pos
+let mk_app pos f x = MLAst.App (f,x) |> ml_annot pos
 let mk_2app pos f x y = mk_app pos (mk_app pos f x) y
 
-let mk_projection pos proj ast = MlAst.Projection (proj, ast) |> ml_annot pos
+let mk_projection pos proj ast = MLAst.Projection (proj, ast) |> ml_annot pos
 
 let mk_let pos ty id ast_in ast_out =
-  MlAst.Let (ty,id,ast_in,ast_out) |> ml_annot pos
+  MLAst.Let (ty,id,ast_in,ast_out) |> ml_annot pos
 
-let mk_seq pos a1 a2 = MlAst.Seq (a1, a2) |> ml_annot pos
+let mk_seq pos a1 a2 = MLAst.Seq (a1, a2) |> ml_annot pos
 
-let mk_return pos ast = MlAst.Return ast |> ml_annot pos
+let mk_return pos ast = MLAst.Return ast |> ml_annot pos
 
-let mk_break pos = MlAst.Break |> ml_annot pos
+let mk_break pos = MLAst.Break |> ml_annot pos
 
 
 (* AST UTILS *)
@@ -155,10 +140,6 @@ and mk_getter_a f_p f_k f_a =
   let body = mk_ite_rectest dummy_pos f_arg f_p true proj_p proj_k in
   mk_lambda dummy_pos [] gty f_arg_v body
 
-
-let mlvar_get_name v = match MlVar.get_name v with
-  | Some str -> str
-  | None -> failwith "MlVar with no name?"
 
 let count_if p l =
   List.fold_left (fun acc e -> if p e then acc + 1 else acc) 0 l

@@ -79,7 +79,7 @@ and spec_of_arguments fenv (a:PC.Arguments.t) =
 
 open Utils
 
-let rec to_ml (p,e:expr) : MlAst.t = match e with
+let rec to_ml (p,e:expr) : MLAst.t = match e with
   | Var v -> var_of_vart p v.name
   | Binop _ -> failwith "TODO"
   | Cst c -> mk_value p Const.(to_gty c)

@@ -70,7 +70,7 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
 
 let no_var ast = dummy_var_t, ast
 
-let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
+let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
   match instr with
   | Block l ->
      begin match l with
@@ -82,10 +82,10 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
      let [@warning "-26"] pp_recty fmt fbt_ll =
        Format.(
          fprintf fmt "@[%a@]"
-           (Ast.pp_list
+           (Printing.pp_list
               (fun fmt fbt_l ->
                 fprintf fmt "@[<hov 2>[ %a@ ]@]"
-                  (Ast.pp_list
+                  (Printing.pp_list
                      (fun fmt (f,(b,_t)) ->
                        fprintf fmt "@[%s :%s %a@]" f
                          (if b then "?" else "") MT.Ty.pp _t) )
@@ -117,7 +117,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MlAst.t) =
                       (Ident.show id |> def_var_name)
                   , Expr.to_ml e in
             true, Some e, e::d in
-       let id_kw = mlvar_get_name id.name in
+       let id_kw = Printing.MLAstPrinter.var_get_name id.name in
        let t, ast_in = match pak with
          | `Pos ->
             let field = field_name_pos i in

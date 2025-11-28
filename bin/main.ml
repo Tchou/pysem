@@ -1,6 +1,6 @@
 open Pysem
 open Aliases
-open Utils
+open Printing
 
 let usage_message = Format.sprintf "%s <file.py>" Sys.argv.(0)
 let input_file = ref None
@@ -32,7 +32,7 @@ let main () =
 
      let ml = Prog.to_ml p in
      pr "mlsem ast" "%a"
-       (pp_print_list ~pp_sep:pp_print_newline Ast.pp_ml_top) ml;
+       (pp_print_list ~pp_sep:pp_print_newline pp_ml_top) ml;
 
      let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
      let module MSC = MS.Checker in
@@ -47,9 +47,9 @@ let main () =
                             |> MTS.norm_and_simpl
                             |> MTS.get in
              let ts = MTS.mk tvs MlGTy.(ub gty |> mk) in
-             Utils.dbg_pr ("typing "^(Ast.Ident.var_show v))
+             dbg_pr ("typing "^(Ast.Ident.var_show v))
                "@{<bold;blue>ast@}: @[%a@]@\n@{<bold;blue>tys@}: @[%a@]"
-               Ast.MSAstPrinter.pp_t ast MTS.pp ts;
+               MSAstPrinter.pp_t ast MTS.pp ts;
              ((v,ts)::tsl, MlMVar.add_to_env v ts mce) )
            ([], MC.Env.empty)
            ms_exprs
@@ -62,7 +62,7 @@ let main () =
      in
      pr "all types" "%a"
        (pp_print_list ~pp_sep:pp_print_nothing
-          Ast.pp_ml_tys)
+          pp_ml_tys)
        v_tys
 
 let () =
