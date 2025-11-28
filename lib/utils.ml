@@ -21,16 +21,19 @@ open Aliases
 let debug = ref true
 and export = ref true
 
-let pr_title str =
-  Format.(fprintf std_formatter "@{<bold>%s:@}@." str)
+let pp_sep fmt = Format.fprintf fmt "@.——@\n"
 
 let pr str =
-  pr_title str;
-  Format.(kfprintf (fun fmt -> fprintf fmt "@.--@\n") std_formatter)
+  let open Format in
+  printf "@{<bold>@{<cyan>%s@}:@}@." str;
+  kfprintf pp_sep std_formatter
 and dbg_pr str =
-  pr_title str;
-  Format.(kfprintf (fun fmt ->
-              if !debug then fprintf fmt "@.--@\n") std_formatter)
+  let open Format in
+  if !debug
+  then (
+    printf "@{<bold>@{<yellow>%s@}:@}@." str;
+    kfprintf pp_sep std_formatter
+  ) else ikfprintf ignore std_formatter
 
 
 (* STRINGS *)

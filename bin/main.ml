@@ -48,7 +48,7 @@ let main () =
                             |> MTS.get in
              let ts = MTS.mk tvs MlGTy.(ub gty |> mk) in
              Utils.dbg_pr ("typing "^(Ast.Ident.var_show v))
-               "@{<bold>ast@}: @[%a@]@\n@{<bold>tys@}: @[%a@]"
+               "@{<bold;blue>ast@}: @[%a@]@\n@{<bold;blue>tys@}: @[%a@]"
                Ast.MSAstPrinter.pp_t ast MTS.pp ts;
              ((v,ts)::tsl, MlMVar.add_to_env v ts mce) )
            ([], MC.Env.empty)
