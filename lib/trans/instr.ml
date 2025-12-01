@@ -117,7 +117,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
                       (Ident.show id |> def_var_name)
                   , Expr.to_ml e in
             true, Some e, e::d in
-       let id_kw = Printing.MLAstPrinter.var_get_name id.name in
+       let id_kw = Ident.show id in
        let t, ast_in = match pak with
          | `Pos ->
             let field = field_name_pos i in

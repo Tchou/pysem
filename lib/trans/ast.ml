@@ -53,8 +53,7 @@ let dannot : 'a -> 'a annot = fun x -> dummy_annot, x
 let env_annot env loc t = env.Env.to_loc loc, t
 
 module Ident = struct
-  let var_show = Printing.MLAstPrinter.var_show
-  let show ({name;_}:ident) = var_show name
+  let show ({name;_}:ident) = Printing.mlvar_show name
 
   let of_identifier (env:Env.t) id : ident =
     let open Env in

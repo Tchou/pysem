@@ -90,55 +90,33 @@ let mk_ite_rectest pos record field opn thn els =
 
 let mk_getter_pk field =
   let tv = mk_tv field in
-  let gty = [ mk_rec_disj true [[ (field, (true, tv)) ]]
-            ; mk_tv ml_fun_darg_name ]
-            |> MT.Tuple.mk |> MlGTy.mk in
-  let f_arg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
-  let f_arg = var_of_vart dummy_pos f_arg_v in
-  let recarg = mk_projection dummy_pos (MSAst.Pi (2,0)) f_arg in
-  let defdarg = mk_projection dummy_pos (MSAst.Pi (2,1)) f_arg in
-  mk_ite_rectest dummy_pos f_arg field true
-    (mk_projection dummy_pos (MSAst.Field field) recarg)
-    (defdarg)
-  |> mk_lambda dummy_pos [] gty f_arg_v
+  let args = [ mk_rec_disj true [[ (field, (true, tv)) ]]
+            ; tv ]
+            |> MT.Tuple.mk in
+  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
+  mk_value dummy_pos fty
 
 let mk_getter_a_d f_p f_k f_a =
   let tv = mk_tv f_a in
-  let gty = [ mk_rec_disj true
-                [ [(f_p, (true, tv)); (f_k, (true, MT.Ty.empty))]
-                ; [(f_k, (true, tv)); (f_p, (true, MT.Ty.empty))] ]
-            ; mk_tv ml_fun_darg_name ]
-            |> MT.Tuple.mk |> MlGTy.mk in
-  let f_arg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
-  let f_arg = var_of_vart dummy_pos f_arg_v in
-  let r_v, r_definition = mk_var_t ~kind:MlMVar.Immut "r",
-                          mk_projection dummy_pos (MSAst.Pi (2,0)) f_arg in
-  let recarg = var_of_vart dummy_pos r_v in
-  let d_v, d_definition = mk_var_t ~kind:MlMVar.Immut "d",
-                          mk_projection dummy_pos (MSAst.Pi (2,1)) f_arg in
-  let defarg = var_of_vart dummy_pos d_v in
-  let proj_p = mk_projection dummy_pos (MSAst.Field f_p) recarg in
-  let proj_k = mk_projection dummy_pos (MSAst.Field f_k) recarg in
-  let body =
-    mk_let dummy_pos [] r_v r_definition
-      (mk_let dummy_pos [] d_v d_definition
-         (mk_ite_rectest dummy_pos recarg f_p true
-            proj_p
-            (mk_ite_rectest dummy_pos recarg f_k true
-               proj_k defarg))) in
-  mk_lambda dummy_pos [] gty f_arg_v body
+  let args1 = [ mk_rec_disj true
+                  [ [(f_p, (false, tv)); (f_k, (true, MT.Ty.empty))]
+                  ; [(f_k, (false, tv)); (f_p, (true, MT.Ty.empty))] ]
+              ; MT.Ty.any ]
+              |> MT.Tuple.mk in
+  let args2 = [ mk_rec_disj true [[ (f_p, (true, MT.Ty.empty))
+                                  ; (f_k, (true, MT.Ty.empty))]]
+              ; tv ]
+              |> MT.Tuple.mk in
+  let args = MT.Ty.cup args1 args2 in
+  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
+  mk_value dummy_pos fty
 and mk_getter_a f_p f_k f_a =
   let tv = mk_tv f_a in
-  let gty = mk_rec_disj true
+  let args = mk_rec_disj true
               [ [(f_p, (false, tv)); (f_k, (true, MT.Ty.empty))]
-              ; [(f_k, (false, tv)); (f_p, (true, MT.Ty.empty))] ]
-            |> MlGTy.mk in
-  let f_arg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
-  let f_arg = var_of_vart dummy_pos f_arg_v in
-  let proj_p = mk_projection dummy_pos (MSAst.Field f_p) f_arg in
-  let proj_k = mk_projection dummy_pos (MSAst.Field f_k) f_arg in
-  let body = mk_ite_rectest dummy_pos f_arg f_p true proj_p proj_k in
-  mk_lambda dummy_pos [] gty f_arg_v body
+              ; [(f_k, (false, tv)); (f_p, (true, MT.Ty.empty))] ] in
+  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
+  mk_value dummy_pos fty
 
 
 let count_if p l =

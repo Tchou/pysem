@@ -44,12 +44,12 @@ let main () =
              let time0 = Unix.gettimeofday () in
              let annot = MS.Reconstruction.infer mce
                            (MS.Refinement.refinement_envs mce ast) ast in
+             let time1 = Unix.gettimeofday () in
              let tvs, gty = MSC.typeof_def mce annot ast
                             |> MTS.norm_and_simpl
                             |> MTS.get in
              let ts = MTS.mk tvs MlGTy.(ub gty |> mk) in
-             let time1 = Unix.gettimeofday () in
-             dbg_pr ("typing "^(Ast.Ident.var_show v))
+             dbg_pr ("typing "^(Printing.mlvar_show v))
                "@{<italic;yellow>%.2fms@}@\n@{<bold;blue>ast@}: @[%a@]@\n\
                 @{<bold;blue>tys@}: @[%a@]"
                ((time1 -. time0) *. 1000.)

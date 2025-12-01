@@ -19,6 +19,9 @@ let pp_list ?(sep=";") pp fmt l =
     pp fmt l
 let pp_nel str = function [] -> "" | _ -> str
 
+let mlvar_show = MlVar.(if !Utils.debug && not !Utils.export
+                        then get_unique_name else show)
+
 module PAstPrinter = struct
   open Mlsem_app.PAst
   open Format
@@ -105,15 +108,7 @@ module MLAstPrinter = struct
   open MLAst
   open Format
 
-  let var_get_name v = match MlVar.get_name v with
-    | Some str -> str
-    | None -> failwith "MlVar with no name?"
-
-  let var_show =
-    MlVar.(if !Utils.debug && not !Utils.export
-           then get_unique_name else show)
-
-  let pp_variable fmt v = Format.fprintf fmt "%s" (var_show v)
+  let pp_variable fmt v = Format.fprintf fmt "%s" (mlvar_show v)
   let pp_gty = MlGTy.pp
   let pp_ty = MT.Ty.pp
   let pp_const = ML.Const.pp
