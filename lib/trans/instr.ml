@@ -101,14 +101,6 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
      let get_pos i = mk_projection p (MSAst.Field (field_name_pos i)) f_arg in
      let get_kw id = mk_projection p (MSAst.Field (field_name_kw id)) f_arg in
 
-     (* let mk_ite_rectest field = mk_ite_rectest p f_arg field true in
-     let get_or_def mlget strget i_kw otv eo = match eo with
-       | None -> mlget i_kw
-       | Some (v,(pos,_)) ->
-          mk_ite_rectest (strget i_kw) otv
-            (mlget i_kw)
-            (var_of_vart (MC.Eid.loc pos) v)
-     in *)
      let load_arg (pak:[`Pos|`Arg|`Kwd]) (i,d,l,t) (id,eo) =
        let opt, eo, default = match eo with
          | None -> false, None, d
@@ -122,17 +114,13 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
          | `Pos ->
             let field = field_name_pos i in
             let tv = field |> mk_tv in
-            (* let _getter = add_builtin (getter_name field)
-                           (mk_getter field) in *)
             ( List.map (fun rec_t -> (field,(opt,tv))::rec_t) t
             , match eo with
               | None -> get_pos i
               | Some (v,(pos,_)) ->
                  let g = Builtins.getter_pk field |> var_of_vart p in
                  mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
-                 |> mk_app p g
-            (* get_or_def get_pos field_name_pos i tv eo *)
-            )
+                 |> mk_app p g )
          | `Arg ->
             let field_p = field_name_pos i in
             let field_k = field_name_kw id_kw in
@@ -150,11 +138,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
                         then (field_p,(opt,tv))::rec_t
                         else (field_k,(opt,tv))::rec_t)
                       t)
-            , get
-            (* mk_ite_rectest (field_name_pos i)
-                (get_pos i)
-                (get_or_def get_kw field_name_kw id_kw tv eo) *)
-            )
+            , get )
          | `Kwd ->
             let field = field_name_kw id_kw in
             let tv = field |> mk_tv in
@@ -164,9 +148,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
               | Some (v,(pos,_)) ->
                  let g = Builtins.getter_pk field |> var_of_vart p in
                  mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
-                 |> mk_app p g
-            (* get_or_def get_kw field_name_kw id_kw tv eo *)
-            )
+                 |> mk_app p g )
        in
        ( i+1
        , default
