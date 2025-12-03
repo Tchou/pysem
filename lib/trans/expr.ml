@@ -81,7 +81,8 @@ open Utils
 
 let rec to_ml (p,e:expr) : MLAst.t = match e with
   | Var v -> var_of_vart p v.name
-  | Binop _ -> failwith "TODO"
+  | Binop (e1,bop,e2) ->
+     mk_2app p (Binop.to_ml p bop) (to_ml e1) (to_ml e2)
   | Cst c -> mk_value p Const.(to_gty c)
   | Lambda _ -> failwith "TODO"
   | Apply (e,params) ->

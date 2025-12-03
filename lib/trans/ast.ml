@@ -123,6 +123,35 @@ module Binop = struct
     | IsNot -> Isn
 
     | In | NotIn -> failwith "Not implemented (Binop)."
+
+  let to_ml pos op =
+    let open Utils in
+    let int_op  = MT.(Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.int ))
+    and int_cmp = MT.(Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.bool))
+    and bool_op = MT.(Arrow.mk Ty.bool (Arrow.mk Ty.bool Ty.bool))
+    and pol_cmp _ = let tv = mk_tv "bop_tv" in
+                    MT.(Arrow.mk tv    (Arrow.mk tv      Ty.bool)) in
+    let strkey, ty = match op with
+      | Add -> "+", int_op
+      | Sub -> "-", int_op
+      | Mult -> "*", int_op
+      | Div -> "/", int_op
+      | Mod -> "%", int_op
+      | Pow -> "^^", int_op
+      | And -> "&&", bool_op
+      | Or -> "||", bool_op
+      | Eq -> "=", pol_cmp ()
+      | Neq -> "<>", pol_cmp ()
+      | Lt -> "<", int_cmp
+      | Gt -> ">", int_cmp
+      | Le -> "≤", int_cmp
+      | Ge -> "≥", int_cmp
+      | Is -> "is", pol_cmp ()
+      | Isn -> "isnot", pol_cmp ()
+    in
+    Builtins.add (mk_id "%s" strkey)
+      (MlGTy.mk ty |> (mk_value dummy_pos))
+    |> var_of_vart pos
 end
 
 (*  ***  Pretty-printers  ***  *)
