@@ -15,12 +15,12 @@ let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
   match e with
   | BoolOp ({values=[a;b];_} as r) ->
      Binop ( of_expression env a
-           , Binop.of_boolop env r.op
+           , Binop.of_boolop r.op
            , of_expression env b) |> annot r.location
   | BoolOp _ -> failwith "Not implemented (Expr.BoolOp(values<>[a;b]))."
   (* | NamedExpr *)
   | BinOp r -> Binop ( of_expression env r.left
-                     , Binop.of_binop env r.op
+                     , Binop.of_binop r.op
                      , of_expression env r.right) |> annot r.location
   (* | UnaryOp *)
   | Lambda r ->
@@ -34,7 +34,7 @@ let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
      | Yield | YieldFrom *)
   | Compare ({ops=[op];comparators=[right];_} as r) ->
      Binop ( of_expression env r.left
-           , Binop.of_comparisonoperator env op
+           , Binop.of_comparisonoperator op
            , of_expression env right) |> annot r.location
   | Compare _ -> failwith "Not implemented (Expr.Compare(¬ only 2 arguments))."
   | Call ({func=Name _;_} as r) ->
@@ -53,7 +53,7 @@ let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
      |> annot r.location
   | Call _ -> failwith "Not implemented (Expr.Call(complex expression))."
   (* | FormattedValue | JoinedStr *)
-  | Constant r -> Cst (Const.of_constant env r.value) |> annot r.location
+  | Constant r -> Cst (Const.of_constant r.value) |> annot r.location
   (* | Attribute | Subscript | Starred *)
   | Name r -> Var (Ident.of_identifier env r.id) |> annot r.location
   (* | List | Tuple | Slice *)

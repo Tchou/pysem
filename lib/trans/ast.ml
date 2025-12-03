@@ -73,7 +73,7 @@ module Ident = struct
 end
 
 module Const = struct
-  let of_constant _env (c:PC.Constant.t) : const = match c with
+  let of_constant (c:PC.Constant.t) : const = match c with
     | None -> None_
     | False -> Bool false
     | True -> Bool true
@@ -97,7 +97,7 @@ module Const = struct
 end
 
 module Binop = struct
-  let of_binop _env (op:PC.BinaryOperator.t) : binop = match op with
+  let of_binop (op:PC.BinaryOperator.t) : binop = match op with
     | Add -> Add
     | Sub -> Sub
     | Mult -> Mult
@@ -108,11 +108,11 @@ module Binop = struct
     | MatMult | LShift | RShift | BitOr | BitXor | BitAnd | FloorDiv
       -> failwith "Not implemented (Binop)."
 
-  let of_boolop _env (op:PC.BooleanOperator.t) : binop = match op with
+  let of_boolop (op:PC.BooleanOperator.t) : binop = match op with
     | And -> And
     | Or -> Or
 
-  let of_comparisonoperator _env (op:PC.ComparisonOperator.t) = match op with
+  let of_comparisonoperator (op:PC.ComparisonOperator.t) = match op with
     | Eq -> Eq
     | NotEq -> Neq
     | Lt -> Lt
