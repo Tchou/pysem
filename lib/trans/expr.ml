@@ -170,11 +170,9 @@ let rec ml_lambda p args body =
   (* dbg_pr "sstt_ty" MT.Ty.pp sstt_ty; *)
   let f_type = MlGTy.mk sstt_ty in
   (* dbg_pr "gty" MlGTy.pp f_type; *)
-  let join_let_rev pos var_in last =
-    List.fold_left (fun body (v,e) -> mk_let pos [] v e body) last var_in in
-  let f_body = join_let_rev p preamble body in
+  let f_body = join_let_rev preamble body in
   let f_anon = mk_lambda p [] f_type f_arg_v f_body in
-  join_let_rev p def f_anon
+  join_let_rev def f_anon
 
 and to_ml (p,e:expr) : MLAst.t = match e with
   | Var v -> var_of_vart p v.name

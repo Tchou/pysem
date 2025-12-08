@@ -59,7 +59,11 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
      begin match l with
      | [] -> mk_unit p |> no_var
      | [i] -> to_ml i
-     | _ -> failwith "TODO"
+     | _ -> match List.fold_left (fun acc i -> to_ml i::acc) [] l with
+            | [] | _::[] -> assert false
+            | (v,e)::r as l ->
+               let l, last = if v = dummy_var_t then r,e else l,dummy_ml_ast in
+               join_let_rev l last |> no_var
      end
   | FunDef (f, args, body) ->
      ( f.name
@@ -67,8 +71,8 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
   | Return eo ->
      ( match eo with None -> mk_unit p | Some e -> Expr.to_ml e )
      |> mk_return p |> no_var
-  | Assign _ -> failwith "TODO"
-  | While _ -> failwith "TODO"
-  | If _ -> failwith "TODO"
+  | Assign (x,e) -> (x.name, Expr.to_ml e)
+  | While _ -> failwith "TODO while"
+  | If _ -> failwith "TODO if"
   | Iexpr e -> Expr.to_ml e |> no_var
   | Break | Continue -> mk_break p |> no_var
