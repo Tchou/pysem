@@ -2,8 +2,14 @@ open Pysem
 open Aliases
 open Printing
 
+module MSC = MS.Checker
+module MTS = MT.TyScheme
+
 let usage_message = Format.sprintf "%s <file.py>" Sys.argv.(0)
 let input_file = ref None
+
+let overwrite = ref true
+(** Allow definition overwrite in toplevel. Or else forbid redefinition. **)
 
 let add_input_file s = 
   match !input_file with 
@@ -12,6 +18,36 @@ let add_input_file s =
 
 let options = Arg.align []
 
+let ml_type mcenv ast =
+  let annot = MS.Reconstruction.infer mcenv
+                (MS.Refinement.refinement_envs mcenv ast) ast in
+  let tvs, gty = MSC.typeof_def mcenv annot ast
+                 |> MTS.norm_and_simpl
+                 |> MTS.get in
+  MTS.mk tvs gty
+
+let upd_env mce v ts =
+  if !overwrite && MC.Env.mem v mce
+  then let tvs1, gty1 = MTS.get ts in
+       let tvs2, gty2 = MC.Env.find v mce
+                        |> MTS.get in
+       MC.Env.rm v mce
+       |> MlMVar.add_to_env v
+            ( MlGTy.disj [gty1;gty2]
+              |> MTS.mk (MT.TVarSet.union tvs1 tvs2) )
+  else MlMVar.add_to_env v ts mce
+
+let treat_def mce (v,ast) =
+  let time0 = Unix.gettimeofday () in
+  let ts = ml_type mce ast in
+  let time1 = Unix.gettimeofday () in
+  dbg_pr ("typing "^(Printing.mlvar_show v))
+    "@{<italic;yellow>%.2fms@}@\n@{<bold;blue>ast@}: @[%a@]@\n\
+     @{<bold;blue>tys@}: @[%a@]"
+    ((time1 -. time0) *. 1000.)
+    MSAstPrinter.pp_t ast MTS.pp ts;
+  upd_env mce v ts
+
 let main () =
   Arg.parse options add_input_file usage_message;
   match !input_file with
@@ -19,55 +55,31 @@ let main () =
      Format.eprintf "%s: missing file@\n%s" Sys.argv.(0)
        (Arg.usage_string options usage_message)
   | Some file ->
-     let m, bil, to_loc = Parsing.parse ~file in
      let open Format in
+     let m, bil, to_loc = Parsing.parse ~file in
      (* dbg_pr "pyre-parsed expression" "%a" *)
        (* Sexplib0.Sexp.pp_hum (PC.Module.sexp_of_t m); *)
      (* pr "block_infos" "%a" *)
        (* (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil; *)
 
-     let env = Env.init bil to_loc in
-     let p = Prog.of_module env m in
+     let p = Prog.of_module (Env.init bil to_loc) m in
      pr "pysem ast" "%a" Ast.pp_prog p;
 
      let ml = Prog.to_ml p in
-     pr "mlsem ast" "%a"
-       (pp_print_list ~pp_sep:pp_print_newline pp_ml_top) ml;
+     pr "mlsem ast" "%a" (pp_print_list ~pp_sep:pp_print_newline pp_ml_top) ml;
 
      let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
-     let module MSC = MS.Checker in
-     let module MTS = MT.TyScheme in
+
      (* MS.Config.infer_overload := false; *)
-     let v_tys =
-       try
-         List.fold_left (fun (tsl,mce) (v,ast) ->
-             let time0 = Unix.gettimeofday () in
-             let annot = MS.Reconstruction.infer mce
-                           (MS.Refinement.refinement_envs mce ast) ast in
-             let time1 = Unix.gettimeofday () in
-             let tvs, gty = MSC.typeof_def mce annot ast
-                            |> MTS.norm_and_simpl
-                            |> MTS.get in
-             let ts = MTS.mk tvs MlGTy.(ub gty |> mk) in
-             dbg_pr ("typing "^(Printing.mlvar_show v))
-               "@{<italic;yellow>%.2fms@}@\n@{<bold;blue>ast@}: @[%a@]@\n\
-                @{<bold;blue>tys@}: @[%a@]"
-               ((time1 -. time0) *. 1000.)
-               MSAstPrinter.pp_t ast MTS.pp ts;
-             ((v,ts)::tsl, MlMVar.add_to_env v ts mce) )
-           ([], MC.Env.empty)
-           ms_exprs
-         |> fst |> List.rev (* keep definition order *)
+     let mce =
+       try List.fold_left treat_def MC.Env.empty ms_exprs
        with
        | MSC.Untypeable err ->
           Format.printf "%s : %a@.%!" err.title
             (Format.pp_print_option pp_print_string) err.descr;
           raise (MSC.Untypeable err)
      in
-     pr "all types" "%a"
-       (pp_print_list ~pp_sep:pp_print_nothing
-          pp_ml_tys)
-       v_tys
+     pr "reconstruction environement" "%a" MC.Env.pp mce
 
 let () =
   if Unix.isatty Unix.stdout then Colors.add_ansi_marking Format.std_formatter;
