@@ -32,3 +32,22 @@ let init bil to_loc =
              current.identifiers
              IdentMap.empty
   ; to_loc }
+
+let upd env bi =
+  let open Parsing in
+  let current = BidTable.find env.infos bi in
+  let vars =
+    IdentMap.fold
+      ( fun py_ident py_info vmap ->
+        IdentMap.add py_ident
+          ( begin match py_info.scope with
+            | Local | Parameter ->
+               Utils.mk_var_t (PCI.to_string py_ident)
+            | Nonlocal | Global ->
+               IdentMap.find py_ident env.vars |> fst
+            | Unknown -> assert false
+            end
+          , py_info)
+          vmap)
+      current.identifiers env.vars in
+  { env with current; vars }
