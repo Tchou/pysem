@@ -59,10 +59,11 @@ module Ident = struct
     let open Env in
     let open Parsing in
     let v, info = match IdentMap.find_opt id env.vars with
-      | None -> failwith (Format.sprintf "id %s not found in %s %s!"
-                            (PCI.to_string id)
-                            (Parsing.show_block_kind env.current.kind)
-                            env.current.name)
+      | None -> Format.sprintf "id %s not found in %s %s!"
+                  (PCI.to_string id)
+                  (Parsing.show_block_kind env.current.kind)
+                  env.current.name
+                |> failwith
       | Some vi -> vi
     in
     { name = v
