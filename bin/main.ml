@@ -8,7 +8,7 @@ module MTS = MT.TyScheme
 let usage_message = Format.sprintf "%s <file.py>" Sys.argv.(0)
 let input_file = ref None
 
-let overwrite = ref true
+let overwrite = ref false (* true <-> unsound as it is *)
 (** Allow definition overwrite in toplevel. Or else forbid redefinition. **)
 
 let add_input_file s = 
@@ -27,14 +27,19 @@ let ml_type mcenv ast =
   MTS.mk tvs gty
 
 let upd_env mce v ts =
-  if !overwrite && MC.Env.mem v mce
-  then let tvs1, gty1 = MTS.get ts in
-       let tvs2, gty2 = MC.Env.find v mce
-                        |> MTS.get in
-       MC.Env.rm v mce
-       |> MlMVar.add_to_env v
-            ( MlGTy.disj [gty1;gty2]
-              |> MTS.mk (MT.TVarSet.union tvs1 tvs2) )
+  if MC.Env.mem v mce
+  then
+    if !overwrite
+    then let tvs1, gty1 = MTS.get ts in
+         let tvs2, gty2 = MC.Env.find v mce
+                          |> MTS.get in
+         MC.Env.rm v mce
+         |> MlMVar.add_to_env v
+              ( MlGTy.disj [gty1;gty2]
+                |> MTS.mk (MT.TVarSet.union tvs1 tvs2) )
+    else
+      Format.sprintf "Cannot add '%s' twice to environement!" (mlvar_show v)
+      |> failwith
   else MlMVar.add_to_env v ts mce
 
 let treat_def mce (v,ast) =
