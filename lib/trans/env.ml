@@ -42,7 +42,7 @@ let upd env bi =
         IdentMap.add py_ident
           ( begin match py_info.scope with
             | Local | Parameter ->
-               Utils.mk_var_t (PCI.to_string py_ident)
+               Utils.mk_var_t ~kind:MlMVar.Mut (PCI.to_string py_ident)
             | Nonlocal | Global ->
                IdentMap.find py_ident env.vars |> fst
             | Unknown -> assert false
