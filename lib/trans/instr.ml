@@ -56,14 +56,16 @@ let no_var ast = dummy_var_t, ast
 let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
   match instr with
   | Block l ->
-     begin match l with
-     | [] -> mk_unit p |> no_var
-     | [i] -> to_ml i
-     | _ -> match List.fold_left (fun acc i -> to_ml i::acc) [] l with
-            | [] | _::[] -> assert false
-            | (v,e)::r as l ->
-               let l, last = if v = dummy_var_t then r,e else l,dummy_ml_ast in
-               join_let_rev l last |> no_var
+     begin match List.fold_left (fun acc i ->
+                     match i with
+                     | _, Block [] -> acc
+                      | _, Block [i] | i -> to_ml i::acc)
+                   [] l
+     with
+     | [] -> assert false
+     | (v,e)::r as l ->
+        let l, last = if v = dummy_var_t then r,e else l,dummy_ml_ast in
+        join_let_rev l last |> no_var
      end
   | FunDef (f, args, body) ->
      ( f.name
