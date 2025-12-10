@@ -37,7 +37,7 @@ let ty_of_int i =
   MT.Ty.interval (Some z) (Some z)
 
 
-(* MAKE System.Ast *)
+(* MAKE Lang.Ast *)
 
 let ml_annot p (ast:MLAst.e) =
   (MC.Eid.unique_with_pos p, ast)

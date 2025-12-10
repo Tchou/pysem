@@ -52,7 +52,10 @@ let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
   | Call _ -> failwith "Not implemented (Expr.Call(complex expression))."
   (* | FormattedValue | JoinedStr *)
   | Constant r -> Cst (Const.of_constant r.value) |> annot r.location
-  (* | Attribute | Subscript | Starred *)
+  (* | Attribute *)
+  (* | Subscript r ->
+     Projection (of_expression env r.slice, of_expression env r.value) |> annot r.location *)
+  (* | Starred *)
   | Name r -> Var (Ident.of_identifier env r.id) |> annot r.location
   (* | List *)
   | Tuple r -> Tuple (List.map (of_expression env) r.elts) |> annot r.location
@@ -168,7 +171,7 @@ let rec ml_lambda p args body =
     List.fold_left (load_arg `Kwd) (i, def, preamble, ty) args.kwonly  in
   let ty = List.(map rev ty) in
   (* dbg_pr "rectype" pp_recty ty; *)
-  let sstt_ty = mk_rec_disj true ty in
+  let sstt_ty = mk_rec_disj false ty in
   (* dbg_pr "sstt_ty" MT.Ty.pp sstt_ty; *)
   let f_type = MlGTy.mk sstt_ty in
   (* dbg_pr "gty" MlGTy.pp f_type; *)

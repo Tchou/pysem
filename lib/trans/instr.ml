@@ -59,7 +59,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
      begin match List.fold_left (fun acc i ->
                      match i with
                      | _, Block [] -> acc
-                      | _, Block [i] | i -> to_ml i::acc)
+                     | _, Block [i] | i -> to_ml i::acc)
                    [] l
      with
      | [] -> assert false
