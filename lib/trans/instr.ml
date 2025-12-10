@@ -76,6 +76,10 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
      |> mk_return p |> no_var
   | Assign (x,e) -> (x.name, Expr.to_ml e)
   | While _ -> failwith "TODO while"
-  | If _ -> failwith "TODO if"
+  | If (e,i,io) ->
+     mk_ite p (Expr.to_ml e) MT.Ty.tt
+       (to_ml i |> snd)
+       (match io with None -> mk_unit p | Some i -> to_ml i |> snd)
+     |> no_var
   | Iexpr e -> Expr.to_ml e |> no_var
   | Break | Continue -> mk_break p |> no_var
