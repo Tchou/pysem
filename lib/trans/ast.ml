@@ -22,6 +22,7 @@ type expr' =
   | Cst of const
   | Lambda of spec * expr
   | Apply of expr * params
+  | Tuple of expr list
 and expr = expr' annot
 and spec =
   { posonly : (ident * expr option) list
@@ -195,6 +196,7 @@ let rec pp_expr' fmt = function
   | Lambda (x,e) ->
      Format.fprintf fmt "@[<hov 2>fun %a -> %a@]" pp_spec x pp_expr e
   | Apply (e,p) -> Format.fprintf fmt "@[%a%a@]" pp_expr e pp_params p
+  | Tuple el ->  Printing.pp_list  ~sep:"," pp_expr fmt el
 and pp_expr fmt (_,e') = pp_expr' fmt e'
 and pp_spec fmt s =
   let open Format in

@@ -54,12 +54,14 @@ let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
   | Constant r -> Cst (Const.of_constant r.value) |> annot r.location
   (* | Attribute | Subscript | Starred *)
   | Name r -> Var (Ident.of_identifier env r.id) |> annot r.location
-  (* | List | Tuple | Slice *)
+  (* | List *)
+  | Tuple r -> Tuple (List.map (of_expression env) r.elts) |> annot r.location
+  (* | Slice *)
 
   | NamedExpr _ | UnaryOp _ | IfExp _ | Dict _ | Set _ | ListComp _ | SetComp _
     | DictComp _ | GeneratorExp _ | Await _ | Yield _ | YieldFrom _
     | FormattedValue _ | JoinedStr _ | Attribute _ | Subscript _ | Starred _
-    | List _ | Tuple _ | Slice _
+    | List _ | Slice _
     -> failwith "Not implemented (Expr)."
 
 and spec_of_arguments fenv (a:PC.Arguments.t) =
@@ -190,3 +192,4 @@ and to_ml (p,e:expr) : MLAst.t = match e with
              |> split)
      in
      mk_app p (to_ml e) (mk_record p (pos_n @ kw_n) (pos_e @ kw_e))
+  | Tuple l -> List.map to_ml l |> mk_tuple p
