@@ -8,8 +8,8 @@ module MTS = MT.TyScheme
 let usage_message = Format.sprintf "%s <file.py>" Sys.argv.(0)
 let input_file = ref None
 
-let overwrite = ref false (* true <-> unsound as it is *)
-(** Allow definition overwrite in toplevel. Or else forbid redefinition. **)
+let shadowing = ref false
+(** Allow shadowing in toplevel. **)
 
 let add_input_file s = 
   match !input_file with 
@@ -27,20 +27,14 @@ let ml_type mcenv ast =
   MTS.mk tvs gty
 
 let upd_env mce v ts =
-  if MC.Env.mem v mce
-  then
-    if !overwrite
-    then let tvs1, gty1 = MTS.get ts in
-         let tvs2, gty2 = MC.Env.find v mce
-                          |> MTS.get in
-         MC.Env.rm v mce
-         |> MlMVar.add_to_env v
-              ( MlGTy.disj [gty1;gty2]
-                |> MTS.mk (MT.TVarSet.union tvs1 tvs2) )
-    else
-      Format.sprintf "Cannot add '%s' twice to environement!" (mlvar_show v)
-      |> failwith
-  else MlMVar.add_to_env v ts mce
+  ( if MC.Env.mem v mce
+    then
+      if !shadowing
+      then MC.Env.rm v mce
+      else failwith (Format.sprintf "Cannot add '%s' twice to environement!"
+                       (mlvar_show v))
+    else mce )
+  |> MlMVar.add_to_env v ts
 
 let treat_def mce (v,ast) =
   let time0 = Unix.gettimeofday () in
