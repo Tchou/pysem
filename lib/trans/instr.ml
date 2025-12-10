@@ -51,7 +51,8 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
     -> failwith "Not implemented (Instr)."
 
 
-let no_var ast = dummy_var_t, ast
+let no_var ast = dummy_var_t (), ast
+let is_dummy v = MlVar.show v = dummy_var
 
 let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
   match instr with
@@ -64,7 +65,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
      with
      | [] -> assert false
      | (v,e)::r as l ->
-        let l, last = if v = dummy_var_t then r,e else l,dummy_ml_ast in
+        let l, last = if is_dummy v then r,e else l,dummy_ml_ast in
         join_let_rev l last |> no_var
      end
   | FunDef (f, args, body) ->

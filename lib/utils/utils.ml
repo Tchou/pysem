@@ -84,7 +84,8 @@ let mk_break pos = MLAst.Break |> ml_annot pos
 
 let dummy_pos = MC.Position.dummy
 let dummy_ml_ast = mk_value dummy_pos MlGTy.any
-let dummy_var_t = mk_var_t "_"
+let dummy_var = "_"
+let dummy_var_t () = mk_var_t dummy_var
 
 let mk_ite_rectest pos record field opn thn els =
   mk_ite pos record
