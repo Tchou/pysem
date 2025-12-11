@@ -139,11 +139,11 @@ module Binop = struct
       | Sub -> "-", int_op
       | Mult -> "*", int_op
       | Div -> "/", int_op
-      | Mod -> "%", int_op
+      | Mod -> "mod", int_op
       | Pow -> "^^", int_op
       | And -> "&&", bool_op
       | Or -> "||", bool_op
-      | Eq -> "=", pol_cmp ()
+      | Eq -> "(=)", pol_cmp ()
       | Neq -> "<>", pol_cmp ()
       | Lt -> "<", int_cmp
       | Gt -> ">", int_cmp
