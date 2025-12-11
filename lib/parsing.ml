@@ -101,15 +101,16 @@ type info =  {
 let ident ?location ?(scope=Unknown)?(ctx=PyCo.ExpressionContext.make_load_of_t()) id = 
   IdentMap.singleton id { scope; context = context ctx; locations = Option.to_list location }
 
-let merge_scope locs var s1 s2 =
+let merge_scope locs1 locs2 var s1 s2 =
   match s1, s2 with
     Unknown, s | s, Unknown -> s
   | Parameter, Local | Local, Parameter -> Local
   | _ when s1 = s2 -> s1
   | _ -> 
-    let location = match locs with 
-        [] -> dummy_loc
-      | l :: _ -> l
+    let location = match locs1, locs2 with
+        [], [] -> dummy_loc
+      | _, l::_ -> l
+      | l::_, _ -> l
     in
     raise_ (IncompatibleScope (var, location, show_scope s1, show_scope s2))
 
@@ -117,10 +118,9 @@ let merge_context c1 c2  = { del = c1.del || c2.del;
                              load = c1.load || c2.load;
                              store = c1.store || c2.store}
 let merge_info var i1 i2 =
-  let locations = i1.locations @ i2.locations in 
   { context = merge_context i1.context i2.context;
-    scope = merge_scope locations var i1.scope i2.scope;
-    locations }
+    scope = merge_scope i1.locations i2.locations var i1.scope i2.scope;
+    locations = i1.locations @ i2.locations }
 let merge_vars vars1 vars2 =
   IdentMap.union (fun var i1 i2 -> Some (merge_info var i1 i2)) vars1 vars2
 
