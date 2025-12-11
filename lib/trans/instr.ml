@@ -75,6 +75,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
      ( match eo with None -> mk_unit p | Some e -> Expr.to_ml e )
      |> mk_return p |> no_var
   | Assign (x,e) -> (x.name, Expr.to_ml e)
+  (* Expr.to_ml e |> mk_varassign p x.name |> no_var *)
   | While _ -> failwith "TODO while"
   | If (e,i,io) ->
      mk_ite p (Expr.to_ml e) MT.Ty.tt

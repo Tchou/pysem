@@ -73,6 +73,8 @@ let join_let_rev var_in last =
   List.fold_left (fun body (v,e) ->
       mk_let (fst e |> MC.Eid.loc) [] v e body) last var_in
 
+let mk_varassign pos v ast = MLAst.VarAssign (v, ast) |> ml_annot pos
+
 let mk_seq pos a1 a2 = MLAst.Seq (a1, a2) |> ml_annot pos
 
 let mk_return pos ast = MLAst.Return ast |> ml_annot pos
