@@ -34,7 +34,7 @@ let upd_env mce v ts =
       else failwith (Format.sprintf "Cannot add '%s' twice to environement!"
                        (mlvar_show v))
     else mce )
-  |> MlMVar.add_to_env v ts
+  |> MC.Env.add v ts
 
 let treat_def mce (v,ast) =
   let time0 = Unix.gettimeofday () in
