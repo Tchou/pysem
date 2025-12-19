@@ -2,6 +2,9 @@ open Aliases
 open Utils
 open Ast
 
+let mk_block l = (* clean empty blocks *)
+  Block (List.filter (fun (_,i) -> i <> Block []) l)
+
 let rec of_statement env (stmt:PC.Statement.t) : instr =
   let annot = env_annot env in
   match stmt with
@@ -9,7 +12,7 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
      let fenv = Parsing.BlockId.mk_fun (PCI.to_string r.name) r.location
                 |> Env.upd env in
      let spec = Expr.spec_of_arguments fenv r.args in
-     let body = Block (List.map (of_statement fenv) r.body)
+     let body = mk_block (List.map (of_statement fenv) r.body)
                 |> annot r.location in
      FunDef ( Ident.of_identifier env r.name
             , spec
@@ -28,14 +31,15 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
   | While ({orelse=[];_} as r) ->
      let e = Expr.of_expression env r.test in
      let is = List.map (of_statement env) r.body in
-     While (e,Block is |> annot r.location) |> annot r.location
+     While (e, mk_block is |> annot r.location) |> annot r.location
   | While _ -> failwith "Not implemented (Instr.While(orelse))"
   | If r ->
      let test = Expr.of_expression env r.test in
-     let thn = Block (List.map (of_statement env) r.body  ) |> annot r.location in
+     let thn = mk_block (List.map (of_statement env) r.body)
+               |> annot r.location in
      let els = match List.map (of_statement env) r.orelse with
        | [] -> Option.None
-       | l -> Some (Block l |> annot r.location) in
+       | l -> Some (mk_block l |> annot r.location) in
      If (test,thn,els) |> annot r.location
   (* | With | AsyncWith | Match | Raise | Try | TryStar | Assert | Import
      | ImportFrom  *)
@@ -63,7 +67,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
                      | _, Block [i] | i -> to_ml i::acc)
                    [] l
      with
-     | [] -> assert false
+     | [] -> mk_unit p |> no_var
      | (v,e)::r as l ->
         let l, last = if is_dummy v then r,e else l,dummy_ml_ast in
         join_let_rev l last |> no_var

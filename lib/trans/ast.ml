@@ -239,9 +239,11 @@ let rec pp_instr' fmt instr' : unit =
     pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr il in
   match instr' with
   | Block il ->
-     fprintf fmt
-       (if !Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
-       pp_instr_list il
+     if il = []
+     then fprintf fmt "@[# Empty block@]"
+     else fprintf fmt
+            (if !Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
+            pp_instr_list il
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]"
                        (pp_ident) x pp_expr e
   | FunDef (i,s,b) -> fprintf fmt "@[<hov 2>def %a%a:@\n%a@]"
