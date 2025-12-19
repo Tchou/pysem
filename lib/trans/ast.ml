@@ -240,7 +240,7 @@ let rec pp_instr' fmt instr' : unit =
   match instr' with
   | Block il ->
      if il = []
-     then fprintf fmt "@[# Empty block@]"
+     then fprintf fmt "@[pass # Empty block@]"
      else fprintf fmt
             (if Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
             pp_instr_list il
