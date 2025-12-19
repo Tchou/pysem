@@ -2,13 +2,13 @@ open Aliases
 
 (* DEBUG *)
 
-let debug = ref true
-and export = ref true
+let debug = true
+and export = true
 
 (* STRINGS *)
 
 let mk_id fmt =
-  Format.kasprintf (fun s -> (if !export then "" else "%") ^ s) fmt
+  Format.kasprintf (fun s -> (if export then "" else "%") ^ s) fmt
 
 let ml_fun_arg_name = mk_id "fun_arg"
 let ml_fun_darg_name = mk_id "def_arg"
@@ -17,7 +17,7 @@ and field_name_arg i k = mk_id "a_%d_%s" i k
 and field_name_kw  k = mk_id "k_%s" k
 and def_var_name k = mk_id "d_%s" k
 
-let def_str_suffix = if !export then "_def" else "_?"
+let def_str_suffix = if export then "_def" else "_?"
 let getter_pk_name field = mk_id "get_%s%s" field def_str_suffix
 and getter_a_name i k d =
   mk_id "get_%d_%s%s" i k (if d then def_str_suffix else "")
@@ -43,7 +43,6 @@ let ml_annot p (ast:MLAst.e) =
   (MC.Eid.unique_with_pos p, ast)
 
 let mk_value pos gty = MLAst.Value gty |> ml_annot pos
-let mk_unit pos = mk_value pos (MlGTy.mk MT.Ty.unit)
 
 let mk_var_t ?(kind=MlMVar.Mut) str = MlMVar.create kind (Some str)
 let mk_var pos ?(kind=MlMVar.Mut) str =
@@ -63,15 +62,11 @@ let mk_lambda pos ty gty id body =
 let mk_ite pos test ty thn els = MLAst.Ite (test,ty,thn,els) |> ml_annot pos
 
 let mk_app pos f x = MLAst.App (f,x) |> ml_annot pos
-let mk_2app pos f x y = mk_app pos (mk_app pos f x) y
 
 let mk_projection pos proj ast = MLAst.Projection (proj, ast) |> ml_annot pos
 
 let mk_let pos ty id ast_in ast_out =
   MLAst.Let (ty,id,ast_in,ast_out) |> ml_annot pos
-let join_let_rev var_in last =
-  List.fold_left (fun body (v,e) ->
-      mk_let (fst e |> MC.Eid.loc) [] v e body) last var_in
 
 let mk_varassign pos v ast = MLAst.VarAssign (v, ast) |> ml_annot pos
 
@@ -89,11 +84,19 @@ let dummy_ml_ast = mk_value dummy_pos MlGTy.any
 let dummy_var = "_"
 let dummy_var_t () = mk_var_t dummy_var
 
+let mk_unit pos = mk_value pos (MlGTy.mk MT.Ty.unit)
+
 let mk_ite_rectest pos record field opn thn els =
   mk_ite pos record
     MT.(Record.mk opn
           [ field, (false,MT.Ty.any) ])
     thn els
+
+let mk_2app pos f x y = mk_app pos (mk_app pos f x) y
+
+let join_let_rev var_in last =
+  List.fold_left (fun body (v,e) ->
+      mk_let (fst e |> MC.Eid.loc) [] v e body) last var_in
 
 let mk_getter_pk field =
   let tv = mk_tv field in

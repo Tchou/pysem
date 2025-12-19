@@ -88,7 +88,7 @@ let () =
   if Unix.isatty Unix.stdout then Colors.add_ansi_marking Format.std_formatter;
   let main = MT.PEnv.(sequential_handler empty main) in
   try
-    if !Utils.debug
+    if Utils.debug
     then begin
         MT.Recording.start_recording ();
         main () |> fst;
