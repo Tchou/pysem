@@ -10,8 +10,8 @@ and export = ref true
 let mk_id fmt =
   Format.kasprintf (fun s -> (if !export then "" else "%") ^ s) fmt
 
-let ml_fun_arg_name = mk_id "%s" "fun_arg"
-let ml_fun_darg_name = mk_id "%s" "def_arg"
+let ml_fun_arg_name = mk_id "fun_arg"
+let ml_fun_darg_name = mk_id "def_arg"
 let field_name_pos i = mk_id "p_%d" i
 and field_name_arg i k = mk_id "a_%d_%s" i k
 and field_name_kw  k = mk_id "k_%s" k
