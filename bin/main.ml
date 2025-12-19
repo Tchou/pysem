@@ -34,16 +34,19 @@ let upd_env mce v ts =
     else mce )
   |> MC.Env.add v ts
 
-let treat_def mce (v,ast) =
+let ms_of_us t = t *. 1000.
+
+let treat_def (tt,mce) (v,ast) =
   let time0 = Unix.gettimeofday () in
   let ts = ml_type mce ast in
   let time1 = Unix.gettimeofday () in
+  let elapsed = time1 -. time0 in
   dbg_pr ("typing "^(Printing.mlvar_show v))
     "@{<italic;yellow>%.2fms@}@\n@{<bold;blue>ast@}: @[%a@]@\n\
      @{<bold;blue>tys@}: @[%a@]"
-    ((time1 -. time0) *. 1000.)
+    (ms_of_us elapsed)
     MSAstPrinter.pp_t ast MTS.pp ts;
-  upd_env mce v ts
+  tt +. elapsed, upd_env mce v ts
 
 let main () =
   Arg.parse options add_input_file usage_message;
@@ -68,15 +71,18 @@ let main () =
      let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
 
      (* MS.Config.infer_overload := false; *)
-     let mce =
-       try List.fold_left treat_def MC.Env.empty ms_exprs
+     let tt, mce =
+       try List.fold_left treat_def (0.,MC.Env.empty) ms_exprs
        with
        | MSC.Untypeable err ->
           Format.printf "%s : %a@.%!" err.title
             (Format.pp_print_option pp_print_string) err.descr;
           raise (MSC.Untypeable err)
      in
-     pr "reconstruction environement" "%a" MC.Env.pp mce
+     pr "reconstruction environement"
+       "%a@\n@{<yellow;italic>checked in %.2fms@}"
+       MC.Env.pp mce
+       (ms_of_us tt)
 
 let () =
   if Unix.isatty Unix.stdout then Colors.add_ansi_marking Format.std_formatter;
