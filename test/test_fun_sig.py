@@ -27,6 +27,11 @@ def h3(u=10):
 
 f2 (h3)
 
+def h4 (u, b=42):
+    return u
+
+f2 (h4)
+
 #The following doesn't
 
 def bad(u, v):

@@ -17,7 +17,8 @@ val add_param : 'ty t -> [`Pos|`Arg|`Kwd] -> int -> string -> 'ty -> bool -> 'ty
 *)
 
 val build : Sstt.Ty.t t -> Sstt.Ty.t
-(** [build b] creates an opaque type which represents a list of argument specifications. *)
+(** [build b] creates an opaque type which represents a list of argument specifications.
+*)
 
 
 val extract_record : Sstt.Ty.t -> Sstt.Ty.t

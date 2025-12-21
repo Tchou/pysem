@@ -167,7 +167,7 @@ let rec ml_lambda p args body =
   let f_body = join_let_rev preamble body in
   let f_packed_v = mk_var_t ~kind:MlMVar.Immut ml_fun_packed_name in
   let f_packed = var_of_vart p f_packed_v in
-  let f_body = Py_params.(mk_let p [extract_record sstt_ty] f_arg_v (unpack p f_packed) f_body) in
+  let f_body = Py_params.(mk_let p [] f_arg_v (unpack p f_packed) f_body) in
   let f_anon = mk_lambda p [] f_type f_packed_v f_body in
   join_let_rev def f_anon
 
