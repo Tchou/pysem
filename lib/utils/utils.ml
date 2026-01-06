@@ -11,11 +11,13 @@ let mk_id fmt =
   Format.kasprintf (fun s -> (if export then "" else "%") ^ s) fmt
 
 let ml_fun_arg_name = mk_id "fun_arg"
+let ml_fun_packed_name = mk_id "fun_packed"
 let ml_fun_darg_name = mk_id "def_arg"
 let field_name_pos i = mk_id "p_%d" i
 and field_name_arg i k = mk_id "a_%d_%s" i k
 and field_name_kw  k = mk_id "k_%s" k
 and def_var_name k = mk_id "d_%s" k
+
 
 let def_str_suffix = if export then "_def" else "_?"
 let getter_pk_name field = mk_id "get_%s%s" field def_str_suffix
@@ -48,6 +50,18 @@ let mk_var_t ?(kind=MlMVar.Mut) str = MlMVar.create kind (Some str)
 let mk_var pos ?(kind=MlMVar.Mut) str =
   MLAst.Var (mk_var_t ~kind str) |> ml_annot pos
 and var_of_vart pos v = Var v |> ml_annot pos
+
+let mk_enum pos e =
+  MLAst.Constructor (MSAst.Enum e, []) |> ml_annot pos
+
+let mk_tag pos t e =
+  MLAst.Constructor (MSAst.Tag t, [e]) |> ml_annot pos
+
+let mk_proj_tag pos t e =
+  MLAst.Projection (MSAst.PiTag t, e) |> ml_annot pos
+
+let mk_proj_tuple pos n i e =
+  MLAst.Projection (MSAst.Pi (n, i), e) |> ml_annot pos
 
 let mk_tuple pos l =
   MLAst.Constructor (MSAst.Tuple (List.length l), l) |> ml_annot pos
@@ -101,8 +115,8 @@ let join_let_rev var_in last =
 let mk_getter_pk field =
   let tv = mk_tv field in
   let args = [ mk_rec_disj true [[ (field, (true, tv)) ]]
-            ; tv ]
-            |> MT.Tuple.mk in
+             ; tv ]
+             |> MT.Tuple.mk in
   let fty = MT.Arrow.mk args tv |> MlGTy.mk in
   mk_value dummy_pos fty
 
@@ -123,8 +137,8 @@ let mk_getter_a_d f_p f_k f_a =
 and mk_getter_a f_p f_k f_a =
   let tv = mk_tv f_a in
   let args = mk_rec_disj true
-              [ [(f_p, (false, tv)); (f_k, (true, MT.Ty.empty))]
-              ; [(f_k, (false, tv)); (f_p, (true, MT.Ty.empty))] ] in
+      [ [(f_p, (false, tv)); (f_k, (true, MT.Ty.empty))]
+      ; [(f_k, (false, tv)); (f_p, (true, MT.Ty.empty))] ] in
   let fty = MT.Arrow.mk args tv |> MlGTy.mk in
   mk_value dummy_pos fty
 
@@ -143,10 +157,10 @@ let pos_converter filename text =
   in
   let bol = (0 :: loop 0 (String.length text)) |> Array.of_list in
   fun (l : PC.Position.t) ->
-  Lexing.{ pos_fname = filename
-         ; pos_lnum = l.line
-         ; pos_bol = bol.(l.line-1)
-         ; pos_cnum = l.column + bol.(l.line-1) }
+    Lexing.{ pos_fname = filename
+           ; pos_lnum = l.line
+           ; pos_bol = bol.(l.line-1)
+           ; pos_cnum = l.column + bol.(l.line-1) }
 
 type loc_converter = PC.Location.t -> MC.Position.t
 let loc_converter filename text =

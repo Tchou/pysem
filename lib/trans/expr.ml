@@ -14,9 +14,9 @@ let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
   let annot = env_annot env in
   match e with
   | BoolOp ({values=[a;b];_} as r) ->
-     Binop ( of_expression env a
-           , Binop.of_boolop r.op
-           , of_expression env b) |> annot r.location
+    Binop ( of_expression env a
+          , Binop.of_boolop r.op
+          , of_expression env b) |> annot r.location
   | BoolOp _ -> failwith "Not implemented (Expr.BoolOp(values<>[a;b]))."
   (* | NamedExpr *)
   | BinOp r -> Binop ( of_expression env r.left
@@ -24,31 +24,31 @@ let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
                      , of_expression env r.right) |> annot r.location
   (* | UnaryOp *)
   | Lambda r ->
-     let lenv = Parsing.BlockId.mk_lambda r.location
-                |> Env.upd env in
-     Lambda ( spec_of_arguments lenv r.args
-            , of_expression lenv r.body ) |> annot r.location
+    let lenv = Parsing.BlockId.mk_lambda r.location
+               |> Env.upd env in
+    Lambda ( spec_of_arguments lenv r.args
+           , of_expression lenv r.body ) |> annot r.location
   (* | IfExp | Dict | Set | ListComp | SetComp | DictComp | GeneratorExp | Await
      | Yield | YieldFrom *)
   | Compare ({ops=[op];comparators=[right];_} as r) ->
-     Binop ( of_expression env r.left
-           , Binop.of_comparisonoperator op
-           , of_expression env right) |> annot r.location
+    Binop ( of_expression env r.left
+          , Binop.of_comparisonoperator op
+          , of_expression env right) |> annot r.location
   | Compare _ -> failwith "Not implemented (Expr.Compare(¬ only 2 arguments))."
   | Call ({func=Name _;_} as r) ->
-     let kw =
-       List.map
-         (fun kw ->
+    let kw =
+      List.map
+        (fun kw ->
            let open PC.Keyword in
            match kw.arg with
            | Some id -> ( PCI.to_string id
                         , of_expression env kw.value )
            | None -> failwith "Not implemented (Expr.Call(several kw_args)).")
-         r.keywords in
-     Apply ( of_expression env r.func
-           , { pos = List.map (of_expression env) r.args
-             ; kw } )
-     |> annot r.location
+        r.keywords in
+    Apply ( of_expression env r.func
+          , { pos = List.map (of_expression env) r.args
+            ; kw } )
+    |> annot r.location
   | Call _ -> failwith "Not implemented (Expr.Call(complex expression))."
   (* | FormattedValue | JoinedStr *)
   | Constant r -> Cst (Const.of_constant r.value) |> annot r.location
@@ -62,9 +62,9 @@ let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
   (* | Slice *)
 
   | NamedExpr _ | UnaryOp _ | IfExp _ | Dict _ | Set _ | ListComp _ | SetComp _
-    | DictComp _ | GeneratorExp _ | Await _ | Yield _ | YieldFrom _
-    | FormattedValue _ | JoinedStr _ | Attribute _ | Subscript _ | Starred _
-    | List _ | Slice _
+  | DictComp _ | GeneratorExp _ | Await _ | Yield _ | YieldFrom _
+  | FormattedValue _ | JoinedStr _ | Attribute _ | Subscript _ | Starred _
+  | List _ | Slice _
     -> failwith "Not implemented (Expr)."
 
 and spec_of_arguments fenv (a:PC.Arguments.t) =
@@ -88,20 +88,16 @@ let rec ml_lambda p args body =
       fprintf fmt "@[%a@]"
         (Printing.pp_list
            (fun fmt fbt_l ->
-             fprintf fmt "@[<hov 2>[ %a@ ]@]"
-               (Printing.pp_list
-                  (fun fmt (f,(b,_t)) ->
-                    fprintf fmt "@[%s :%s %a@]" f
-                      (if b then "?" else "") MT.Ty.pp _t) )
-               fbt_l) )
+              fprintf fmt "@[<hov 2>[ %a@ ]@]"
+                (Printing.pp_list
+                   (fun fmt (f,(b,_t)) ->
+                      fprintf fmt "@[%s :%s %a@]" f
+                        (if b then "?" else "") MT.Ty.pp _t) )
+                fbt_l) )
         fbt_ll)
   in
-
   let f_arg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
   let f_arg = var_of_vart p f_arg_v in
-  let nb_pos = List.length args.posonly
-  and nb_arg = List.length args.args in
-
   let get_pos i = mk_projection p (MSAst.Field (field_name_pos i)) f_arg in
   let get_kw id = mk_projection p (MSAst.Field (field_name_kw id)) f_arg in
 
@@ -109,52 +105,46 @@ let rec ml_lambda p args body =
     let opt, eo, default = match eo with
       | None -> false, None, d
       | Some e ->
-         let e = mk_var_t ~kind:MlMVar.Immut
-                   (Ident.show id |> def_var_name)
-               , to_ml e in
-         true, Some e, e::d in
+        let e = mk_var_t ~kind:MlMVar.Immut
+            (Ident.show id |> def_var_name)
+              , to_ml e in
+        true, Some e, e::d in
     let id_kw = Ident.show id in
     let t, ast_in = match pak with
       | `Pos ->
-         let field = field_name_pos i in
-         let tv = field |> mk_tv in
-         ( List.map (fun rec_t -> (field,(opt,tv))::rec_t) t
-         , match eo with
-           | None -> get_pos i
-           | Some (v,(pos,_)) ->
-              let g = Builtins.getter_pk field |> var_of_vart p in
-              mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
-              |> mk_app p g )
+        let field = field_name_pos i in
+        let tv = field |> mk_tv in
+        ( Py_params.add_param t `Pos i id_kw tv opt
+        , match eo with
+        | None -> get_pos i
+        | Some (v,(pos,_)) ->
+          let g = Builtins.getter_pk field |> var_of_vart p in
+          mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
+          |> mk_app p g )
       | `Arg ->
-         let field_p = field_name_pos i in
-         let field_k = field_name_kw id_kw in
-         let field_a = field_name_arg i id_kw in
-         let tv = mk_tv field_a in
-         let g = Builtins.getter_a i id_kw field_p field_k field_a opt
-                 |> var_of_vart p in
-         let get = match eo with
-           | None -> mk_app p g f_arg
-           | Some (v,(pos,_)) ->
-              mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
-              |> mk_app p g in
-         ( List.(mapi (fun j rec_t ->
-                     if j < length t - (i-nb_pos) - 1
-                     then (field_p,(opt,tv))
-                          ::(field_k,(true,MT.Ty.empty))::rec_t
-                     else (field_k,(opt,tv))
-                          ::(field_p,(true,MT.Ty.empty))::rec_t)
-                   t)
-         , get )
+        let field_p = field_name_pos i in
+        let field_k = field_name_kw id_kw in
+        let field_a = field_name_arg i id_kw in
+        let tv = mk_tv field_a in
+        let g = Builtins.getter_a i id_kw field_p field_k field_a opt
+                |> var_of_vart p in
+        let get = match eo with
+          | None -> mk_app p g f_arg
+          | Some (v,(pos,_)) ->
+            mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
+            |> mk_app p g in
+        ( Py_params.add_param t `Arg i id_kw tv opt
+        , get )
       | `Kwd ->
-         let field = field_name_kw id_kw in
-         let tv = field |> mk_tv in
-         ( List.map (fun rec_t -> (field,(opt,tv))::rec_t) t
-         , match eo with
-           | None -> get_kw id_kw
-           | Some (v,(pos,_)) ->
-              let g = Builtins.getter_pk field |> var_of_vart p in
-              mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
-              |> mk_app p g )
+        let field = field_name_kw id_kw in
+        let tv = field |> mk_tv in
+        ( Py_params.add_param t `Kwd i id_kw tv opt
+        , match eo with
+        | None -> get_kw id_kw
+        | Some (v,(pos,_)) ->
+          let g = Builtins.getter_pk field |> var_of_vart p in
+          mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
+          |> mk_app p g )
     in
     ( i+1
     , default
@@ -162,37 +152,35 @@ let rec ml_lambda p args body =
       ::l
     , t )
   in
-  let ty = List.init (nb_arg+1) (fun _ -> []) in
+  let ty = Py_params.empty in
   let i, def, preamble, ty =
     List.fold_left (load_arg `Pos) (0, [] , []      , ty) args.posonly in
   let i, def, preamble, ty =
     List.fold_left (load_arg `Arg) (i, def, preamble, ty) args.args    in
   let _, def, preamble, ty =
     List.fold_left (load_arg `Kwd) (i, def, preamble, ty) args.kwonly  in
-  let ty = List.(map rev ty) in
   (* dbg_pr "rectype" pp_recty ty; *)
-  let sstt_ty = mk_rec_disj false ty in
+  let sstt_ty = Py_params.build ty in
   (* dbg_pr "sstt_ty" MT.Ty.pp sstt_ty; *)
   let f_type = MlGTy.mk sstt_ty in
   (* dbg_pr "gty" MlGTy.pp f_type; *)
   let f_body = join_let_rev preamble body in
-  let f_anon = mk_lambda p [] f_type f_arg_v f_body in
+  let f_packed_v = mk_var_t ~kind:MlMVar.Immut ml_fun_packed_name in
+  let f_packed = var_of_vart p f_packed_v in
+  let f_body = Py_params.(mk_let p [] f_arg_v (unpack p f_packed) f_body) in
+  let f_anon = mk_lambda p [] f_type f_packed_v f_body in
   join_let_rev def f_anon
 
 and to_ml (p,e:expr) : MLAst.t = match e with
   | Var v -> var_of_vart p v.name
   | Binop (e1,bop,e2) ->
-     mk_2app p (Binop.to_ml p bop) (to_ml e1) (to_ml e2)
+    mk_2app p (Binop.to_ml p bop) (to_ml e1) (to_ml e2)
   | Cst c -> mk_value p Const.(to_gty c)
   | Lambda (args, body) ->
-     ml_lambda p args (to_ml body)
+    ml_lambda p args (to_ml body)
   | Apply (e,params) ->
-     let pos_n, pos_e =
-       List.(mapi (fun i expr -> field_name_pos i, to_ml expr) params.pos
-             |> split)
-     and kw_n, kw_e =
-       List.(map (fun (str, expr) -> field_name_kw str, to_ml expr) params.kw
-             |> split)
-     in
-     mk_app p (to_ml e) (mk_record p (pos_n @ kw_n) (pos_e @ kw_e))
+    let pos_e = List.map to_ml params.pos in
+    let kw_e = List.map (fun (s, e) -> s, to_ml e) params.kw in
+    let args = Py_params.pack p pos_e kw_e in
+    mk_app p (to_ml e) args
   | Tuple l -> List.map to_ml l |> mk_tuple p
