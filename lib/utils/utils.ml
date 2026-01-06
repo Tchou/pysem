@@ -2,7 +2,9 @@ open Aliases
 
 (* DEBUG *)
 
-let debug = true
+let debug = match Sys.getenv_opt "PYSEM_DEBUG" with
+    None | Some "true" -> true
+  | _ -> false
 and export = true
 
 (* STRINGS *)
@@ -20,11 +22,11 @@ and def_var_name k = mk_id "d_%s" k
 
 
 let def_str_suffix = if export then "_def" else "_?"
-let getter_pk_name field = mk_id "get_%s%s" field def_str_suffix
+let getter_pk_name field = mk_id "%%get_%s%s" field def_str_suffix
 and getter_a_name i k d =
-  mk_id "get_%d_%s%s" i k (if d then def_str_suffix else "")
+  mk_id "%%get_%d_%s%s" i k (if d then def_str_suffix else "")
 
-
+let is_internal s = s <> "" && s.[0] = '%'
 (* MAKE TYPES *)
 
 let mk_tv ?(k=MT.TVar.KInfer) str =

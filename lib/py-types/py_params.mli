@@ -9,7 +9,7 @@ val empty : 'ty t
 val add_param : 'ty t -> [`Pos|`Arg|`Kwd] -> int -> string -> 'ty -> bool -> 'ty t
 (** [add_param b k pos name v has_default ] adds an argument to builder [b].
 
-    - [k] denotes the type of arguments ([`Pos]itional onlty, mixed [`Arg]ument, [`Kwd]-only argument)
+    - [k] denotes the type of arguments ([`Pos]itional only, mixed [`Arg]ument, [`Kwd]-only argument)
     - [pos] is the position of the argument in the parameter list,
     - [name] is the name of the argument in the parameter list
     - [v] is the data associated with this argument
@@ -31,3 +31,6 @@ val pack : MC.Position.t -> MLAst.t list -> (string * MLAst.t) list -> MLAst.t
 
 val unpack : MC.Position.t -> MLAst.t -> MLAst.t
 (** [unpack pos arg ] creates a term that extracts the record part of the encoded argument list*)
+
+val pp_py_scheme : Format.formatter -> MT.TyScheme.t -> unit
+(** [pp_py_scheme fmt s] prints the toplevel type-scheme s as a Python signature *)

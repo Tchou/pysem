@@ -44,3 +44,23 @@ def f3():
     return lambda x=42, y=45: x + y
 
 f3()
+
+def f4(g):
+    return (g(1,2,z=4),g(u=1, v=2))
+
+def g0(u=1,v=2,z=3):
+    return u+v+z
+
+f4(g0)
+
+
+def g1(x=1, y=2, /, u=1, *,v=2,z=3):
+    return x+y+u+v+z
+
+f4(g1)
+
+def g2(*,u=1,v=2,z=3):
+    return u+v+z
+
+#f4(g2)  #type error, the call g(1,2,z=4) in f4 is not well typed
+
