@@ -98,21 +98,21 @@ let rec ml_lambda p args body =
   in
   let f_arg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
   let f_arg = var_of_vart p f_arg_v in
-  let get_pos i = mk_projection p (MSAst.Field (field_name_pos i)) f_arg in
-  let get_kw id = mk_projection p (MSAst.Field (field_name_kw id)) f_arg in
+  let get_pos i = mk_projection p (MSAst.Field (Py_params.field_name_pos i)) f_arg in
+  let get_kw id = mk_projection p (MSAst.Field (Py_params.field_name_kw id)) f_arg in
 
   let load_arg (pak:[`Pos|`Arg|`Kwd]) (i,d,l,t) (id,eo) =
     let opt, eo, default = match eo with
       | None -> false, None, d
       | Some e ->
         let e = mk_var_t ~kind:MlMVar.Immut
-            (Ident.show id |> def_var_name)
+            (Ident.external_name id |> def_var_name)
               , to_ml e in
         true, Some e, e::d in
-    let id_kw = Ident.show id in
+    let id_kw = Ident.external_name id in
     let t, ast_in = match pak with
       | `Pos ->
-        let field = field_name_pos i in
+        let field = Py_params.field_name_pos i in
         let tv = field |> mk_tv in
         ( Py_params.add_param t `Pos i id_kw tv opt
         , match eo with
@@ -122,9 +122,9 @@ let rec ml_lambda p args body =
           mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
           |> mk_app p g )
       | `Arg ->
-        let field_p = field_name_pos i in
-        let field_k = field_name_kw id_kw in
-        let field_a = field_name_arg i id_kw in
+        let field_p = Py_params.field_name_pos i in
+        let field_k = Py_params.field_name_kw id_kw in
+        let field_a = Py_params.field_name_arg i id_kw in
         let tv = mk_tv field_a in
         let g = Builtins.getter_a i id_kw field_p field_k field_a opt
                 |> var_of_vart p in
@@ -136,7 +136,7 @@ let rec ml_lambda p args body =
         ( Py_params.add_param t `Arg i id_kw tv opt
         , get )
       | `Kwd ->
-        let field = field_name_kw id_kw in
+        let field = Py_params.field_name_kw id_kw in
         let tv = field |> mk_tv in
         ( Py_params.add_param t `Kwd i id_kw tv opt
         , match eo with

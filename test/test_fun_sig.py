@@ -64,3 +64,11 @@ def g2(*,u=1,v=2,z=3):
 
 #f4(g2)  #type error, the call g(1,2,z=4) in f4 is not well typed
 
+def i (x,y ):
+    return (x,y)
+#Test mixed function types
+def f5(f, y=42):
+    if f(y, z=y+1) == 43:
+        return f
+    else:
+        return i

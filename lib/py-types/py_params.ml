@@ -1,9 +1,23 @@
 open Aliases
-
-let tag_s = "%%py_param_spec"
+(*
+   See py-types.md
+*)
+(* Since we rely on the names we make always internal
+   (not conditionally as in {Utils.export}, otherwise the
+   code breaks if Utils.export is [true])*)
+let tag_s = Utils.internal "py_param_spec"
 let tag = MT.Tag.define tag_s
 
-let approx_id = MT.Enum.define "%%py_param_approx_spec"  
+let approx_id = MT.Enum.define (Utils.internal "py_param_approx_spec")
+
+let exact_str = Utils.internal "py_param_exact_spec"
+let field_name_pos i = Utils.mk_internal "p_%d" i
+let field_name_arg i k = Utils.mk_internal "a_%d_%s" i k
+let field_name_kw  k = Utils.mk_internal "k_%s" k
+let getter_pk_name field =
+  Utils.mk_internal "get_%s%s" field "_def"
+let getter_a_name i k d =
+  Utils.mk_internal "get_%d_%s%s" i k (if d then "_def" else "")
 let approx_id_ty = MT.Enum.typ approx_id
 let fail msg = Format.kfprintf (fun _ -> assert false) Format.err_formatter msg
 
@@ -13,9 +27,16 @@ type 'ty param =
     ty : 'ty;
     has_default : bool }
 
-type 'ty t = 'ty param list * 'ty param list * 'ty param list
+type 'ty builder = 'ty param list * 'ty param list * 'ty param list
 
 let empty = [], [], []
+
+let validate (a,b,c) =
+  a @ b @ c
+  |> List.iteri (fun i p ->
+      if p.pos <> i then
+        fail "Missing argument for postision %d" i
+    )
 let rec insert p l =
   match l with
     [] -> [p]
@@ -33,14 +54,13 @@ let add_param (pb, ab, kb) (k : [`Pos|`Arg|`Kwd]) pos name ty has_default =
   | `Arg -> pb, insert param ab, kb
   | `Kwd -> pb, ab, insert param kb
 
-
 let rec_as_pos l =
   List.map (fun p ->
-      Utils.field_name_pos p.pos,(p.has_default, p.ty)) l
+      field_name_pos p.pos,(p.has_default, p.ty)) l
 
 let rec_as_kw l =
   List.map (fun p ->
-      Utils.field_name_kw p.name,(p.has_default, p.ty)) l
+      field_name_kw p.name,(p.has_default, p.ty)) l
 
 let map_split f l =
   let rec loop l acc =
@@ -86,7 +106,10 @@ let make_descr_part (pa, ab, kb) =
   let descr = p @ a @ k in
   let id = match Hashtbl.find_opt id_by_descr descr with
       Some e -> e
-    | None -> let e = Sstt.Enum.mk "%%py_param_exact_spec"  in
+    | None ->
+      (* Avoid MLsem's Enum that performs hashconsing,
+         we want a fresh internal id for the enum *)
+      let e = Sstt.Enum.mk exact_str in
       EnumHash.add descr_by_id e descr;
       Hashtbl.add id_by_descr descr e;
       e
@@ -96,6 +119,7 @@ let make_descr_part (pa, ab, kb) =
 
 
 let build builder =
+  validate builder;
   let tr = make_record_part builder |> Utils.mk_rec_disj false in
   let ts = make_descr_part builder in
   [tr; ts]
@@ -114,8 +138,8 @@ let extract_record t =
   else fail "Invalid record component"
 
 let pack p pos kw =
-  let pos_l, pos_e = List.mapi (fun i e -> Utils.field_name_pos i, e) pos |> List.split in
-  let kw_l, kw_e = List.map (fun (s, e) -> Utils.field_name_kw s, e) kw |> List.split in
+  let pos_l, pos_e = List.mapi (fun i e -> field_name_pos i, e) pos |> List.split in
+  let kw_l, kw_e = List.map (fun (s, e) -> field_name_kw s, e) kw |> List.split in
   let r = Utils.mk_record p (pos_l @ kw_l) (pos_e @ kw_e) in
   let e_approx_id = Utils.mk_enum p approx_id in
   let pair = Utils.mk_tuple p [r; e_approx_id] in
@@ -129,7 +153,6 @@ let map_exact f =
   List.map (function Str _ as s -> s
                    | Named p -> Named { p with ty = f p.ty }
                    | Anon p -> Anon { p with ty = f p.ty })
-
 
 let map_approx f l =
   List.map (fun (pl, kl) ->
@@ -154,9 +177,13 @@ let record_atom_to_sig node ctx r =
     |> List.fold_left (fun (apos, akw) (l, (ty, opt)) ->
         assert (not opt);
         let ty = node ctx ty in
-        match String.split_on_char '_' (Label.name l) with (* *)
-        | ["p"; n] -> (int_of_string n, ty)::apos, akw
-        | ["k"; n] -> apos, (n, ty)::akw
+        (*
+          Keep in sync with field_name_pos and
+          field_name_kw at the top of the file
+        *)
+        match String.split_on_char '_' (Label.name l) with
+        | ["%%p"; n] -> (int_of_string n, ty)::apos, akw
+        | ["%%k"; n] -> apos, (n, ty)::akw
         | _ -> fail "Unexpected label %s" (Label.name l)
       ) ([], [])
   in
@@ -173,8 +200,8 @@ let to_approx node ctx rec_type =
 
 let field_param node ctx is_anon rec_type p =
   let field =
-    if is_anon then Utils.field_name_pos p.pos
-    else Utils.field_name_kw p.name
+    if is_anon then field_name_pos p.pos
+    else field_name_kw p.name
   in
   MT.Record.proj rec_type field |> node ctx
 
@@ -187,7 +214,7 @@ let extract_id descr_id =
 
 let to_exact node ctx rec_type spec_id =
   let descr = EnumHash.find descr_by_id spec_id in
-  let tr_kind = function 
+  let tr_kind = function
       Str _ as s -> s
     | Anon p -> Anon { p with ty = field_param node ctx true rec_type p }
     | Named p -> Named { p with ty = field_param node ctx false rec_type p }
@@ -278,25 +305,27 @@ let () = MT.PEnv.add_printer_param params
 let pp_mapping fmt m =
   match m with
     [] -> ()
-  | _ -> 
-    Format.(fprintf fmt "@[<hov 1>[%a]@]" 
+  | _ ->
+    Format.(fprintf fmt "@[<hov 1>[%a]@]"
               (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
-                 (fun fmt (_, s) -> pp_print_string fmt s))
+                 (fun fmt (_, s) -> MT.TVar.pp fmt s))
               m)
 
 let pp_py_scheme fmt s =
   let vars, gty = MT.TyScheme.get s in
   let vars = MT.TVarSet.destruct vars in
-  let mapping = match vars with
+  let mk v n = v, MT.TVar.(mk (kind v) (Some n)) in
+  let new_names = match vars with
       [] -> []
-    | [ x ] -> [ x, "X"]
-    | [ x; y] -> [x, "X"; y, "Y"]
-    | [ x; y; z] -> [x, "X"; y, "Y"; z, "Z"]
-    | _ -> List.mapi (fun i x -> x, "X" ^ string_of_int i) vars 
+    | [ _ ] -> [ "X"]
+    | [ _; _ ] -> ["X"; "Y"]
+    | [ _; _; _ ] -> ["X"; "Y"; "Z"]
+    | _ -> List.mapi (fun i _ -> ("X" ^ string_of_int i)) vars
   in
+  let mapping = List.map2 mk vars new_names in
   let () = pp_mapping fmt mapping in
-  let subst = mapping 
-              |> List.map (fun (x, n) -> x, MT.Enum.(define n |> typ)) 
+  let subst = mapping
+              |> List.map (fun (x, n) -> x, MT.TVar.typ n)
               |> MT.Subst.construct
   in
   let pp_ty = Sstt.Printer.print_ty (MT.PEnv.printer_params ()) in
@@ -307,5 +336,6 @@ let pp_py_scheme fmt s =
   else
     let sup' = MT.Subst.apply subst sup in
     Format.fprintf fmt "@[%a <:@ Any <:@ %a@]"
-      pp_ty inf' 
+      pp_ty inf'
       pp_ty sup'
+

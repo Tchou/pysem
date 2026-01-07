@@ -8,25 +8,20 @@ let debug = match Sys.getenv_opt "PYSEM_DEBUG" with
 and export = true
 
 (* STRINGS *)
+let is_internal = String.starts_with ~prefix:"%%"
+let internal s = "%%" ^ s
+let strip_internal s =
+  assert (is_internal s);
+  String.sub s 2 (String.length s - 2)
 
-let mk_id fmt =
-  Format.kasprintf (fun s -> (if export then "" else "%") ^ s) fmt
-
+let mk_internal fmt = Format.kasprintf internal fmt
+let mk_id fmt = Format.kasprintf (fun s -> if export then s
+                                   else internal s) fmt
 let ml_fun_arg_name = mk_id "fun_arg"
 let ml_fun_packed_name = mk_id "fun_packed"
 let ml_fun_darg_name = mk_id "def_arg"
-let field_name_pos i = mk_id "p_%d" i
-and field_name_arg i k = mk_id "a_%d_%s" i k
-and field_name_kw  k = mk_id "k_%s" k
 and def_var_name k = mk_id "d_%s" k
 
-
-let def_str_suffix = if export then "_def" else "_?"
-let getter_pk_name field = mk_id "%%get_%s%s" field def_str_suffix
-and getter_a_name i k d =
-  mk_id "%%get_%d_%s%s" i k (if d then def_str_suffix else "")
-
-let is_internal s = s <> "" && s.[0] = '%'
 (* MAKE TYPES *)
 
 let mk_tv ?(k=MT.TVar.KInfer) str =

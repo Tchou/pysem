@@ -15,7 +15,7 @@ let add vname body =
 
 let getter_pk field =
   let open Hashtbl in
-  let gname = getter_pk_name field in
+  let gname = Py_params.getter_pk_name field in
   if mem builtins gname
   then find builtins gname |> fst
   else let g = mk_getter_pk field in
@@ -24,7 +24,7 @@ let getter_pk field =
        v
 and getter_a i k fp fk fa d =
   let open Hashtbl in
-  let gname = getter_a_name i k d in
+  let gname = Py_params.getter_a_name i k d in
   if mem builtins gname
   then find builtins gname |> fst
   else let g = (if d then mk_getter_a_d else mk_getter_a) fp fk fa in

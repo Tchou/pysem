@@ -57,6 +57,11 @@ let env_annot env loc t = env.Env.to_loc loc, t
 module Ident = struct
   let show ({name;_}:ident) = Printing.mlvar_show name
 
+  let external_name ({name; _}: ident) =
+    match MlVar.get_name name with
+      Some s -> s
+    | None -> failwith "Ident.external_name: anonymous variable"
+
   let of_identifier (env:Env.t) id : ident =
     let open Env in
     let open Parsing in
@@ -91,12 +96,12 @@ module Const = struct
   let to_gty c : MlGTy.t =
     let open Mlsem.Types in
     GTy.mk (match c with
-            | None_ -> failwith "Ty.None"
-            (* | Ellipsis -> failwith "Ty.Ellipsis" *)
-            | Bool b -> if b then Ty.tt else Ty.ff
-            | Int i -> Utils.ty_of_int i
-            (* | Float _ -> Ty.float (\* !! TODO !! *\) *)
-            | String _ -> Ty.string )
+        | None_ -> failwith "Ty.None"
+        (* | Ellipsis -> failwith "Ty.Ellipsis" *)
+        | Bool b -> if b then Ty.tt else Ty.ff
+        | Int i -> Utils.ty_of_int i
+        (* | Float _ -> Ty.float (\* !! TODO !! *\) *)
+        | String _ -> Ty.string )
 end
 
 module Binop = struct
@@ -133,7 +138,7 @@ module Binop = struct
     and int_cmp = MT.(Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.bool))
     and bool_op = MT.(Arrow.mk Ty.bool (Arrow.mk Ty.bool Ty.bool))
     and pol_cmp _ = let tv = mk_tv "bop_tv" in
-                    MT.(Arrow.mk tv    (Arrow.mk tv      Ty.bool)) in
+      MT.(Arrow.mk tv    (Arrow.mk tv      Ty.bool)) in
     let strkey, ty = match op with
       | Add -> "+", int_op
       | Sub -> "-", int_op
@@ -192,13 +197,13 @@ let pp_const fmt = function
 let rec pp_expr' fmt = function
   | Var id -> pp_ident fmt id
   | Binop (e1, b, e2) ->
-     Format.fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
+    Format.fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
   | Cst c -> pp_const fmt c
   | Lambda (x,e) ->
-     Format.fprintf fmt "@[<hov 2>fun %a -> %a@]" pp_spec x pp_expr e
+    Format.fprintf fmt "@[<hov 2>fun %a -> %a@]" pp_spec x pp_expr e
   | Apply (e,p) -> Format.fprintf fmt "@[%a%a@]" pp_expr e pp_params p
   | Tuple el ->  Printing.pp_list  ~sep:"," pp_expr fmt el
-  (*| Projection (p,e) -> Format.fprintf fmt "@[%a[%a]@]" pp_expr e pp_expr p *)
+(*| Projection (p,e) -> Format.fprintf fmt "@[%a[%a]@]" pp_expr e pp_expr p *)
 and pp_expr fmt (_,e') = pp_expr' fmt e'
 and pp_spec fmt s =
   let open Format in
@@ -239,15 +244,15 @@ let rec pp_instr' fmt instr' : unit =
     pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr il in
   match instr' with
   | Block il ->
-     if il = []
-     then fprintf fmt "@[pass # Empty block@]"
-     else fprintf fmt
-            (if Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
-            pp_instr_list il
+    if il = []
+    then fprintf fmt "@[pass # Empty block@]"
+    else fprintf fmt
+        (if Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
+        pp_instr_list il
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]"
-                       (pp_ident) x pp_expr e
+                      (pp_ident) x pp_expr e
   | FunDef (i,s,b) -> fprintf fmt "@[<hov 2>def %a%a:@\n%a@]"
-                         pp_ident i pp_spec s pp_instr b
+                        pp_ident i pp_spec s pp_instr b
   | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i
   | If (e,i,io) -> fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"
                      pp_expr e pp_instr i (pp_print_option pp_instr) io
