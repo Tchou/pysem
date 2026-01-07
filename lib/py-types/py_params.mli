@@ -30,40 +30,49 @@ val extract_record : Sstt.Ty.t -> Sstt.Ty.t
 
 val pack : MC.Position.t -> MLAst.t list -> (string * MLAst.t) list -> MLAst.t
 (** [pack pos pos_args kw_args] creates a term that represent all Python
-    arguments packed before a function call. For the call [f(1,2,3,x=4,y=5)],
+    arguments packed before a function call. For the call [f(e1,e2,e3,x=e4,y=e5)],
     this function should be called with [pack pos [a1,a2,a3] [ "x",a4; "y",a5
-    ]].
+    ]] where [ai] is the ASTs of expression [ei].
 *)
 
 val unpack : MC.Position.t -> MLAst.t -> MLAst.t
-(** [unpack pos arg ] creates a term that extracts the record part of the encoded argument list.
-    For a function call [f(1,2,3,x=4,y=5)] was packed with [pack pos [a1,a2,a3] [ "x",a4; "y",a5]],
-    [unpack pos arg] returns the AST of a record: [ { __1=1; __2=2; __3=3; x=4; y=5 } ] (
-    the name of the labels are given as an example. The actual name can be obtained with
-    {!field_name_pos} and {!field_name_kw}).
+(** [unpack pos arg] creates a term that extracts the record part of the encoded arguments.
+    For a function call [f(e1,e2,e3,x=e4,y=e5)] was packed with [pack pos [a1,a2,a3] [ "x",a4; "y",a5]],
+    [unpack pos arg] returns the AST of a record: [ { __1=a1; __2=a2; __3=a3; x=a4; y=a5 } ] (
+    the name of the labels are an implementation detail. The parameters should be extracted with
+    {!positional_getter}, {!argument_getter} or {!kwonly_getter}.
 *)
 
-val field_name_pos : int -> string
-(** [field_name_pos i] builds the record field name corresponding to a positional argument in postition [i]. *)
+val positional_getter : MC.Position.t -> int -> MLAst.t -> MLAst.t option -> MLAst.t
+(** [positional_getter pos i arg odef] returns an AST that extracts the record
+    field corresponding to the ith positional parameter of ther record [arg].
+    If [odef] is [None], the field must be present. Otherwise, if [odef] is [Some def],
+    then [def] is returned if the field is absent.
+*)
 
-val field_name_arg : int -> string -> string
-(** [field_name_arg i s] builds a record field name for a mixed argument at position [i] with name [s]. *)
+val argument_getter : MC.Position.t -> int -> string -> MLAst.t -> MLAst.t option -> MLAst.t
+(** [argument_getter pos i kw arg odef] returns an AST that extracts the record
+  field corresponding to regular parameter in the ith position or of name
+  [kw] record [arg]. If [odef] is [None], the field must be present.
+  Otherwise, if [odef] is [Some def], then [def] is returned if the field is
+  absent.
+*)
 
-val field_name_kw : string -> string
-(** [field_name_kw s] builds the record field name corresponding to a keyword argument [s]. *)
-
-val getter_pk_name : string -> string
-
-val getter_a_name : int -> string -> bool -> string
+val kwonly_getter : MC.Position.t -> string -> MLAst.t -> MLAst.t option -> MLAst.t
+(** [kwonly_getter pos kw arg odef] returns an AST that extracts the record
+    field corresponding to a keyword only parameter [kw] of ther record [arg].
+    If [odef] is [None], the field must be present. Otherwise, if [odef] is [Some def],
+    then [def] is returned if the field is absent.
+*)
 
 (** {1 Pretty-printing}
 
-   This module registers a pretty-printer for python type signatures, which are
-   printed using Python or pylint conventions. For the function [f] below:
-   {[
-    def f (x, y,/,z=42, *, u=12):
-      ...
-   ]}
+    This module registers a pretty-printer for python type signatures, which are
+    printed using Python or pylint conventions. For the function [f] below:
+    {[
+      def f (x, y,/,z=42, *, u=12):
+        ...
+    ]}
     its signature is printed as:
     {[
       (x:tx, y:tx, /, z:tz = ..., *, u:tu = ... ) -> tres
@@ -72,11 +81,11 @@ val getter_a_name : int -> string -> bool -> string
 *)
 
 val pp_py_scheme : Format.formatter -> MT.TyScheme.t -> unit
-(** [pp_py_scheme fmt s] prints the toplevel type-scheme s as a Python signature.
+(** [pp_py_scheme fmt s] prints the toplevel type-scheme [s] as a Python signature.
     For the function [f] below:
     {[
-        def f (a, b, c = 42):
-          return (a, b, c+3)
+      def f (a, b, c = 42):
+        return (a, b, c+3)
     ]}
     its signature is printed as:
     {[

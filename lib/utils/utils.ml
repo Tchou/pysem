@@ -20,7 +20,7 @@ let mk_id fmt = Format.kasprintf (fun s -> if export then s
 let ml_fun_arg_name = mk_id "fun_arg"
 let ml_fun_packed_name = mk_id "fun_packed"
 let ml_fun_darg_name = mk_id "def_arg"
-and def_var_name k = mk_id "d_%s" k
+let def_var_name k = mk_id "d_%s" k
 
 (* MAKE TYPES *)
 
@@ -109,35 +109,6 @@ let join_let_rev var_in last =
   List.fold_left (fun body (v,e) ->
       mk_let (fst e |> MC.Eid.loc) [] v e body) last var_in
 
-let mk_getter_pk field =
-  let tv = mk_tv field in
-  let args = [ mk_rec_disj true [[ (field, (true, tv)) ]]
-             ; tv ]
-             |> MT.Tuple.mk in
-  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
-  mk_value dummy_pos fty
-
-let mk_getter_a_d f_p f_k f_a =
-  let tv = mk_tv f_a in
-  let args1 = [ mk_rec_disj true
-                  [ [(f_p, (false, tv)); (f_k, (true, MT.Ty.empty))]
-                  ; [(f_k, (false, tv)); (f_p, (true, MT.Ty.empty))] ]
-              ; MT.Ty.any ]
-              |> MT.Tuple.mk in
-  let args2 = [ mk_rec_disj true [[ (f_p, (true, MT.Ty.empty))
-                                  ; (f_k, (true, MT.Ty.empty))]]
-              ; tv ]
-              |> MT.Tuple.mk in
-  let args = MT.Ty.cup args1 args2 in
-  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
-  mk_value dummy_pos fty
-and mk_getter_a f_p f_k f_a =
-  let tv = mk_tv f_a in
-  let args = mk_rec_disj true
-      [ [(f_p, (false, tv)); (f_k, (true, MT.Ty.empty))]
-      ; [(f_k, (false, tv)); (f_p, (true, MT.Ty.empty))] ] in
-  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
-  mk_value dummy_pos fty
 
 
 let count_if p l =

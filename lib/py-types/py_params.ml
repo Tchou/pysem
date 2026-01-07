@@ -12,12 +12,91 @@ let approx_id = MT.Enum.define (Utils.internal "py_param_approx_spec")
 
 let exact_str = Utils.internal "py_param_exact_spec"
 let field_name_pos i = Utils.mk_internal "p_%d" i
-let field_name_arg i k = Utils.mk_internal "a_%d_%s" i k
 let field_name_kw  k = Utils.mk_internal "k_%s" k
-let getter_pk_name field =
-  Utils.mk_internal "get_%s%s" field "_def"
-let getter_a_name i k d =
-  Utils.mk_internal "get_%d_%s%s" i k (if d then "_def" else "")
+
+let getter_name fmt =
+  Format.kasprintf (fun s -> Utils.mk_internal "get_%s"  s) fmt
+
+let register_builtin name ast_builder arg =
+  match Builtins.find_opt name with
+    Some v -> v
+  | None ->
+    let g = ast_builder arg in
+    Builtins.add name g
+
+let ast_get_field_or_default field =
+  let open Utils in
+  let tv = mk_tv field in
+  let args = [ mk_rec_disj true [[ (field, (true, tv)) ]]
+             ; tv ]
+             |> MT.Tuple.mk in
+  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
+  mk_value dummy_pos fty
+
+let generic_getter pos field_name arg odef =
+  match odef with
+    None ->   (*  perform arg.field_name  *)
+    Utils.mk_projection pos (MSAst.Field field_name) arg
+  | Some def -> (* perform  (ast_field_or_default field) arg def *)
+    let open Utils in
+    let g = register_builtin
+        (getter_name "%s" field_name) ast_get_field_or_default field_name
+            |> var_of_vart pos
+    in
+    mk_app pos g (mk_tuple pos [ arg; def ])
+
+let positional_getter pos i arg odef =
+  generic_getter pos (field_name_pos i) arg odef
+
+let kwonly_getter pos kw arg odef =
+  generic_getter pos (field_name_kw kw) arg odef
+
+let ast_get_field2 (field1, field2) =
+  let open Utils in
+  let tv = mk_tv field1 in
+  let args = [
+    mk_rec_disj true [[ (field1, (false, tv)); (field2, (true, Sstt.Ty.empty)) ]];
+    mk_rec_disj true [[ (field2, (false, tv)); (field1, (true, Sstt.Ty.empty)) ]];
+  ] |> MT.Ty.disj
+  in
+  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
+  mk_value dummy_pos fty
+
+let ast_get_field2_def (field1, field2) =
+  let open Utils in
+  let open Sstt in
+  let tv = mk_tv field1 in
+  let args = [
+    [ mk_rec_disj true [[ (field1, (false, tv)); (field2, (true, Ty.empty)) ]]; Ty.any ];
+    [ mk_rec_disj true [[ (field2, (false, tv)); (field1, (true, Ty.empty)) ]]; Ty.any];
+    [ mk_rec_disj true [[ (field2, (true, Ty.empty)); (field1, (true, Ty.empty)) ]]; tv]
+  ]
+    |> List.map MT.Tuple.mk
+    |> Ty.disj
+  in
+  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
+  mk_value dummy_pos fty
+
+let argument_getter pos i kw arg odef =
+  let open Utils in
+  let field1 = field_name_pos i in
+  let field2 = field_name_kw kw in
+  match odef with
+    None ->
+    let g = register_builtin
+        (getter_name "%s_%s" field1 field2)
+        ast_get_field2 (field1, field2)
+            |> var_of_vart pos
+    in
+    mk_app pos g arg
+  | Some def ->
+    let g = register_builtin
+        (getter_name "%s_%s_def" field1 field2)
+        ast_get_field2_def (field1, field2)
+            |> var_of_vart pos
+    in
+    mk_app pos g (mk_tuple pos [ arg; def ])
+
 let approx_id_ty = MT.Enum.typ approx_id
 let fail msg = Format.kfprintf (fun _ -> assert false) Format.err_formatter msg
 
@@ -339,4 +418,3 @@ let pp_py_scheme fmt s =
     Format.fprintf fmt "@[@[%a@] <:@ Any <:@ @[%a@]@]"
       pp_ty inf'
       pp_ty sup'
-

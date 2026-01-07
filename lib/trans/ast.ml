@@ -157,8 +157,11 @@ module Binop = struct
       | Is -> "is", pol_cmp ()
       | Isn -> "isnot", pol_cmp ()
     in
-    Builtins.add (mk_id "%s" strkey)
-      (MlGTy.mk ty |> (mk_value dummy_pos))
+    let op_name = mk_id "%s" strkey in
+    (match Builtins.find_opt op_name with
+       Some v -> v
+     | None -> Builtins.add op_name
+                 (MlGTy.mk ty |> (mk_value dummy_pos)))
     |> var_of_vart pos
 end
 
