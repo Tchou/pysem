@@ -267,10 +267,11 @@ let pp_approx_sig fmt (lp, lkw) =
   let l = l @ List.map Either.right lkw in
   let (s, _, _) = Prec.varop_info Tuple in
   fprintf fmt "@[(";
-  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s@ " s)
+  Prec.print_seq
     (fun fmt e -> match e with
          Either.Left ty -> fprintf fmt "%a" Printer.print_descr ty
-       | Either.Right (s, ty) -> fprintf fmt "%s=%a"s Printer.print_descr ty) fmt l;
+       | Either.Right (s, ty) -> fprintf fmt "%s=%a"s Printer.print_descr ty)
+    s fmt l;
   fprintf fmt ")@]"
 
 let print_approx prec assoc fmt b l =
@@ -280,8 +281,8 @@ let print_approx prec assoc fmt b l =
   let need_par = Prec.need_parentheses prec assoc cup_info in
   fprintf fmt "@[<hov 1>";
   if need_par then fprintf fmt "(";
-  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ %s@ " sym) pp_approx_sig fmt l;
-  if not b then (match l with [] -> fprintf fmt "..." | _ -> fprintf fmt "; ..." );
+  Prec.print_seq pp_approx_sig sym fmt l;
+  if not b then (match l with [] -> fprintf fmt "..." | _ -> fprintf fmt ";@ ..." );
   if need_par then fprintf fmt ")";
   fprintf fmt "@]"
 
@@ -332,10 +333,10 @@ let pp_py_scheme fmt s =
   let inf, sup = MT.GTy.destruct gty in
   let inf' = MT.Subst.apply subst inf in
   if MT.Ty.equiv inf sup then
-    Format.fprintf fmt "%a" pp_ty inf'
+    Format.fprintf fmt "@[%a@]" pp_ty inf'
   else
     let sup' = MT.Subst.apply subst sup in
-    Format.fprintf fmt "@[%a <:@ Any <:@ %a@]"
+    Format.fprintf fmt "@[@[%a@] <:@ Any <:@ @[%a@]@]"
       pp_ty inf'
       pp_ty sup'
 
