@@ -82,21 +82,22 @@ let main () =
           (Format.pp_print_option pp_print_string) err.descr;
         raise (MSC.Untypeable err)
     in
-    dbg_pr "reconstruction environement" "";
-    names
-    |> List.rev
-    |> List.iter (fun v ->
-        let s = MC.Env.find v mce in
-        if MlVar.show v |> Utils.is_internal |> not then
-          Format.printf "@[<hov>%a: %a@]@\n"
-            MlVar.pp v
-            Py_params.pp_py_scheme s
-        else
-        if Utils.debug then
-          Format.printf "@[<hov>%a@]@\n"
-            Printing.pp_ml_tys (v, s)
-      );
-    Format.printf "@{<yellow;italic>checked in %.2fms@}@\n"
+    pr "reconstruction environement"
+      "%a@\n@{<yellow;italic>checked in %.2fms@}"
+      (let nl = ref true in
+       pp_print_list
+         ~pp_sep:(fun fmt _ -> if !nl then fprintf fmt "@\n"; nl := true)
+         ( fun fmt v ->
+           let s = MC.Env.find v mce in
+           if MlVar.show v |> Utils.is_internal |> not
+           then Format.fprintf fmt "@[<hov>%a: %a@]"
+                  MlVar.pp v
+                  Py_params.pp_py_scheme s
+           else if Utils.debug
+           then Format.fprintf fmt "@[<hov>%a@]"
+                  Printing.pp_ml_tys (v, s)
+           else nl := false ))
+      (List.rev names)
       (ms_of_us tt)
 
 let () =

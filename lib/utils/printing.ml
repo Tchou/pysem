@@ -2,7 +2,7 @@ open Aliases
 
 let pp_begin =
   let f = ref true in
-  fun fmt -> Format.fprintf fmt (if !f then (f:=false ; "") else "——@\n")
+  fun fmt -> Format.fprintf fmt (if !f then (f:=false ; "") else "——@.")
 and pp_end fmt = Format.fprintf fmt "@."
 
 let pr str =
@@ -148,15 +148,15 @@ module MLAstPrinter = struct
                                 | _ -> "@[<hov 2>else@ %a@]@ ")
          pp_t t2
     | PatMatch (t,ptl) ->
-       fprintf fmt "@[match @[%a@]@ with@ | %a@]@\n"
+       fprintf fmt "@[match @[%a@]@ with@ | %a@]"
          pp_t t (pp_print_list ~pp_sep:pp_print_nothing
-                   (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]@\n"
+                   (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]"
                                        pp_pattern p pp_t t)) ptl
     | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
     | Projection (p,t) -> fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
                             pp_t t pp_projection p
     | Declare (v,t) ->
-       fprintf fmt "@[<hov 2>val mut %a =@ %a@]@\n"
+       fprintf fmt "@[<hov 2>val mut %a =@ %a@]"
          pp_variable v pp_t t
     | Let (tyl,v,t1,t2) ->
        fprintf fmt "@[@[<hov 2>let %a%s@[%a@] =@ @[%a@]@ in@]@\n%a@]"
@@ -251,9 +251,9 @@ module PAstPrinter = struct
     | TypeCast (t,_,_) -> fprintf fmt "@[<hov 2>cast [%a]@]" pp_t t
     | TypeCoerce (t,_,_) -> fprintf fmt "@[<hov 2>coerce [%a]@]" pp_t t
     | PatMatch (t,ptl) ->
-       fprintf fmt "@[match @[%a@]@ with@\n| %a@]@\n"
+       fprintf fmt "@[match @[%a@]@ with@\n| %a@]"
          pp_t t (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "")
-                   (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]@\n"
+                   (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]"
                                        pp_pattern p pp_t t)) ptl
     | Cond (_t1,_,_t2,_ot) -> fprintf fmt "Cond"
     | While (test,_,body) ->
@@ -266,9 +266,9 @@ end
 
 let pp_ml_top fmt (v,ml) =
   let open MLAstPrinter in
-  Format.fprintf fmt "@[<hov 2>let %a =@ %a@]@\n" pp_variable v pp_t ml
+  Format.fprintf fmt "@[<hov 2>let %a =@ %a@]" pp_variable v pp_t ml
 
 let pp_ml_tys fmt (v,tys) =
   let open MLAstPrinter in
-  Format.fprintf fmt "@[<hov 2>val %a :@ %a@]@\n"
+  Format.fprintf fmt "@[<hov 2>val %a :@ %a@]"
     pp_variable v MT.TyScheme.pp tys
