@@ -11,8 +11,8 @@ let input_file = ref None
 let shadowing = ref false
 (** Allow shadowing in toplevel. **)
 
-let add_input_file s = 
-  match !input_file with 
+let add_input_file s =
+  match !input_file with
   | None -> input_file := (Some s)
   | Some _ -> raise (Arg.Bad "multiple files provided")
 
@@ -58,13 +58,13 @@ let main () =
       (Arg.usage_string options usage_message)
   | Some file ->
     let open Format in
-    let m, bil, to_loc = Parsing.parse ~file in
+    let m, globals, bil, to_loc = Parsing.parse ~file in
     (* dbg_pr "pyre-parsed expression" "%a" *)
     (* Sexplib0.Sexp.pp_hum (PC.Module.sexp_of_t m); *)
     (* pr "block_infos" "%a" *)
     (* (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil; *)
 
-    let p = Prog.of_module (Env.init bil to_loc) m in
+    let p = Prog.of_module (Env.init globals bil to_loc) m in
     dbg_pr "pysem ast" "%a" Ast.pp_prog p;
 
     let ml = Prog.to_ml p in
@@ -82,7 +82,7 @@ let main () =
         raise (MSC.Untypeable err)
     in
     dbg_pr "reconstruction environement" "";
-    names 
+    names
     |> List.rev
     |> List.iter (fun v ->
         let s = MC.Env.find v mce in
@@ -111,13 +111,13 @@ let () =
     end
     else main () |> fst
   with
-  | Parsing.Syntax (file, e) -> 
+  | Parsing.Syntax (file, e) ->
     Format.eprintf "%s: %d:%d-%d:%d : %s@\n"
       file e.line e.column e.end_line e.end_column e.message;
     exit 3
   | Sys_error msg -> Format.eprintf "%s@\n" msg; exit 1
   | MSC.Untypeable _ -> exit 2 (* printed above *)
-  | e  -> 
+  | e  ->
     Format.eprintf "ERROR: %s@\n%s@\n"
       (Printexc.to_string e)
       (Printexc.get_backtrace ());

@@ -1,7 +1,13 @@
 module PyCo = PyreAst.Concrete
 module PyTF = PyreAst.TaglessFinal
 
-let builtins = [ (* Available via [dirs(__builtins__)] *)
+
+module IdentMap = Map.Make(PyreAst.Concrete.Identifier)
+module IdentSet = Set.Make(PyreAst.Concrete.Identifier)
+let dummy_pos = PyCo.Position.make_t ~line:~-1 ~column:~-1 ()
+let dummy_loc = PyCo.Location.make_t ~start:dummy_pos ~stop:dummy_pos ()
+
+let _builtins = [ (* Available via [dirs(__builtins__)] *)
   "ArithmeticError"; "AssertionError"; "AttributeError"; "BaseException"; "BaseExceptionGroup";
   "BlockingIOError"; "BrokenPipeError"; "BufferError"; "BytesWarning"; "ChildProcessError";
   "ConnectionAbortedError"; "ConnectionError"; "ConnectionRefusedError"; "ConnectionResetError";
@@ -25,30 +31,21 @@ let builtins = [ (* Available via [dirs(__builtins__)] *)
   "open"; "ord"; "pow"; "print"; "property"; "quit"; "range"; "repr"; "reversed"; "round"; "set"; "setattr";
   "slice"; "sorted"; "staticmethod"; "str"; "sum"; "super"; "tuple"; "type"; "vars"; "zip"
 ]
-
-module IdentMap = Map.Make(PyreAst.Concrete.Identifier)
-module IdentSet = Set.Make(PyreAst.Concrete.Identifier)
-let dummy_pos = PyCo.Position.make_t ~line:~-1 ~column:~-1 ()
-let dummy_loc = PyCo.Location.make_t ~start:dummy_pos ~stop:dummy_pos ()
-let builtins_as_arguments to_keep =
-  List.filter_map (fun s ->
-      let identifier = PyCo.Identifier.make_t s () in
-      if IdentSet.mem identifier to_keep then
-        Some (PyCo.Argument.make_t ~location:dummy_loc
-                ~identifier ())
-      else None ) builtins
-
 module Error =
 struct
   type t =
-      IncompatibleScope of PyCo.Identifier.t * PyCo.Location.t * string * string
-    | AltPatternNames of PyCo.Location.t (* patterns x | y *)
-    | UndefinedGlobalName of PyCo.Identifier.t * PyCo.Location.t
-    | DuplicateArgument of PyCo.Identifier.t * PyCo.Location.t
-  let to_pyre e =
+      IncompatibleScope of PyCo.Identifier.t * string * string
+    | AltPatternNames (* patterns x | y *)
+    | DuplicateArgument of PyCo.Identifier.t
+    | UnboundNonlocal of PyCo.Identifier.t
+  let to_pyre locations e =
     let open PyreAst.Parser.Error in
     let open Format in
-    let mk_error message loc =
+    let loc = match locations with
+        l :: _ -> l
+      | _ -> dummy_loc
+    in
+    let mk_error message =
       let open PyCo.Location in
       { message;
         line = loc.start.line;
@@ -58,18 +55,17 @@ struct
       } in
     let id_str = PyCo.Identifier.to_string in
     match e with
-    | IncompatibleScope (id1, loc, s1, s2) ->
+    | IncompatibleScope (id1, s1, s2) ->
       mk_error (sprintf "Name '%s' has incompatible scope %s and %s"
                   (id_str id1) s1 s2)
-        loc
-    | AltPatternNames loc -> mk_error "Alternative pattern binds different names" loc
-    | UndefinedGlobalName (id, loc) ->
-      mk_error (sprintf "Undefined name '%s'" (id_str id)) loc
-    | DuplicateArgument (id, loc) ->
-      mk_error (sprintf "Duplicate argument '%s'" (id_str id)) loc
+    | AltPatternNames -> mk_error "Alternative pattern binds different names"
+    | DuplicateArgument id ->
+      mk_error (sprintf "Duplicate argument '%s'" (id_str id))
+    | UnboundNonlocal id  ->
+      mk_error (sprintf "Unbound nonlocal '%s'" (id_str id))
 end
-exception Error of Error.t (* internal errors, re-raised see parse at the end of the file *)
-let raise_ e = raise (Error (e))
+exception Error of Error.t * PyCo.Location.t list (* internal errors, re-raised see parse at the end of the file *)
+let raise_ ?(locations=[]) e = raise (Error (e, locations))
 
 
 
@@ -116,12 +112,8 @@ let merge_scope locs1 locs2 var s1 s2 =
   | Parameter, Local | Local, Parameter -> Local
   | _ when s1 = s2 -> s1
   | _ ->
-    let location = match locs1, locs2 with
-        [], [] -> dummy_loc
-      | _, l::_ -> l
-      | l::_, _ -> l
-    in
-    raise_ (IncompatibleScope (var, location, show_scope s1, show_scope s2))
+    let locations = locs1@ locs2 in
+    raise_ ~locations (IncompatibleScope (var, show_scope s1, show_scope s2))
 
 let merge_context c1 c2  = { del = c1.del || c2.del;
                              load = c1.load || c2.load;
@@ -160,13 +152,13 @@ end
 module BidTable = Hashtbl.Make(BlockId)
 module IdentTable = Hashtbl.Make(struct include PyCo.Identifier let equal a b = compare a b = 0 end)
 type env = {
-  global : (info IdentMap.t * BlockId.t list) BidTable.t;
-  free : BlockId.t list IdentTable.t;
+  blocks : (info IdentMap.t * BlockId.t list) BidTable.t;
+  mutable globals : info IdentMap.t;
   filename : string
 }
 let create_env filename =
-  { global = BidTable.create 16;
-    free = IdentTable.create 16;
+  { blocks = BidTable.create 16;
+    globals = IdentMap.empty;
     filename
   }
 
@@ -207,7 +199,7 @@ let enter_arguments scope (a : PyCo.Arguments.t) vars =
   let add_arg_list l vars =
     List.fold_left (fun avars PyCo.Argument.{location;identifier; _} ->
         (* same effect as bind above *)
-        if IdentTable.mem seen identifier then raise_ (DuplicateArgument (identifier, location));
+        if IdentTable.mem seen identifier then raise_ ~locations:[location] (DuplicateArgument (identifier));
         IdentTable.add seen identifier ();
         ident ~location ~scope ~ctx:(make_store_of_t ()) identifier
         |> merge_vars avars
@@ -220,69 +212,31 @@ let enter_arguments scope (a : PyCo.Arguments.t) vars =
   |> add_arg_list a.kwonlyargs
   |> add_arg_list (Option.to_list a.kwarg)
 
-(* Function declarations introduces a new block (and hence a new scope).
-   [compute_fun_variables] closes the scope corresponding to the body of the function
-
-*)
-let () = Printexc.record_backtrace true
-
-
 (* Computes the variables used in a block.
-   returns the list of variables that are free in the block together with their scope.
-   To compute the scope:
-   - explicit NonLocal or Global are kept
-   - without further info, writing or del makes a variable local
-   - otherwise the scope is unknown
-   - the scope of a function in its scope is:
-   - global at toplevel
-   - local in its scope
-   - the scope of a function in itself is nonlocal for a non-toplevel function
-     and global otherwise
+   Scoping requires two passes:
+   - while building the parse tree, we mark variables that
+     are known Local, Nonlocal or Global
+   - variable that remain unknown are resolved in a second pass, using
+     LEGB (local, enclosing, global, builtins)
 *)
 let compute_block_variables env location kind name args body =
-  (* vars is the mapping from variable names to info.
-     - if a variable is known Global or NonLocal, leave it
-     - if it is unknown but has a stored or del context, then make it local to the current scope
-     - if it is local and the kind is 'Module' make it global.
-       Then:
-     - all variables that are still unknown are marked as free variables and returned
-  *)
   let vars = List.fold_left (fun acc (_,v, _) -> merge_vars acc v) IdentMap.empty body in
   let idents = List.concat_map get3 body in
-  let vars = enter_arguments (if kind = Module then Global else Parameter) args vars in
-  let free = ref [] in (* Variables that remain free after the current scope *)
-  let todo = ref [] in (* Free variables that were found in the current scope *)
-  let nvars = vars |> IdentMap.filter_map (fun var info ->
+
+  let vars = enter_arguments Parameter args vars in
+  let nvars = vars |> IdentMap.map (fun info ->
       let scope =
         match info.scope with
-          Unknown when info.context.del || info.context.store || kind = Module ->
-          todo := var ::!todo;
+        | Unknown when info.context.del || info.context.store ->
           if kind = Module then Global else Local
-        | Unknown -> free := (var, info) :: !free; Unknown
-        | s -> if IdentTable.mem env.free var then todo := var::!todo; s
+        | s -> s
       in
-      Some { info with scope }
-    )
-  in
-  let () = !todo |> List.iter (fun v ->
-      try IdentTable.find env.free v
-          |> List.map (fun bid ->
-              let map, l = BidTable.find env.global bid in
-              let info = IdentMap.find v map in
-              let info' = { info with scope = if kind = Module then Global else Nonlocal } in
-              (bid, (IdentMap.add v info' map, l))
-            )
-          |> List.iter (fun (k, v) -> BidTable.replace env.global k v)
-      with Not_found -> () (* free variables introduced in the current scope *)
+      { info with scope }
     )
   in
   let bid = BlockId.{ kind; name; location } in
-  !free |> List.iter (fun (v,_) ->
-      let l = try IdentTable.find env.free v with Not_found -> [] in
-      IdentTable.replace env.free v (bid::l));
-  BidTable.replace env.global bid (nvars, idents);
-  let rem_vars = IdentMap.of_list !free in
-  List.map get1 body, rem_vars, [bid]
+  BidTable.add env.blocks bid (nvars, idents);
+  List.map get1 body, ident ~location ~scope:Unknown ~ctx:store_ctx name, [bid]
 
 
 (* Tweaked version of Pyre's own AST builder,
@@ -611,7 +565,7 @@ let pattern =
         if not (List.for_all (fun (_,v',_) ->
             IdentMap.equal (fun _ _ -> true) v v' ) l)
         then
-          raise_ (AltPatternNames location)
+          raise_ AltPatternNames
     in
     let* _init and*@ patterns in
     make_matchor_of_t ~location ~patterns ()
@@ -623,12 +577,13 @@ let pattern =
 let statement tbl =
   let open PyCo.Statement in
   let mk_fun mk kind ~location ~name ~args ~body ~decorator_list ~returns ~type_comment ~type_params =
-    let* _init = (), ident ~location ~scope:Unknown ~ctx:store_ctx name, []
+    let* _init
     and* args
     and* body = compute_block_variables tbl location kind name (get1 args) body
     and*@ decorator_list
     and*? returns
-    and*@ type_params in
+    and*@ type_params
+    in
     mk ~location ~name ~args ?body:(Some body) ?decorator_list:(Some decorator_list)
       ?returns ?type_comment ?type_params:(Some type_params) ()
   in
@@ -809,52 +764,60 @@ let pp_block_info fmt bi =
   pp_print_list ~pp_sep:pp_print_space pp_defines fmt bi.defines;
   fprintf fmt "@]@]@\n--"
 
+let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
+  let vars, bids = BidTable.find tbl.blocks bid in
+  let r_vars = IdentMap.filter_map (fun var infos ->
+      match infos.scope with
+      | Nonlocal when not (IdentSet.mem var enclosing) ->
+        raise_ ~locations:infos.locations (UnboundNonlocal var)
+      | (Global|Nonlocal) when not infos.context.load &&
+                               not infos.context.store &&
+                               not infos.context.del -> None
+      (* variable where referenced in nonlocal or global but never used *)
 
-let filter_globals = IdentMap.filter (fun _  info -> info.scope = Global)
-let union_globals = IdentMap.union (fun v i1 i2 -> Some (merge_info v i1 i2))
-
-let rec make_summary (tbl : env)  bid =
-  let vars, bids = BidTable.find tbl.global bid in
-  let gvars = filter_globals vars in
-  let gl_vars, sublist = make_summary_list tbl bids in
-  let vars = union_globals vars gl_vars in
-  union_globals gvars gl_vars,
+      | Unknown ->
+        if scope = Nonlocal && IdentSet.mem var enclosing then
+          Some { infos with scope = Nonlocal }
+        else
+          let () = tbl.globals <- IdentMap.add var infos tbl.globals in
+          Some { infos with scope = Global }
+      | Global ->
+        let () = tbl.globals <- IdentMap.add var infos tbl.globals in
+        Some infos
+      | _ ->  Some infos
+    ) vars
+  in
+  BidTable.replace tbl.blocks bid (r_vars, bids);
+  let nscope, nenclosing = match bid.kind with
+      Module -> Global, enclosing
+    | Fun|AsyncFun|Lambda ->
+      Nonlocal,
+      IdentMap.fold (fun var infos acc ->
+          if infos.scope = Local then IdentSet.add var acc else acc)
+        r_vars enclosing
+    | Class -> scope, enclosing
+  in
   {name = PyCo.Identifier.to_string bid.BlockId.name;
    filename = tbl.filename;
    location = bid.BlockId.location;
    kind = bid.BlockId.kind;
-   identifiers = vars;
+   identifiers = r_vars;
    defines = List.map (fun bid ->
        BlockId.(PyCo.Identifier.to_string bid.name, bid.location, bid.kind)) bids;
-  }:: sublist
-and make_summary_list tbl l =
-  match l with
-    [] -> IdentMap.empty, []
-  | bid :: ll ->
-    let gvars, l = make_summary tbl bid in
-    let gl_vars, ll = make_summary_list tbl ll in
-    union_globals gvars gl_vars,
-    l @ ll
+  } :: List.concat_map (resolve_unknown_scope nenclosing nscope tbl) bids
+
 
 let module_gen (tbl:env) ~body ~type_ignores =
-  let tlv_refs = List.fold_left (fun acc (_,v,_) ->
-      IdentSet.add_seq (IdentMap.to_seq v |> Seq.map fst) acc
-    ) IdentSet.empty body
-  in
   let module_name = PyCo.Identifier.make_t tbl.filename () in
   let body, vars, bids = compute_block_variables tbl dummy_loc Module
-      module_name
-      (PyCo.Arguments.make_t ~args:(builtins_as_arguments tlv_refs) ()) body
+      module_name (PyCo.Arguments.make_t ~args:[] ()) body
   in
   PyCo.Module.make_t ~body ~type_ignores (),vars, bids
 
 let module_ (tbl:env) ~body ~type_ignores =
   let m, v, i = module_gen tbl ~body ~type_ignores in
-  match  IdentMap.choose_opt v with
-    Some (ident, {locations=loc::_;_}) -> raise_ (UndefinedGlobalName(ident, loc))
-  | Some (ident, {locations=[];_}) -> raise_ (UndefinedGlobalName(ident, dummy_loc))
-  | None ->
-    m,snd (make_summary_list tbl i)
+  assert (IdentMap.cardinal v = 1 && List.compare_length_with i 1 = 0); (* The module name *)
+  m,resolve_unknown_scope IdentSet.empty Global tbl (List.hd i)
 
 (* after we are done, any remaining variable that has scope Local is changed
    to Global (it is "local" to the module) and any free variable that remains should raise an error.
@@ -896,5 +859,5 @@ let parse ~file =
       )
   with
     Error e -> syntax file e
-  | exception Error e -> syntax file (Error.to_pyre e)
-  | Ok (ast,defs) -> ast, defs, Utils.loc_converter file str
+  | exception Error (e, locations) -> syntax file (Error.to_pyre locations e)
+  | Ok (ast,defs) -> ast, env.globals, defs, Utils.loc_converter file str

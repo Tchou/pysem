@@ -62,10 +62,15 @@ val pp_block_info : Format.formatter -> block_info -> unit
 
 val pp_vars : Format.formatter -> (PyreAst.Concrete.Identifier.t * info) list -> unit
 
-val parse : file:string -> PyreAst.Concrete.Module.t * block_info list * Utils.loc_converter
-(** [parse ~file] returns a pair [(ast, bil)] where [ast] is the concrete AST of
-    the module defined written in [file] and [bil] is the list of all scope blocks
-    defined in the file.
+val parse : file:string -> PyreAst.Concrete.Module.t * info IdentMap.t * block_info list * Utils.loc_converter
+(** [parse ~file] returns a 4-tuple [(ast, globals, bil, conv)] where:
+    - [ast] is the concrete AST of the module defined written in [file]
+    - [globals] is the set of global names referenced in the file with their information
+    - [bil] is the list of all blocks, in pre-order traversal of the file. The [bil] list
+    starts with the block representing the module, followed by the first scoping construct
+    (class, function or lambda) itself followed by all its descendants, then the second
+    toplevel scoping construct etc…
+    - [conv] is a conversion function from Pyre locations to MLsem
 
     @raise Syntax if a syntax error occurs.
 *)
