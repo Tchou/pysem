@@ -2,28 +2,25 @@ open Aliases
 
 (* DEBUG *)
 
-let debug = true
+let debug = match Sys.getenv_opt "PYSEM_DEBUG" with
+    None | Some "true" -> true
+  | _ -> false
 and export = true
 
 (* STRINGS *)
+let is_internal = String.starts_with ~prefix:"%%"
+let internal s = "%%" ^ s
+let strip_internal s =
+  assert (is_internal s);
+  String.sub s 2 (String.length s - 2)
 
-let mk_id fmt =
-  Format.kasprintf (fun s -> (if export then "" else "%") ^ s) fmt
-
+let mk_internal fmt = Format.kasprintf internal fmt
+let mk_id fmt = Format.kasprintf (fun s -> if export then s
+                                   else internal s) fmt
 let ml_fun_arg_name = mk_id "fun_arg"
 let ml_fun_packed_name = mk_id "fun_packed"
 let ml_fun_darg_name = mk_id "def_arg"
-let field_name_pos i = mk_id "p_%d" i
-and field_name_arg i k = mk_id "a_%d_%s" i k
-and field_name_kw  k = mk_id "k_%s" k
-and def_var_name k = mk_id "d_%s" k
-
-
-let def_str_suffix = if export then "_def" else "_?"
-let getter_pk_name field = mk_id "get_%s%s" field def_str_suffix
-and getter_a_name i k d =
-  mk_id "get_%d_%s%s" i k (if d then def_str_suffix else "")
-
+let def_var_name k = mk_id "d_%s" k
 
 (* MAKE TYPES *)
 
@@ -112,35 +109,6 @@ let join_let_rev var_in last =
   List.fold_left (fun body (v,e) ->
       mk_let (fst e |> MC.Eid.loc) [] v e body) last var_in
 
-let mk_getter_pk field =
-  let tv = mk_tv field in
-  let args = [ mk_rec_disj true [[ (field, (true, tv)) ]]
-             ; tv ]
-             |> MT.Tuple.mk in
-  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
-  mk_value dummy_pos fty
-
-let mk_getter_a_d f_p f_k f_a =
-  let tv = mk_tv f_a in
-  let args1 = [ mk_rec_disj true
-                  [ [(f_p, (false, tv)); (f_k, (true, MT.Ty.empty))]
-                  ; [(f_k, (false, tv)); (f_p, (true, MT.Ty.empty))] ]
-              ; MT.Ty.any ]
-              |> MT.Tuple.mk in
-  let args2 = [ mk_rec_disj true [[ (f_p, (true, MT.Ty.empty))
-                                  ; (f_k, (true, MT.Ty.empty))]]
-              ; tv ]
-              |> MT.Tuple.mk in
-  let args = MT.Ty.cup args1 args2 in
-  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
-  mk_value dummy_pos fty
-and mk_getter_a f_p f_k f_a =
-  let tv = mk_tv f_a in
-  let args = mk_rec_disj true
-      [ [(f_p, (false, tv)); (f_k, (true, MT.Ty.empty))]
-      ; [(f_k, (false, tv)); (f_p, (true, MT.Ty.empty))] ] in
-  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
-  mk_value dummy_pos fty
 
 
 let count_if p l =

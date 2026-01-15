@@ -98,53 +98,30 @@ let rec ml_lambda p args body =
   in
   let f_arg_v = mk_var_t ~kind:MlMVar.Immut ml_fun_arg_name in
   let f_arg = var_of_vart p f_arg_v in
-  let get_pos i = mk_projection p (MSAst.Field (field_name_pos i)) f_arg in
-  let get_kw id = mk_projection p (MSAst.Field (field_name_kw id)) f_arg in
 
   let load_arg (pak:[`Pos|`Arg|`Kwd]) (i,d,l,t) (id,eo) =
     let opt, eo, default = match eo with
       | None -> false, None, d
       | Some e ->
-        let e = mk_var_t ~kind:MlMVar.Immut
-            (Ident.show id |> def_var_name)
-              , to_ml e in
-        true, Some e, e::d in
-    let id_kw = Ident.show id in
+        let (pos, _) as e_def = to_ml e in
+        let v = mk_var_t ~kind:MlMVar.Immut
+            (Ident.external_name id |> def_var_name)
+        in
+        let e_var = var_of_vart (MC.Eid.loc pos) v in
+        true, Some e_var, (v,e_def)::d
+    in
+    let tv = Ident.external_name id |> mk_tv in
+    let id_kw = Ident.external_name id in
     let t, ast_in = match pak with
       | `Pos ->
-        let field = field_name_pos i in
-        let tv = field |> mk_tv in
-        ( Py_params.add_param t `Pos i id_kw tv opt
-        , match eo with
-        | None -> get_pos i
-        | Some (v,(pos,_)) ->
-          let g = Builtins.getter_pk field |> var_of_vart p in
-          mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
-          |> mk_app p g )
+        (Py_params.add_param t `Pos i id_kw tv opt,
+         Py_params.positional_getter p i f_arg eo)
       | `Arg ->
-        let field_p = field_name_pos i in
-        let field_k = field_name_kw id_kw in
-        let field_a = field_name_arg i id_kw in
-        let tv = mk_tv field_a in
-        let g = Builtins.getter_a i id_kw field_p field_k field_a opt
-                |> var_of_vart p in
-        let get = match eo with
-          | None -> mk_app p g f_arg
-          | Some (v,(pos,_)) ->
-            mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
-            |> mk_app p g in
-        ( Py_params.add_param t `Arg i id_kw tv opt
-        , get )
+        ( Py_params.add_param t `Arg i id_kw tv opt,
+          Py_params.argument_getter p i id_kw f_arg eo)
       | `Kwd ->
-        let field = field_name_kw id_kw in
-        let tv = field |> mk_tv in
-        ( Py_params.add_param t `Kwd i id_kw tv opt
-        , match eo with
-        | None -> get_kw id_kw
-        | Some (v,(pos,_)) ->
-          let g = Builtins.getter_pk field |> var_of_vart p in
-          mk_tuple p [ f_arg; (var_of_vart (MC.Eid.loc pos) v) ]
-          |> mk_app p g )
+        ( Py_params.add_param t `Kwd i id_kw tv opt,
+          Py_params.kwonly_getter p id_kw f_arg eo)
     in
     ( i+1
     , default

@@ -1,11 +1,103 @@
 open Aliases
-let tag_s = "py_param_spec"
-
-
+(*
+   See py-types.md
+*)
+(* Since we rely on the names we make always internal
+   (not conditionally as in {Utils.export}, otherwise the
+   code breaks if Utils.export is [true])*)
+let tag_s = Utils.internal "py_param_spec"
 let tag = MT.Tag.define tag_s
-let dummy = MT.Enum.define "%%dummy_py_param_spec%%"
-let dummy_t = dummy |> MT.Enum.typ
 
+let approx_id = MT.Enum.define (Utils.internal "py_param_approx_spec")
+
+let exact_str = Utils.internal "py_param_exact_spec"
+let field_name_pos i = Utils.mk_internal "p_%d" i
+let field_name_kw  k = Utils.mk_internal "k_%s" k
+
+let getter_name fmt =
+  Format.kasprintf (fun s -> Utils.mk_internal "get_%s"  s) fmt
+
+let register_builtin name ast_builder arg =
+  match Builtins.find_opt name with
+    Some v -> v
+  | None ->
+    let g = ast_builder arg in
+    Builtins.add name g
+
+let ast_get_field_or_default field =
+  let open Utils in
+  let tv = mk_tv field in
+  let args = [ mk_rec_disj true [[ (field, (true, tv)) ]]
+             ; tv ]
+             |> MT.Tuple.mk in
+  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
+  mk_value dummy_pos fty
+
+let generic_getter pos field_name arg odef =
+  match odef with
+    None ->   (*  perform arg.field_name  *)
+    Utils.mk_projection pos (MSAst.Field field_name) arg
+  | Some def -> (* perform  (ast_field_or_default field) arg def *)
+    let open Utils in
+    let g = register_builtin
+        (getter_name "%s" field_name) ast_get_field_or_default field_name
+            |> var_of_vart pos
+    in
+    mk_app pos g (mk_tuple pos [ arg; def ])
+
+let positional_getter pos i arg odef =
+  generic_getter pos (field_name_pos i) arg odef
+
+let kwonly_getter pos kw arg odef =
+  generic_getter pos (field_name_kw kw) arg odef
+
+let ast_get_field2 (field1, field2) =
+  let open Utils in
+  let tv = mk_tv field1 in
+  let args = [
+    mk_rec_disj true [[ (field1, (false, tv)); (field2, (true, Sstt.Ty.empty)) ]];
+    mk_rec_disj true [[ (field2, (false, tv)); (field1, (true, Sstt.Ty.empty)) ]];
+  ] |> MT.Ty.disj
+  in
+  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
+  mk_value dummy_pos fty
+
+let ast_get_field2_def (field1, field2) =
+  let open Utils in
+  let open Sstt in
+  let tv = mk_tv field1 in
+  let args = [
+    [ mk_rec_disj true [[ (field1, (false, tv)); (field2, (true, Ty.empty)) ]]; Ty.any ];
+    [ mk_rec_disj true [[ (field2, (false, tv)); (field1, (true, Ty.empty)) ]]; Ty.any];
+    [ mk_rec_disj true [[ (field2, (true, Ty.empty)); (field1, (true, Ty.empty)) ]]; tv]
+  ]
+    |> List.map MT.Tuple.mk
+    |> Ty.disj
+  in
+  let fty = MT.Arrow.mk args tv |> MlGTy.mk in
+  mk_value dummy_pos fty
+
+let argument_getter pos i kw arg odef =
+  let open Utils in
+  let field1 = field_name_pos i in
+  let field2 = field_name_kw kw in
+  match odef with
+    None ->
+    let g = register_builtin
+        (getter_name "%s_%s" field1 field2)
+        ast_get_field2 (field1, field2)
+            |> var_of_vart pos
+    in
+    mk_app pos g arg
+  | Some def ->
+    let g = register_builtin
+        (getter_name "%s_%s_def" field1 field2)
+        ast_get_field2_def (field1, field2)
+            |> var_of_vart pos
+    in
+    mk_app pos g (mk_tuple pos [ arg; def ])
+
+let approx_id_ty = MT.Enum.typ approx_id
 let fail msg = Format.kfprintf (fun _ -> assert false) Format.err_formatter msg
 
 type 'ty param =
@@ -14,9 +106,16 @@ type 'ty param =
     ty : 'ty;
     has_default : bool }
 
-type 'ty t = 'ty param list * 'ty param list * 'ty param list
+type 'ty builder = 'ty param list * 'ty param list * 'ty param list
 
 let empty = [], [], []
+
+let validate (a,b,c) =
+  a @ b @ c
+  |> List.iteri (fun i p ->
+      if p.pos <> i then
+        fail "Missing argument for postision %d" i
+    )
 let rec insert p l =
   match l with
     [] -> [p]
@@ -34,14 +133,13 @@ let add_param (pb, ab, kb) (k : [`Pos|`Arg|`Kwd]) pos name ty has_default =
   | `Arg -> pb, insert param ab, kb
   | `Kwd -> pb, ab, insert param kb
 
-
 let rec_as_pos l =
   List.map (fun p ->
-      Utils.field_name_pos p.pos,(p.has_default, p.ty)) l
+      field_name_pos p.pos,(p.has_default, p.ty)) l
 
 let rec_as_kw l =
   List.map (fun p ->
-      Utils.field_name_kw p.name,(p.has_default, p.ty)) l
+      field_name_kw p.name,(p.has_default, p.ty)) l
 
 let map_split f l =
   let rec loop l acc =
@@ -62,72 +160,47 @@ let make_record_part (pb, ab, kb) =
       @ rec_as_pos a_pos
       @ rec_as_kw a_kw
       @ always_kw)
-let tt = MT.Enum.(define "true" |> typ)
-let ff = MT.Enum.(define "false" |> typ)
-let param_to_type p =
-  let name_t = MT.Enum.(define p.name|>typ) in
-  let pos_t = Utils.ty_of_int p.pos in
-  let has_default_t = if p.has_default then tt else ff in
-  [pos_t; name_t; has_default_t]
 
-let extract_str ty =
-  let open Sstt in
-  match ty |> Ty.get_descr |> Descr.get_enums |> Enums.destruct with
-    (true, [ name ]) -> name |> Enum.name
-  | (b, l) -> fail "Invalid encoding of spec name (%b, %d)" b (List.length l)
+type 'ty param_kind = Anon of 'ty param
+                    | Named of 'ty param
+                    | Str of string
+let anon a = Anon { a with ty = () }
+let named a = Named { a with ty = () }
 
-let extract_int ty =
-  let open Sstt in
-  match Ty.get_descr ty
-        |> Descr.get_intervals
-        |> Intervals.destruct
-        |> List.map Intervals.Atom.get
-  with
-    [ Some i, Some j ] when Z.equal i j -> Z.to_int i
-  | _ -> failwith "Invalid encoding of spec position"
+module EnumHash = Hashtbl.Make(Sstt.Enum)
+let descr_by_id = EnumHash.create 16
 
-let tuple_get n t =
-  let open Sstt in
-  Tuples.get n (Descr.get_tuples (Ty.get_descr t))
+let id_by_descr = Hashtbl.create 16
 
-let tuple_proj n i t =
-  let open Sstt in
-  tuple_get n t
-  |> Op.TupleComp.proj i
-
-let type_to_param is_pos rec_type pos name has_default =
-  let open Sstt in
-  let pos = pos |> extract_int in
-  let name = name |> extract_str in
-  let has_default = has_default |> Ty.leq tt in
-  let field =
-    if is_pos then Utils.field_name_pos pos
-    else Utils.field_name_kw name
+let make_descr_part (pa, ab, kb) =
+  let p = match List.map anon pa with
+      [] -> []
+    | l -> l @ [ Str "/"]
   in
-  let ty = MT.Record.proj rec_type field  in
-  { name; pos; ty; has_default }
-
-let spec_by_id = Hashtbl.create 16
-module TyHash = Hashtbl.Make(Sstt.Ty)
-let id_by_spec = TyHash.create 16
-let make_arg_spec_part (pb, ab, kb) =
-  let pb_t = List.concat_map param_to_type pb |> MT.Tuple.mk in
-  let ab_t = List.concat_map param_to_type ab |> MT.Tuple.mk in
-  let kb_t = List.concat_map param_to_type kb |> MT.Tuple.mk in
-  let spec = MT.Tuple.mk [pb_t; ab_t; kb_t] in
-  let id = match TyHash.find_opt id_by_spec spec with
+  let a = List.map named ab in
+  let k = match List.map named kb with
+      [] -> []
+    | l -> [Str "*"] @ l
+  in
+  let descr = p @ a @ k in
+  let id = match Hashtbl.find_opt id_by_descr descr with
       Some e -> e
-    | None -> let e = Sstt.Enum.mk "<ID>"  in
-      Hashtbl.add spec_by_id e spec;
-      TyHash.add id_by_spec spec e;
+    | None ->
+      (* Avoid MLsem's Enum that performs hashconsing,
+         we want a fresh internal id for the enum *)
+      let e = Sstt.Enum.mk exact_str in
+      EnumHash.add descr_by_id e descr;
+      Hashtbl.add id_by_descr descr e;
       e
   in
   let ty_id = Sstt.( id |> Descr.mk_enum |> Ty.mk_descr) in
-  MT.Ty.cup dummy_t ty_id
+  MT.Ty.cup approx_id_ty ty_id
+
 
 let build builder =
+  validate builder;
   let tr = make_record_part builder |> Utils.mk_rec_disj false in
-  let ts = make_arg_spec_part builder in
+  let ts = make_descr_part builder in
   [tr; ts]
   |> MT.Tuple.mk
   |> MT.Tag.mk tag
@@ -143,34 +216,22 @@ let extract_record t =
   if is_non_empty_rec r then r
   else fail "Invalid record component"
 
-
 let pack p pos kw =
-  let pos_l, pos_e = List.mapi (fun i e -> Utils.field_name_pos i, e) pos |> List.split in
-  let kw_l, kw_e = List.map (fun (s, e) -> Utils.field_name_kw s, e) kw |> List.split in
+  let pos_l, pos_e = List.mapi (fun i e -> field_name_pos i, e) pos |> List.split in
+  let kw_l, kw_e = List.map (fun (s, e) -> field_name_kw s, e) kw |> List.split in
   let r = Utils.mk_record p (pos_l @ kw_l) (pos_e @ kw_e) in
-  let e_dummy = Utils.mk_enum p dummy in
-  let pair = Utils.mk_tuple p [r; e_dummy] in
+  let e_approx_id = Utils.mk_enum p approx_id in
+  let pair = Utils.mk_tuple p [r; e_approx_id] in
   Utils.mk_tag p tag pair
 
 let unpack p e =
   Utils.mk_proj_tag p tag e
   |> Utils.mk_proj_tuple p 2 0
 
-let extract_single_tuple ty =
-  let open Sstt in
-  let tc = Ty.get_descr ty |> Descr.get_tuples |> Tuples.components in
-  match tc with
-    [], false -> []
-  | [ tc ], false -> begin
-      match Op.TupleComp.as_union tc with
-        [ l ] -> l
-      | _ -> fail "tuple type is not a single tuple"
-    end
-  | l, b -> fail "tuple type mix different arities %d, %b" (List.length l) b
-
-let map_exact f (lp, la, lk) =
-  let fp p = { p with ty = f p.ty } in
-  List.(map fp lp, map fp la, map fp lk)
+let map_exact f =
+  List.map (function Str _ as s -> s
+                   | Named p -> Named { p with ty = f p.ty }
+                   | Anon p -> Anon { p with ty = f p.ty })
 
 let map_approx f l =
   List.map (fun (pl, kl) ->
@@ -179,13 +240,12 @@ let map_approx f l =
     ) l
 
 type 'ty descr =
-    Exact of 'ty t
+    Exact of 'ty param_kind list
   | Approx of bool * ('ty list * (string * 'ty) list) list
 
 let map f d = match d with
-    Exact t -> Exact (map_exact f t)
+    Exact l -> Exact (map_exact f l)
   | Approx (b, l) -> Approx (b,map_approx f l)
-
 
 let record_atom_to_sig node ctx r =
   let open Sstt in
@@ -196,9 +256,13 @@ let record_atom_to_sig node ctx r =
     |> List.fold_left (fun (apos, akw) (l, (ty, opt)) ->
         assert (not opt);
         let ty = node ctx ty in
-        match String.split_on_char '_' (Label.name l) with (* *)
-        | ["p"; n] -> (int_of_string n, ty)::apos, akw
-        | ["k"; n] -> apos, (n, ty)::akw
+        (*
+          Keep in sync with field_name_pos and
+          field_name_kw at the top of the file
+        *)
+        match String.split_on_char '_' (Label.name l) with
+        | ["%%p"; n] -> (int_of_string n, ty)::apos, akw
+        | ["%%k"; n] -> apos, (n, ty)::akw
         | _ -> fail "Unexpected label %s" (Label.name l)
       ) ([], [])
   in
@@ -212,63 +276,68 @@ let to_approx node ctx rec_type =
   in
   Approx (b, List.map (record_atom_to_sig node ctx) sigs)
 
-let rec map3 f l =
-  match l with
-    [] -> []
-  | x::y::z::ll -> (f x y z) :: map3 f ll
-  | _ -> fail "Invalid list in map3"
+
+let field_param node ctx is_anon rec_type p =
+  let field =
+    if is_anon then field_name_pos p.pos
+    else field_name_kw p.name
+  in
+  MT.Record.proj rec_type field |> node ctx
+
+let extract_id descr_id =
+  let open Sstt in
+  let id = Ty.diff descr_id approx_id_ty |> Ty.get_descr |> Descr.get_enums in
+  match Enums.destruct id with
+    (true, [ id ]) -> Some id
+  | _ -> None
 
 let to_exact node ctx rec_type spec_id =
+  let descr = EnumHash.find descr_by_id spec_id in
+  let tr_kind = function
+      Str _ as s -> s
+    | Anon p -> Anon { p with ty = field_param node ctx true rec_type p }
+    | Named p -> Named { p with ty = field_param node ctx false rec_type p }
+  in
+  Exact (List.map tr_kind descr)
+
+let tuple_get n t =
   let open Sstt in
-  let id = Ty.diff spec_id dummy_t |> Ty.get_descr |> Descr.get_enums in
-  let id = match Enums.destruct id with
-      (true, [ id ]) -> id
-    | _ -> fail "Invalid id"
-  in
-  let spec = Hashtbl.find spec_by_id id in
-  let spec_pos = tuple_proj 3 0 spec |> extract_single_tuple in
-  let spec_args = tuple_proj 3 1 spec |> extract_single_tuple in
-  let spec_kw = tuple_proj 3 2 spec |> extract_single_tuple in
-  let tr_param b ty1 ty2 ty3 =
-    let p = type_to_param b rec_type ty1 ty2 ty3 in
-    { p with ty = node ctx p.ty }
-  in
-  Exact ((map3 (tr_param true) spec_pos,
-          map3 (tr_param true) spec_args,
-          map3 (tr_param false) spec_kw))
+  Tuples.get n (Descr.get_tuples (Ty.get_descr t))
+
+let tuple_proj n i t =
+  let open Sstt in
+  tuple_get n t
+  |> Op.TupleComp.proj i
 
 let to_t node ctx comp : _ option =
   let open Sstt in
   let _, t = Op.TagComp.as_atom comp in
   let rec_type = MT.Tuple.proj 2 0 t in
-  let spec = tuple_proj 2 1 t in
-  Some (if Ty.leq spec dummy_t
-        then to_approx node ctx rec_type
-        else to_exact node ctx rec_type spec)
+  let descr = tuple_proj 2 1 t in
+  match extract_id descr with
+    None -> Some (to_approx node ctx rec_type)
+  | Some id -> Some (to_exact node ctx rec_type id)
+
+let pp_param_pos fmt p =
+  Format.fprintf fmt "%a%s"
+    Sstt.Printer.print_descr p.ty
+    (if p.has_default then " = ..." else "")
 
 let pp_param fmt p =
-  Format.fprintf fmt "%s=%s%a" p.name (if p.has_default then "?" else "")
-    Sstt.Printer.print_descr p.ty
+  Format.fprintf fmt "%s:@ %a" p.name
+    pp_param_pos p
 
-let print_exact _prec _assoc fmt (p, a, k) =
+let print_exact _prec _assoc fmt l =
   let open Format in
-  let p = match List.map (fun p -> `Spec p) p with
-      [] -> []
-    | l -> l @ [(`Str "/")]
-  in
-  let a = List.map (fun a -> `Spec a) a in
-  let k = match List.map (fun k -> `Spec k) k with
-      [] -> []
-    | l -> (`Str "*") :: l
-  in
   let pr fmt e = match e with
-      `Spec p -> pp_param fmt p
-    | `Str s -> pp_print_string fmt s
+      Anon p -> pp_param_pos fmt p
+    | Named p -> pp_param fmt p
+    | Str s -> pp_print_string fmt s
   in
   fprintf fmt "@[<hov 1>(%a)@]"
     (pp_print_list
-       ~pp_sep:(fun fmt () -> fprintf fmt ", ")
-       pr) (p@a@k)
+       ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
+       pr) l
 
 let pp_approx_sig fmt (lp, lkw) =
   let open Format in
@@ -277,21 +346,22 @@ let pp_approx_sig fmt (lp, lkw) =
   let l = l @ List.map Either.right lkw in
   let (s, _, _) = Prec.varop_info Tuple in
   fprintf fmt "@[(";
-  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "%s " s)
+  Prec.print_seq
     (fun fmt e -> match e with
          Either.Left ty -> fprintf fmt "%a" Printer.print_descr ty
-       | Either.Right (s, ty) -> fprintf fmt "%s=%a"s Printer.print_descr ty) fmt l;
+       | Either.Right (s, ty) -> fprintf fmt "%s=%a"s Printer.print_descr ty)
+    s fmt l;
   fprintf fmt ")@]"
 
 let print_approx prec assoc fmt b l =
   let open Format in
   let open Sstt in
-  let cup_info = Prec.(varop_info Cup) in
+  let (sym,_,_) as cup_info = Prec.(varop_info Cup) in
   let need_par = Prec.need_parentheses prec assoc cup_info in
-  fprintf fmt "@[";
+  fprintf fmt "@[<hov 1>";
   if need_par then fprintf fmt "(";
-  pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "; " ) pp_approx_sig fmt l;
-  if not b then (match l with [] -> fprintf fmt "..." | _ -> fprintf fmt "; ..." );
+  Prec.print_seq pp_approx_sig sym fmt l;
+  if not b then (match l with [] -> fprintf fmt "..." | _ -> fprintf fmt ";@ ..." );
   if need_par then fprintf fmt ")";
   fprintf fmt "@]"
 
@@ -310,3 +380,41 @@ let params = Sstt.Printer.{ aliases = [];
                             extensions = [(MT.Tag.tag tag, py_params_builder) ]}
 
 let () = MT.PEnv.add_printer_param params
+(* The code below depends on printer param being initialized *)
+
+let pp_mapping fmt m =
+  match m with
+    [] -> ()
+  | _ ->
+    Format.(fprintf fmt "@[<hov 1>[%a]@]"
+              (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
+                 (fun fmt (_, s) -> MT.TVar.pp fmt s))
+              m)
+
+let pp_py_scheme fmt s =
+  let vars, gty = MT.TyScheme.get s in
+  let vars = MT.TVarSet.destruct vars in
+  let mk v n = v, MT.TVar.(mk (kind v) (Some n)) in
+  let new_names = match vars with
+      [] -> []
+    | [ _ ] -> [ "X"]
+    | [ _; _ ] -> ["X"; "Y"]
+    | [ _; _; _ ] -> ["X"; "Y"; "Z"]
+    | _ -> List.mapi (fun i _ -> ("X" ^ string_of_int i)) vars
+  in
+  let mapping = List.map2 mk vars new_names in
+  let () = pp_mapping fmt mapping in
+  let subst = mapping
+              |> List.map (fun (x, n) -> x, MT.TVar.typ n)
+              |> MT.Subst.construct
+  in
+  let pp_ty = Sstt.Printer.print_ty (MT.PEnv.printer_params ()) in
+  let inf, sup = MT.GTy.destruct gty in
+  let inf' = MT.Subst.apply subst inf in
+  if MT.Ty.equiv inf sup then
+    Format.fprintf fmt "@[%a@]" pp_ty inf'
+  else
+    let sup' = MT.Subst.apply subst sup in
+    Format.fprintf fmt "@[@[%a@] <:@ Any <:@ @[%a@]@]"
+      pp_ty inf'
+      pp_ty sup'
