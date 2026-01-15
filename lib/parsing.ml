@@ -623,7 +623,7 @@ let pattern =
 let statement tbl =
   let open PyCo.Statement in
   let mk_fun mk kind ~location ~name ~args ~body ~decorator_list ~returns ~type_comment ~type_params =
-    let* _init
+    let* _init = (), ident ~location ~scope:Unknown ~ctx:store_ctx name, []
     and* args
     and* body = compute_block_variables tbl location kind name (get1 args) body
     and*@ decorator_list
