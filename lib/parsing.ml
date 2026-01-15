@@ -2,49 +2,55 @@ module PyCo = PyreAst.Concrete
 module PyTF = PyreAst.TaglessFinal
 
 let builtins = [ (* Available via [dirs(__builtins__)] *)
-  "ArithmeticError"; "AssertionError"; "AttributeError"; "BaseException"; "BaseExceptionGroup"; 
-  "BlockingIOError"; "BrokenPipeError"; "BufferError"; "BytesWarning"; "ChildProcessError"; 
-  "ConnectionAbortedError"; "ConnectionError"; "ConnectionRefusedError"; "ConnectionResetError"; 
-  "DeprecationWarning"; "EOFError"; "Ellipsis"; "EncodingWarning"; "EnvironmentError"; "Exception"; 
+  "ArithmeticError"; "AssertionError"; "AttributeError"; "BaseException"; "BaseExceptionGroup";
+  "BlockingIOError"; "BrokenPipeError"; "BufferError"; "BytesWarning"; "ChildProcessError";
+  "ConnectionAbortedError"; "ConnectionError"; "ConnectionRefusedError"; "ConnectionResetError";
+  "DeprecationWarning"; "EOFError"; "Ellipsis"; "EncodingWarning"; "EnvironmentError"; "Exception";
   "ExceptionGroup"; "False"; "FileExistsError"; "FileNotFoundError"; "FloatingPointError";
-  "FutureWarning"; "GeneratorExit"; "IOError"; "ImportError"; "ImportWarning"; "IndentationError"; 
-  "IndexError";  "InterruptedError"; "IsADirectoryError"; "KeyError"; "KeyboardInterrupt"; "LookupError"; 
+  "FutureWarning"; "GeneratorExit"; "IOError"; "ImportError"; "ImportWarning"; "IndentationError";
+  "IndexError";  "InterruptedError"; "IsADirectoryError"; "KeyError"; "KeyboardInterrupt"; "LookupError";
   "MemoryError"; "ModuleNotFoundError"; "NameError"; "None"; "NotADirectoryError"; "NotImplemented";
   "NotImplementedError";  "OSError"; "OverflowError"; "PendingDeprecationWarning"; "PermissionError";
-  "ProcessLookupError"; "PythonFinalizationError"; "RecursionError"; "ReferenceError"; "ResourceWarning"; 
-  "RuntimeError"; "RuntimeWarning"; "StopAsyncIteration"; "StopIteration"; "SyntaxError"; "SyntaxWarning"; 
-  "SystemError"; "SystemExit"; "TabError"; "TimeoutError"; "True"; "TypeError"; "UnboundLocalError"; 
-  "UnicodeDecodeError"; "UnicodeEncodeError"; "UnicodeError"; "UnicodeTranslateError"; "UnicodeWarning"; 
-  "UserWarning"; "ValueError"; "Warning"; "ZeroDivisionError"; "_IncompleteInputError"; 
+  "ProcessLookupError"; "PythonFinalizationError"; "RecursionError"; "ReferenceError"; "ResourceWarning";
+  "RuntimeError"; "RuntimeWarning"; "StopAsyncIteration"; "StopIteration"; "SyntaxError"; "SyntaxWarning";
+  "SystemError"; "SystemExit"; "TabError"; "TimeoutError"; "True"; "TypeError"; "UnboundLocalError";
+  "UnicodeDecodeError"; "UnicodeEncodeError"; "UnicodeError"; "UnicodeTranslateError"; "UnicodeWarning";
+  "UserWarning"; "ValueError"; "Warning"; "ZeroDivisionError"; "_IncompleteInputError";
   "__build_class__"; "__debug__"; "__doc__"; "__import__"; "__loader__"; "__name__"; "__package__";
   "__spec__"; "abs"; "aiter"; "all"; "anext"; "any"; "ascii"; "bin"; "bool"; "breakpoint"; "bytearray";
   "bytes"; "callable"; "chr"; "classmethod"; "compile"; "complex"; "copyright"; "credits"; "delattr";
   "dict"; "dir"; "divmod"; "enumerate"; "eval"; "exec"; "exit"; "filter"; "float"; "format"; "frozenset";
-  "getattr"; "globals"; "hasattr"; "hash"; "help"; "hex"; "id"; "input"; "int"; "isinstance"; "issubclass"; 
-  "iter"; "len"; "license"; "list"; "locals"; "map"; "max"; "memoryview"; "min"; "next"; "object"; "oct"; 
-  "open"; "ord"; "pow"; "print"; "property"; "quit"; "range"; "repr"; "reversed"; "round"; "set"; "setattr"; 
+  "getattr"; "globals"; "hasattr"; "hash"; "help"; "hex"; "id"; "input"; "int"; "isinstance"; "issubclass";
+  "iter"; "len"; "license"; "list"; "locals"; "map"; "max"; "memoryview"; "min"; "next"; "object"; "oct";
+  "open"; "ord"; "pow"; "print"; "property"; "quit"; "range"; "repr"; "reversed"; "round"; "set"; "setattr";
   "slice"; "sorted"; "staticmethod"; "str"; "sum"; "super"; "tuple"; "type"; "vars"; "zip"
 ]
 
+module IdentMap = Map.Make(PyreAst.Concrete.Identifier)
+module IdentSet = Set.Make(PyreAst.Concrete.Identifier)
 let dummy_pos = PyCo.Position.make_t ~line:~-1 ~column:~-1 ()
 let dummy_loc = PyCo.Location.make_t ~start:dummy_pos ~stop:dummy_pos ()
-let builtins_as_arguments =
-  List.map (fun s -> PyCo.Argument.make_t ~location:dummy_loc 
-               ~identifier:(PyCo.Identifier.make_t s()) ()) builtins
+let builtins_as_arguments to_keep =
+  List.filter_map (fun s ->
+      let identifier = PyCo.Identifier.make_t s () in
+      if IdentSet.mem identifier to_keep then
+        Some (PyCo.Argument.make_t ~location:dummy_loc
+                ~identifier ())
+      else None ) builtins
 
 module Error =
 struct
-  type t = 
-      IncompatibleScope of PyCo.Identifier.t * PyCo.Location.t * string * string 
+  type t =
+      IncompatibleScope of PyCo.Identifier.t * PyCo.Location.t * string * string
     | AltPatternNames of PyCo.Location.t (* patterns x | y *)
     | UndefinedGlobalName of PyCo.Identifier.t * PyCo.Location.t
     | DuplicateArgument of PyCo.Identifier.t * PyCo.Location.t
-  let to_pyre e = 
+  let to_pyre e =
     let open PyreAst.Parser.Error in
     let open Format in
     let mk_error message loc =
       let open PyCo.Location in
-      { message; 
+      { message;
         line = loc.start.line;
         column = loc.start.column;
         end_line = loc.stop.line;
@@ -53,7 +59,7 @@ struct
     let id_str = PyCo.Identifier.to_string in
     match e with
     | IncompatibleScope (id1, loc, s1, s2) ->
-      mk_error (sprintf "Name '%s' has incompatible scope %s and %s" 
+      mk_error (sprintf "Name '%s' has incompatible scope %s and %s"
                   (id_str id1) s1 s2)
         loc
     | AltPatternNames loc -> mk_error "Alternative pattern binds different names" loc
@@ -67,9 +73,8 @@ let raise_ e = raise (Error (e))
 
 
 
-module IdentMap = Map.Make(PyreAst.Concrete.Identifier)
-type scope = 
-  Local | Parameter | Nonlocal | Global | Unknown
+type scope =
+    Local | Parameter | Nonlocal | Global | Unknown
 
 
 let show_scope = function
@@ -79,12 +84,16 @@ let show_scope = function
   | Parameter -> "parameter"
   | Unknown -> "unknown (nonlocal or global)"
 
-
+let pretty_scope = function
+  | Local | Parameter -> "Ⓛ"
+  | Nonlocal -> "Ⓝ"
+  | Global -> "Ⓖ"
+  | _ -> assert false
 
 type context = { del : bool; load : bool; store : bool; }
 let default_context = { del = false; load = false; store = false }
 
-let context = 
+let context =
   PyCo.ExpressionContext.(
     function
       Del -> { default_context with del = true }
@@ -98,7 +107,7 @@ type info =  {
   locations : PyCo.Location.t list
 }
 
-let ident ?location ?(scope=Unknown)?(ctx=PyCo.ExpressionContext.make_load_of_t()) id = 
+let ident ?location ?(scope=Unknown) ?(ctx=PyCo.ExpressionContext.make_load_of_t()) id =
   IdentMap.singleton id { scope; context = context ctx; locations = Option.to_list location }
 
 let merge_scope locs1 locs2 var s1 s2 =
@@ -106,7 +115,7 @@ let merge_scope locs1 locs2 var s1 s2 =
     Unknown, s | s, Unknown -> s
   | Parameter, Local | Local, Parameter -> Local
   | _ when s1 = s2 -> s1
-  | _ -> 
+  | _ ->
     let location = match locs1, locs2 with
         [], [] -> dummy_loc
       | _, l::_ -> l
@@ -114,7 +123,7 @@ let merge_scope locs1 locs2 var s1 s2 =
     in
     raise_ (IncompatibleScope (var, location, show_scope s1, show_scope s2))
 
-let merge_context c1 c2  = { del = c1.del || c2.del; 
+let merge_context c1 c2  = { del = c1.del || c2.del;
                              load = c1.load || c2.load;
                              store = c1.store || c2.store}
 let merge_info var i1 i2 =
@@ -131,7 +140,7 @@ type block_kind = Fun | AsyncFun | Lambda | Class | Module
 module BlockId =
 struct
   type t =
-    { kind : block_kind; 
+    { kind : block_kind;
       name : PyCo.Identifier.t;
       location : PyCo.Location.t }
   let mk ~kind ~name ~location = { kind; name=PyCo.Identifier.make_t name (); location }
@@ -153,19 +162,20 @@ module IdentTable = Hashtbl.Make(struct include PyCo.Identifier let equal a b = 
 type env = {
   global : (info IdentMap.t * BlockId.t list) BidTable.t;
   free : BlockId.t list IdentTable.t;
-  filename : string;
+  filename : string
 }
 let create_env filename =
   { global = BidTable.create 16;
     free = IdentTable.create 16;
-    filename}
+    filename
+  }
 
-(* Computing a node of the AST can either yield the node itself, 
-   for any construct that cannot contain an identifier 
+(* Computing a node of the AST can either yield the node itself,
+   for any construct that cannot contain an identifier
    (e.g. operators).
    Otherwise, it is a triple of:
    1. the AST node
-   2. the map of identifiers from the current scope in the node 
+   2. the map of identifiers from the current scope in the node
    3. the list of block identifiers from the current scope in the node
 *)
 type 'a result = 'a * info IdentMap.t * BlockId.t list
@@ -179,14 +189,14 @@ let store_ctx = PyCo.ExpressionContext.make_store_of_t ()
   [bind]/[bind_opt] must be used for identifiers that bind names, see:
  https://docs.python.org/3/reference/executionmodel.html#binding-of-names
 *)
-let bind ~location name =   
+let bind ~location name =
   name,
   ident ~location ~ctx:store_ctx name,
   []
 let bind_opt ~location o = match o with
     None -> None, IdentMap.empty, []
-  | Some name -> 
-    let r = bind ~location name in 
+  | Some name ->
+    let r = bind ~location name in
     (Some (get1 r)), get2 r, get3 r
 
 (* Computations of free variables and variable scope *)
@@ -200,21 +210,35 @@ let enter_arguments scope (a : PyCo.Arguments.t) vars =
         if IdentTable.mem seen identifier then raise_ (DuplicateArgument (identifier, location));
         IdentTable.add seen identifier ();
         ident ~location ~scope ~ctx:(make_store_of_t ()) identifier
-        |> merge_vars avars 
+        |> merge_vars avars
       ) vars l
   in
-  vars 
+  vars
   |> add_arg_list a.posonlyargs
   |> add_arg_list a.args
   |> add_arg_list (Option.to_list a.vararg)
   |> add_arg_list a.kwonlyargs
   |> add_arg_list (Option.to_list a.kwarg)
 
-(* Function declarations introduces a new block (and hence a new scope). 
+(* Function declarations introduces a new block (and hence a new scope).
    [compute_fun_variables] closes the scope corresponding to the body of the function
 
 *)
 let () = Printexc.record_backtrace true
+
+
+(* Computes the variables used in a block.
+   returns the list of variables that are free in the block together with their scope.
+   To compute the scope:
+   - explicit NonLocal or Global are kept
+   - without further info, writing or del makes a variable local
+   - otherwise the scope is unknown
+   - the scope of a function in its scope is:
+   - global at toplevel
+   - local in its scope
+   - the scope of a function in itself is nonlocal for a non-toplevel function
+     and global otherwise
+*)
 let compute_block_variables env location kind name args body =
   (* vars is the mapping from variable names to info.
      - if a variable is known Global or NonLocal, leave it
@@ -228,24 +252,24 @@ let compute_block_variables env location kind name args body =
   let vars = enter_arguments (if kind = Module then Global else Parameter) args vars in
   let free = ref [] in (* Variables that remain free after the current scope *)
   let todo = ref [] in (* Free variables that were found in the current scope *)
-  let nvars = vars |> IdentMap.filter_map (fun var info -> 
+  let nvars = vars |> IdentMap.filter_map (fun var info ->
       let scope =
         match info.scope with
-          Unknown when info.context.del || info.context.store || kind = Module -> 
-          todo := (var, kind = Module) ::!todo; 
+          Unknown when info.context.del || info.context.store || kind = Module ->
+          todo := var ::!todo;
           if kind = Module then Global else Local
         | Unknown -> free := (var, info) :: !free; Unknown
-        | s -> if IdentTable.mem env.free var then todo := (var, kind = Module)::!todo; s
+        | s -> if IdentTable.mem env.free var then todo := var::!todo; s
       in
       Some { info with scope }
     )
   in
-  let () = !todo |> List.iter (fun (v, is_global) -> 
+  let () = !todo |> List.iter (fun v ->
       try IdentTable.find env.free v
-          |> List.map (fun bid -> 
+          |> List.map (fun bid ->
               let map, l = BidTable.find env.global bid in
               let info = IdentMap.find v map in
-              let info' = { info with scope = if is_global then Global else Nonlocal } in
+              let info' = { info with scope = if kind = Module then Global else Nonlocal } in
               (bid, (IdentMap.add v info' map, l))
             )
           |> List.iter (fun (k, v) -> BidTable.replace env.global k v)
@@ -253,19 +277,16 @@ let compute_block_variables env location kind name args body =
     )
   in
   let bid = BlockId.{ kind; name; location } in
-  !free |> List.iter (fun (v,_) -> 
+  !free |> List.iter (fun (v,_) ->
       let l = try IdentTable.find env.free v with Not_found -> [] in
       IdentTable.replace env.free v (bid::l));
   BidTable.replace env.global bid (nvars, idents);
   let rem_vars = IdentMap.of_list !free in
-  let rem_vars = if PyCo.Identifier.compare name lambda_id = 0 || kind = Module then rem_vars
-    else merge_vars rem_vars (ident ~location ~ctx:store_ctx name) (* functions bind their name *)
-  in
   List.map get1 body, rem_vars, [bid]
 
 
 (* Tweaked version of Pyre's own AST builder,
-   see: 
+   see:
    https://github.com/grievejia/pyre-ast/blob/trunk/lib/concrete.ml
 *)
 
@@ -298,7 +319,7 @@ let (and*?) (a, b, c) o =
 (* Thread the list monad *)
 let (and*@) (a, b, c) l =
   let l, v, i =
-    List.fold_left (fun (al, av, ai) (el, ev, ei) -> 
+    List.fold_left (fun (al, av, ai) (el, ev, ei) ->
         el::al, merge_vars av ev, ai @ ei
       ) ([], b, c) l
   in (a, List.rev l), v, i
@@ -306,7 +327,7 @@ let (and*@) (a, b, c) l =
 (* Thread the option monad inside the list monad (list of options)*)
 let (and*?@) (a, b, c) l =
   let l, v, i =
-    List.fold_left (fun (al, av, ai) ol -> 
+    List.fold_left (fun (al, av, ai) ol ->
         match ol with
           None -> (None::al, av, ai)
         | Some (el,ev,ei) -> (Some el)::al, merge_vars av ev, ai @ ei
@@ -347,8 +368,8 @@ let binary_operator =
 let comparison_operator =
   let open PyCo.ComparisonOperator in
   PyTF.ComparisonOperator.make ~eq:(make_eq_of_t ()) ~noteq:(make_noteq_of_t ())
-    ~lt:(make_lt_of_t ()) ~lte:(make_lte_of_t ()) ~gt:(make_gt_of_t ()) 
-    ~gte:(make_gte_of_t ()) ~is:(make_is_of_t ()) ~isnot:(make_isnot_of_t ()) 
+    ~lt:(make_lt_of_t ()) ~lte:(make_lte_of_t ()) ~gt:(make_gt_of_t ())
+    ~gte:(make_gte_of_t ()) ~is:(make_is_of_t ()) ~isnot:(make_isnot_of_t ())
     ~in_:(make_in_of_t ()) ~notin:(make_notin_of_t ()) ()
 
 let unary_operator =
@@ -361,12 +382,12 @@ let comprehension ~target ~iter ~ifs ~is_async =
   PyCo.Comprehension.make_t ~target ~iter ~ifs ~is_async ()
 
 let keyword ~location ~arg ~value =
-  (* The arg identifier in a keyword is not binding, and does not interact with the namespace 
+  (* The arg identifier in a keyword is not binding, and does not interact with the namespace
      def f():
       global x
-      g(x=42) <- x and the global x variable are distinct    
+      g(x=42) <- x and the global x variable are distinct
   *)
-  let* value in 
+  let* value in
   PyCo.Keyword.make_t ~location ?arg ~value ()
 
 let argument ~location ~identifier ~annotation ~type_comment =
@@ -439,11 +460,11 @@ let expression tbl =
     make_generatorexp_of_t ~location ~elt ~generators ()
   in
   let await ~location ~value =
-    let* value in 
+    let* value in
     make_await_of_t ~location ~value ()
   in
   let yield ~location ~value =
-    let* _init 
+    let* _init
     and*? value in
     make_yield_of_t ~location ?value ()
   in
@@ -493,15 +514,15 @@ let expression tbl =
   in
   let tuple ~location ~elts ~ctx =
     let* _init and*@ elts in
-    make_tuple_of_t ~location ~elts ~ctx () 
+    make_tuple_of_t ~location ~elts ~ctx ()
   in
   let slice ~location ~lower ~upper ~step =
     let* _init and*? lower and*? upper and*? step in
     make_slice_of_t ~location ?lower ?upper ?step ()
-  in 
+  in
   PyTF.Expression.make
     ~bool_op ~named_expr ~bin_op ~unary_op ~lambda ~if_exp ~dict ~set
-    ~list_comp ~set_comp ~dict_comp ~generator_exp ~await ~yield ~yield_from ~compare 
+    ~list_comp ~set_comp ~dict_comp ~generator_exp ~await ~yield ~yield_from ~compare
     ~call ~formatted_value ~joined_str ~constant ~attribute ~subscript ~starred ~name
     ~list ~tuple ~slice ()
 
@@ -511,7 +532,7 @@ let with_item ~context_expr ~optional_vars =
 
 let import_alias ~location ~name ~asname =
   match asname with
-    None -> 
+    None ->
     let* name = bind ~location name in
     PyCo.ImportAlias.make_t ~location ~name ?asname ()
   | Some n ->
@@ -528,7 +549,7 @@ let type_param =
     let* name = bind ~location name in
     PyCo.TypeParam.make_paramspec_of_t ~location ~name ()
   in
-  let type_var_tuple ~location ~name = 
+  let type_var_tuple ~location ~name =
     let* name = bind ~location name in
     PyCo.TypeParam.make_typevartuple_of_t ~location ~name ()
   in
@@ -562,7 +583,7 @@ let pattern =
     make_matchsequence_of_t ~location ~patterns ()
   in
   let match_class ~location ~cls ~patterns ~kwd_attrs ~kwd_patterns =
-    let* cls 
+    let* cls
     and*@ patterns
     and*@ kwd_patterns in
     make_matchclass_of_t ~location ~cls ~patterns ~kwd_attrs ~kwd_patterns ()
@@ -577,8 +598,8 @@ let pattern =
     make_matchstar_of_t ~location ?name ()
   in
   let match_as ~location ~pattern ~name =
-    let* _init 
-    and*? pattern 
+    let* _init
+    and*? pattern
     and* name = bind_opt ~location name in (* case _ is None, None, case x: is None, Some x, case x as _ is rejected by the parser *)
     make_matchas_of_t ~location ?pattern ?name ()
   in
@@ -587,7 +608,7 @@ let pattern =
       match patterns with
         [] -> ()
       | (_,v,_) :: l ->
-        if not (List.for_all (fun (_,v',_) -> 
+        if not (List.for_all (fun (_,v',_) ->
             IdentMap.equal (fun _ _ -> true) v v' ) l)
         then
           raise_ (AltPatternNames location)
@@ -608,7 +629,7 @@ let statement tbl =
     and*@ decorator_list
     and*? returns
     and*@ type_params in
-    mk ~location ~name ~args ?body:(Some body) ?decorator_list:(Some decorator_list) 
+    mk ~location ~name ~args ?body:(Some body) ?decorator_list:(Some decorator_list)
       ?returns ?type_comment ?type_params:(Some type_params) ()
   in
   let function_def = mk_fun make_functiondef_of_t Fun in
@@ -623,14 +644,14 @@ let statement tbl =
     make_classdef_of_t ~location ~name ~bases ~keywords ~body ~decorator_list ~type_params ()
   in
   let return ~location ~value =
-    let* _init and*? value in 
+    let* _init and*? value in
     make_return_of_t ~location ?value ()
   in
   let delete ~location ~targets =
     let* _init and*@ targets in make_delete_of_t ~location ~targets ()
   in
   let assign ~location ~targets ~value ~type_comment =
-    let* _init 
+    let* _init
     and*@ targets
     and* value in
     make_assign_of_t ~location ~targets ~value ?type_comment ()
@@ -709,9 +730,9 @@ let statement tbl =
     make_importfrom_of_t ~location ?module_ ~names ~level ()
   in
   let mk_scope mk scope ~location ~names =
-    let vars = List.fold_left (fun acc n -> 
+    let vars = List.fold_left (fun acc n ->
         IdentMap.add n {scope; context=default_context;locations=[location]} acc)
-        IdentMap.empty names 
+        IdentMap.empty names
     in mk ~location ?names:(Some names) (), vars, []
   in
   let global = mk_scope make_global_of_t Global in
@@ -730,8 +751,8 @@ let statement tbl =
 let type_ignore ~lineno ~tag = PyCo.TypeIgnore.make_t ~lineno ~tag ()
 
 let function_type ~argtypes ~returns =
-  let* _init 
-  and*@ argtypes 
+  let* _init
+  and*@ argtypes
   and* returns in PyCo.FunctionType.make_t ~argtypes ~returns ()
 
 
@@ -766,18 +787,18 @@ let pp_block_kind fmt k =
 let pp_info fmt i = Format.fprintf fmt "%s,(del=%b,load=%b,store=%b)"
     (show_scope i.scope) i.context.del i.context.load i.context.store
 
-let pp_vars fmt vars = 
+let pp_vars fmt vars =
   let open Format in
   fprintf fmt "%a"
     (pp_print_list ~pp_sep:pp_print_space
        (fun fmt (v, i) -> fprintf fmt "%s=%a" (PyCo.Identifier.to_string v) pp_info i))
     vars
 
-let pp_defines fmt (s, loc, k) = 
+let pp_defines fmt (s, loc, k) =
   Format.fprintf fmt "%s (%a) %a" s pp_loc loc pp_block_kind k
 let pp_block_info fmt bi =
   let open Format in
-  fprintf fmt "@[%a %s (%s:%a)@]@\n" pp_block_kind bi.kind 
+  fprintf fmt "@[%a %s (%s:%a)@]@\n" pp_block_kind bi.kind
     bi.name
     bi.filename
     pp_loc bi.location;
@@ -789,9 +810,15 @@ let pp_block_info fmt bi =
   fprintf fmt "@]@]@\n--"
 
 
+let filter_globals = IdentMap.filter (fun _  info -> info.scope = Global)
+let union_globals = IdentMap.union (fun v i1 i2 -> Some (merge_info v i1 i2))
 
-let rec make_summary (tbl : env) bid =
+let rec make_summary (tbl : env)  bid =
   let vars, bids = BidTable.find tbl.global bid in
+  let gvars = filter_globals vars in
+  let gl_vars, sublist = make_summary_list tbl bids in
+  let vars = union_globals vars gl_vars in
+  union_globals gvars gl_vars,
   {name = PyCo.Identifier.to_string bid.BlockId.name;
    filename = tbl.filename;
    location = bid.BlockId.location;
@@ -799,20 +826,27 @@ let rec make_summary (tbl : env) bid =
    identifiers = vars;
    defines = List.map (fun bid ->
        BlockId.(PyCo.Identifier.to_string bid.name, bid.location, bid.kind)) bids;
-  }:: make_summary_list tbl bids
+  }:: sublist
 and make_summary_list tbl l =
   match l with
-    [] -> []
-  | bid :: ll -> (make_summary tbl bid) @ make_summary_list tbl ll
+    [] -> IdentMap.empty, []
+  | bid :: ll ->
+    let gvars, l = make_summary tbl bid in
+    let gl_vars, ll = make_summary_list tbl ll in
+    union_globals gvars gl_vars,
+    l @ ll
 
 let module_gen (tbl:env) ~body ~type_ignores =
-  let module_name = PyCo.Identifier.make_t tbl.filename () in
-  let body, vars, bids = compute_block_variables tbl dummy_loc Module 
-      module_name
-      (PyCo.Arguments.make_t ~args:builtins_as_arguments ()) body
+  let tlv_refs = List.fold_left (fun acc (_,v,_) ->
+      IdentSet.add_seq (IdentMap.to_seq v |> Seq.map fst) acc
+    ) IdentSet.empty body
   in
-  PyCo.Module.make_t ~body ~type_ignores (),vars, bids 
-
+  let module_name = PyCo.Identifier.make_t tbl.filename () in
+  let body, vars, bids = compute_block_variables tbl dummy_loc Module
+      module_name
+      (PyCo.Arguments.make_t ~args:(builtins_as_arguments tlv_refs) ()) body
+  in
+  PyCo.Module.make_t ~body ~type_ignores (),vars, bids
 
 let module_ (tbl:env) ~body ~type_ignores =
   let m, v, i = module_gen tbl ~body ~type_ignores in
@@ -820,14 +854,14 @@ let module_ (tbl:env) ~body ~type_ignores =
     Some (ident, {locations=loc::_;_}) -> raise_ (UndefinedGlobalName(ident, loc))
   | Some (ident, {locations=[];_}) -> raise_ (UndefinedGlobalName(ident, dummy_loc))
   | None ->
-    m,make_summary_list tbl i
+    m,snd (make_summary_list tbl i)
 
 (* after we are done, any remaining variable that has scope Local is changed
    to Global (it is "local" to the module) and any free variable that remains should raise an error.
 *)
 
-let spec env = 
-  PyTF.make ~argument ~arguments ~binary_operator ~boolean_operator 
+let spec env =
+  PyTF.make ~argument ~arguments ~binary_operator ~boolean_operator
     ~comparison_operator ~comprehension ~constant
     ~exception_handler
     ~expression:(expression env)
