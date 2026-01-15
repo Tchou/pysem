@@ -19,9 +19,8 @@ and dbg_pr str =
     kfprintf pp_end std_formatter
   ) else ikfprintf ignore std_formatter
 
-let pp_list ?(sep=";") pp fmt l =
+let pp_list ?(sep=";") =
   Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "%s@ "sep)
-    pp fmt l
 let pp_nel str = function [] -> "" | _ -> str
 
 let mlvar_show = MlVar.(if Utils.debug && not Utils.export
@@ -175,7 +174,7 @@ module MLAstPrinter = struct
     | Alt (t1,t2) -> fprintf fmt "@[<hov 2>Alt(%a,@ %a)@]" pp_t t1 pp_t t2
     | Block (_,t) -> fprintf fmt "@[<hov 2>Block:@ %a@]" pp_t t
     | Ret (_,ot) -> fprintf fmt "@[<hov 2>Ret:@ %a@]"
-                     (pp_print_option pp_t) ot
+                      (pp_print_option pp_t) ot
     | If (test,ty,t,ot) ->
        fprintf fmt
          "@[@[<hov 2>if: %a is %a@]@\n@[<hov 2>then@ %a@]@\n\

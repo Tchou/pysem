@@ -23,17 +23,17 @@ type expr' =
   | Lambda of spec * expr
   | Apply of expr * params
   | Tuple of expr list
-  (* | Projection of expr * expr (\* proj, value *\) *)
+(* | Projection of expr * expr (\* proj, value *\) *)
 and expr = expr' annot
 and spec =
   { posonly : (ident * expr option) list
-  ; args    : (ident * expr option) list
+  ; mixed   : (ident * expr option) list
   ; vararg  : ident option
-  ; kwonly  : (ident * expr option) list
-  ; kwarg   : ident option }
+  ; kwdonly : (ident * expr option) list
+  ; kwdarg  : ident option }
 and params =
   { pos : expr list
-  ; kw  : (string * expr) list }
+  ; kwd : (string * expr) list }
 
 type target = ident
 
@@ -50,8 +50,7 @@ and instr = instr' annot
 
 type prog = instr list
 
-let dummy_annot = MC.Position.dummy
-let dannot : 'a -> 'a annot = fun x -> dummy_annot, x
+let dannot : 'a -> 'a annot = fun x -> Utils.dummy_pos, x
 let env_annot env loc t = env.Env.to_loc loc, t
 
 module Ident = struct
@@ -59,7 +58,7 @@ module Ident = struct
 
   let external_name ({name; _}: ident) =
     match MlVar.get_name name with
-      Some s -> s
+    | Some s -> s
     | None -> failwith "Ident.external_name: anonymous variable"
 
   let of_identifier (env:Env.t) id : ident =
@@ -96,12 +95,12 @@ module Const = struct
   let to_gty c : MlGTy.t =
     let open Mlsem.Types in
     GTy.mk (match c with
-        | None_ -> failwith "Ty.None"
-        (* | Ellipsis -> failwith "Ty.Ellipsis" *)
-        | Bool b -> if b then Ty.tt else Ty.ff
-        | Int i -> Utils.ty_of_int i
-        (* | Float _ -> Ty.float (\* !! TODO !! *\) *)
-        | String _ -> Ty.string )
+            | None_ -> failwith "Ty.None"
+            (* | Ellipsis -> failwith "Ty.Ellipsis" *)
+            | Bool b -> if b then Ty.tt else Ty.ff
+            | Int i -> Utils.ty_of_int i
+            (* | Float _ -> Ty.float (\* !! TODO !! *\) *)
+            | String _ -> Ty.string )
 end
 
 module Binop = struct
@@ -138,7 +137,7 @@ module Binop = struct
     and int_cmp = MT.(Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.bool))
     and bool_op = MT.(Arrow.mk Ty.bool (Arrow.mk Ty.bool Ty.bool))
     and pol_cmp _ = let tv = mk_tv "bop_tv" in
-      MT.(Arrow.mk tv    (Arrow.mk tv      Ty.bool)) in
+                    MT.(Arrow.mk tv    (Arrow.mk tv      Ty.bool)) in
     let strkey, ty = match op with
       | Add -> "+", int_op
       | Sub -> "-", int_op
@@ -200,58 +199,56 @@ let pp_const fmt = function
 let rec pp_expr' fmt = function
   | Var id -> pp_ident fmt id
   | Binop (e1, b, e2) ->
-    Format.fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
+     Format.fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
   | Cst c -> pp_const fmt c
   | Lambda (x,e) ->
-    Format.fprintf fmt "@[<hov 2>fun %a -> %a@]" pp_spec x pp_expr e
+     Format.fprintf fmt "@[<hov 2>fun %a -> %a@]" pp_spec x pp_expr e
   | Apply (e,p) -> Format.fprintf fmt "@[%a%a@]" pp_expr e pp_params p
-  | Tuple el ->  Printing.pp_list  ~sep:"," pp_expr fmt el
+  | Tuple el -> Printing.pp_list ~sep:"," pp_expr fmt el
 (*| Projection (p,e) -> Format.fprintf fmt "@[%a[%a]@]" pp_expr e pp_expr p *)
 and pp_expr fmt (_,e') = pp_expr' fmt e'
 and pp_spec fmt s =
   let open Format in
   let pr_if b str = if b then str else "" in
-  let po, ar, va, ko, ka =
-    s.posonly<>[], s.args<>[], s.vararg<>None, s.kwonly<>[], s.kwarg<>None in
-  let pos_arg = (pr_if po ", /") ^ (pr_if (po && (ar||va||ko||ka)) ", ") in
+  let po, mx, va, ko, ka =
+    s.posonly<>[], s.mixed<>[], s.vararg<>None, s.kwdonly<>[], s.kwdarg<>None in
+  let pos_mix = (pr_if po ", /") ^ (pr_if (po && (mx||va||ko||ka)) ", ") in
   let var = match s.vararg with None -> "" | Some id -> Ident.show id in
-  let arg_kw = (pr_if (ar && (va || ko)) ", ") ^ (pr_if (va || ko) "*") ^ var
-               ^ (pr_if ko ", ") in
-  let kwo_kwa = pr_if (ka && (ko || va || ar)) ", " in
+  let mix_kwd = (pr_if (mx && (va || ko)) ", ") ^ (pr_if (va || ko) "*") ^ var
+                ^ (pr_if ko ", ") in
+  let kwo_kwa = pr_if (ka && (ko || va || mx)) ", " in
   let kwarg =
-    match s.kwarg with None -> "" | Some id -> "**" ^ Ident.(show id) in
+    match s.kwdarg with None -> "" | Some id -> "**" ^ Ident.(show id) in
   let pp_list_i_eo =
     Printing.pp_list ~sep:"," (fun fmt (i,(e:expr option)) ->
         fprintf fmt "%s%s%a" Ident.(show i) (if e = None then "" else "=")
           (pp_print_option pp_expr) e) in
   fprintf fmt "@[(%a%s%a%s%a%s%s)@]"
     pp_list_i_eo s.posonly
-    pos_arg
-    pp_list_i_eo s.args
-    arg_kw
-    pp_list_i_eo s.kwonly
+    pos_mix
+    pp_list_i_eo s.mixed
+    mix_kwd
+    pp_list_i_eo s.kwdonly
     kwo_kwa
     kwarg
-and pp_params fmt {pos;kw} =
+and pp_params fmt {pos;kwd} =
   let open Format in
   let open Printing in
   fprintf fmt "@[(%a%s%a)@]"
     (pp_list ~sep:"," pp_expr) pos
-    (if pos<>[] && kw<>[] then ", " else "")
+    (if pos<>[] && kwd<>[] then ", " else "")
     (pp_list ~sep:"," (fun fmt (k,e) ->
-         fprintf fmt "@[%a=%a@]" pp_print_string k pp_expr e)) kw
+         fprintf fmt "@[%a=%a@]" pp_print_string k pp_expr e)) kwd
 
 let rec pp_instr' fmt instr' : unit =
   let open Format in
-  let pp_instr_list il =
-    pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr il in
   match instr' with
   | Block il ->
-    if il = []
-    then fprintf fmt "@[pass # Empty block@]"
-    else fprintf fmt
-        (if Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
-        pp_instr_list il
+     if il = []
+     then fprintf fmt "@[pass # Empty block@]"
+     else fprintf fmt
+            (if Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
+            pp_instr_list il
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]"
                       (pp_ident) x pp_expr e
   | FunDef (i,s,b) -> fprintf fmt "@[<hov 2>def %a%a:@\n%a@]"
@@ -265,7 +262,7 @@ let rec pp_instr' fmt instr' : unit =
   | Break -> fprintf fmt "break@\n"
   | Continue -> fprintf fmt "continue@\n"
 and pp_instr fmt (_,instr') = pp_instr' fmt instr'
+and pp_instr_list il =
+  Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr il)
 
-let pp_prog prog =
-  Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n")
-            pp_instr prog)
+let pp_prog = pp_instr_list

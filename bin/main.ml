@@ -11,8 +11,8 @@ let input_file = ref None
 let shadowing = ref false
 (** Allow shadowing in toplevel. **)
 
-let add_input_file s = 
-  match !input_file with 
+let add_input_file s =
+  match !input_file with
   | None -> input_file := (Some s)
   | Some _ -> raise (Arg.Bad "multiple files provided")
 
@@ -68,7 +68,8 @@ let main () =
     dbg_pr "pysem ast" "%a" Ast.pp_prog p;
 
     let ml = Prog.to_ml p in
-    dbg_pr "mlsem ast" "%a" (pp_print_list ~pp_sep:pp_print_newline pp_ml_top) ml;
+    dbg_pr "mlsem ast" "%a"
+      (pp_print_list ~pp_sep:pp_print_newline pp_ml_top) ml;
 
     let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
 
@@ -82,7 +83,7 @@ let main () =
         raise (MSC.Untypeable err)
     in
     dbg_pr "reconstruction environement" "";
-    names 
+    names
     |> List.rev
     |> List.iter (fun v ->
         let s = MC.Env.find v mce in
@@ -111,13 +112,13 @@ let () =
     end
     else main () |> fst
   with
-  | Parsing.Syntax (file, e) -> 
+  | Parsing.Syntax (file, e) ->
     Format.eprintf "%s: %d:%d-%d:%d : %s@\n"
       file e.line e.column e.end_line e.end_column e.message;
     exit 3
   | Sys_error msg -> Format.eprintf "%s@\n" msg; exit 1
   | MSC.Untypeable _ -> exit 2 (* printed above *)
-  | e  -> 
+  | e ->
     Format.eprintf "ERROR: %s@\n%s@\n"
       (Printexc.to_string e)
       (Printexc.get_backtrace ());

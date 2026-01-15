@@ -3,13 +3,16 @@ open Aliases
 (* DEBUG *)
 
 let debug = match Sys.getenv_opt "PYSEM_DEBUG" with
-    None | Some "true" -> true
+  | None | Some "true" -> true
   | _ -> false
 and export = true
 
+
 (* STRINGS *)
-let is_internal = String.starts_with ~prefix:"%%"
-let internal s = "%%" ^ s
+
+let internal_prefix = "%%"
+let is_internal = String.starts_with ~prefix:internal_prefix
+let internal s = internal_prefix ^ s
 let strip_internal s =
   assert (is_internal s);
   String.sub s 2 (String.length s - 2)
@@ -21,6 +24,7 @@ let ml_fun_arg_name = mk_id "fun_arg"
 let ml_fun_packed_name = mk_id "fun_packed"
 let ml_fun_darg_name = mk_id "def_arg"
 let def_var_name k = mk_id "d_%s" k
+
 
 (* MAKE TYPES *)
 
@@ -34,7 +38,6 @@ let mk_rec_disj opn (fbt_ll:(string * (bool * MT.Ty.t)) list list) =
 let ty_of_int i =
   let z = Z.of_int i in
   MT.Ty.interval (Some z) (Some z)
-
 
 (* MAKE Lang.Ast *)
 
@@ -50,13 +53,11 @@ and var_of_vart pos v = Var v |> ml_annot pos
 
 let mk_enum pos e =
   MLAst.Constructor (MSAst.Enum e, []) |> ml_annot pos
-
 let mk_tag pos t e =
   MLAst.Constructor (MSAst.Tag t, [e]) |> ml_annot pos
 
 let mk_proj_tag pos t e =
   MLAst.Projection (MSAst.PiTag t, e) |> ml_annot pos
-
 let mk_proj_tuple pos n i e =
   MLAst.Projection (MSAst.Pi (n, i), e) |> ml_annot pos
 
@@ -109,18 +110,17 @@ let join_let_rev var_in last =
   List.fold_left (fun body (v,e) ->
       mk_let (fst e |> MC.Eid.loc) [] v e body) last var_in
 
-
-
 let count_if p l =
   List.fold_left (fun acc e -> if p e then acc + 1 else acc) 0 l
-
 
 (* PYRE UTILS *)
 
 let pos_converter filename text =
   let[@tail_mod_cons] rec loop i len =
-    if i >= len then []
-    else if text.[i] = '\n' then (i+1)::(loop (i+1) len)
+    if i >= len
+    then []
+    else if text.[i] = '\n'
+    then (i+1)::(loop (i+1) len)
     else loop (i+1) len
   in
   let bol = (0 :: loop 0 (String.length text)) |> Array.of_list in
@@ -139,5 +139,4 @@ let loc_converter filename text =
     MC.Position.(with_poss l1 l2 () |> position)
 
 let pp_py_expr fmt e =
-  Format.fprintf fmt "%a"
-    (Sexplib0.Sexp.pp) (PC.Expression.sexp_of_t e)
+  Format.fprintf fmt "%a" Sexplib0.Sexp.pp (PC.Expression.sexp_of_t e)

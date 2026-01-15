@@ -10,3 +10,5 @@ module MlMVar = Mlsem.Lang.MVariable
 module MLAst = Mlsem.Lang.Ast
 module MSAst = Mlsem.System.Ast
 module MlGTy = Mlsem.Types.GTy
+
+let fail msg = Format.kfprintf (fun _ -> assert false) Format.err_formatter msg

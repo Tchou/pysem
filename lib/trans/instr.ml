@@ -42,7 +42,7 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
        | l -> Some (mk_block l |> annot r.location) in
      If (test,thn,els) |> annot r.location
   (* | With | AsyncWith | Match | Raise | Try | TryStar | Assert | Import
-     | ImportFrom  *)
+     | ImportFrom *)
   | Global {location;_} | Nonlocal {location;_} | Pass {location}
     -> Block [] |> annot location (* or Expr.None ? *)
   | Expr r -> Iexpr (Expr.of_expression env r.value) |> annot r.location
