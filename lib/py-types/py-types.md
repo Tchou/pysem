@@ -121,11 +121,3 @@ inf <: Any <: sup
 ```
 where `inf` and `sup` are the lower and upper bound of the gradual type and
 `Any` is the gradual type (`?` in the literature of set-theoretic-types).
-
-
-
-
-
-
-
-
