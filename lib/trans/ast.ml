@@ -247,7 +247,7 @@ let rec pp_instr' fmt instr' : unit =
      if il = []
      then fprintf fmt "@[pass # Empty block@]"
      else fprintf fmt
-            (if Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
+            (if !Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
             pp_instr_list il
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]"
                       (pp_ident) x pp_expr e

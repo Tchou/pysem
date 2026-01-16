@@ -1,12 +1,19 @@
 open Aliases
 
-(* DEBUG *)
+(* VARIABLES *)
 
-let debug = match Sys.getenv_opt "PYSEM_DEBUG" with
-  | None | Some "true" -> true
-  | _ -> false
-and export = true
+let debug = ref false (** Show debug informations. *)
 
+and export = ref false (** Print code with legals characters. *)
+
+(* let shadowing = ref false (\** Allow shadowing in toplevel. *\) *)
+
+let user_vars =
+  [ debug , "PYSEM_DEBUG"
+  ; export, "PYSEM_EXPORT"
+  ] (** Configurable variables. *)
+
+let sh_values = [ "true",true ]
 
 (* STRINGS *)
 
@@ -18,13 +25,12 @@ let strip_internal s =
   String.sub s 2 (String.length s - 2)
 
 let mk_internal fmt = Format.kasprintf internal fmt
-let mk_id fmt = Format.kasprintf (fun s -> if export then s
+let mk_id fmt = Format.kasprintf (fun s -> if !export then s
                                    else internal s) fmt
 let ml_fun_arg_name = mk_id "fun_arg"
 let ml_fun_packed_name = mk_id "fun_packed"
 let ml_fun_darg_name = mk_id "def_arg"
 let def_var_name k = mk_id "d_%s" k
-
 
 (* MAKE TYPES *)
 

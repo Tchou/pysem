@@ -5,11 +5,20 @@ open Printing
 module MSC = MS.Checker
 module MTS = MT.TyScheme
 
+(* CLI *)
+
 let usage_message = Format.sprintf "%s <file.py>" Sys.argv.(0)
+
 let input_file = ref None
 
-let shadowing = ref false
-(** Allow shadowing in toplevel. **)
+let set_user_vars () =
+  Utils.user_vars
+  |> List.map (fun (ref_v, env_var) ->
+         Sys.getenv_opt env_var
+         |> Option.map (fun str ->
+                List.assoc_opt str Utils.sh_values
+                |> Option.map (fun v -> ref_v := v)))
+  |> ignore
 
 let add_input_file s =
   match !input_file with
@@ -17,6 +26,8 @@ let add_input_file s =
   | Some _ -> raise (Arg.Bad "multiple files provided")
 
 let options = Arg.align []
+
+(* TRANSLATE AND TYPE *)
 
 let ml_type mcenv ast =
   let annot = MS.Reconstruction.infer mcenv
@@ -27,10 +38,11 @@ let ml_type mcenv ast =
 let upd_env mce v ts =
   ( if MC.Env.mem v mce
     then
-      if !shadowing
-      then MC.Env.rm v mce
-      else failwith (Format.sprintf "Cannot add '%s' twice to environement!"
-                       (mlvar_show v))
+      (* if !Utils.shadowing *)
+      (* then MC.Env.rm v mce *)
+      (* else *)
+      failwith (Format.sprintf "Cannot add '%s' twice to environement!"
+                  (mlvar_show v))
     else mce )
   |> MC.Env.add v ts
 
@@ -49,6 +61,8 @@ let treat_def (tt, mce, lst) (v, ast) =
     (ms_of_us elapsed)
     MSAstPrinter.pp_t ast MTS.pp ts;
   tt +. elapsed, upd_env mce v ts, v::lst
+
+(* ENTRY POINT *)
 
 let main () =
   Arg.parse options add_input_file usage_message;
@@ -82,6 +96,7 @@ let main () =
             (Format.pp_print_option pp_print_string) err.descr;
           raise (MSC.Untypeable err)
      in
+
      pr "reconstruction environement"
        "%a@\n@{<yellow;italic>checked in %.2fms@}"
        (let nl = ref true in
@@ -93,7 +108,7 @@ let main () =
             then Format.fprintf fmt "@[<hov>%a: %a@]"
                    MlVar.pp v
                    Py_params.pp_py_scheme s
-            else if Utils.debug
+            else if !Utils.debug
             then Format.fprintf fmt "@[<hov>%a@]"
                    Printing.pp_ml_tys (v, s)
             else nl := false ))
@@ -102,9 +117,10 @@ let main () =
 
 let () =
   if Unix.isatty Unix.stdout then Colors.add_ansi_marking Format.std_formatter;
+  set_user_vars ();
   let main = MT.PEnv.(sequential_handler empty main) in
   try
-    if Utils.debug
+    if !Utils.debug
     then begin
         MT.Recording.start_recording ();
         main () |> fst;

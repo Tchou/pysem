@@ -12,7 +12,7 @@ let pr str =
   kfprintf pp_end std_formatter
 and dbg_pr str =
   let open Format in
-  if Utils.debug
+  if !Utils.debug
   then (
     pp_begin std_formatter;
     printf "@{<bold>@{<yellow>%s@}:@}@." str;
@@ -23,7 +23,7 @@ let pp_list ?(sep=";") =
   Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "%s@ "sep)
 let pp_nel str = function [] -> "" | _ -> str
 
-let mlvar_show = MlVar.(if Utils.debug && not Utils.export
+let mlvar_show = MlVar.(if !Utils.debug && not !Utils.export
                         then get_unique_name else show)
 
 module MSAstPrinter = struct
