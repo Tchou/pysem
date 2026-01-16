@@ -2,8 +2,12 @@
 opam-version: "2.0"
 synopsis: "A python type checker based on set-thoeoretic types (library)"
 description: "A python type checker based on set-thoeoretic types"
-maintainer: ["Kim Nguyễn <kn@lmf.cnrs.fr>"]
-authors: ["Kim Nguyễn <kn@lmf.cnrs.fr>"]
+maintainer: [
+  "Kim Nguyễn <kn@lmf.cnrs.fr>" "Philippe Volte--Vieira <pvv@lmf.cnrs.fr>"
+]
+authors: [
+  "Kim Nguyễn <kn@lmf.cnrs.fr>" "Philippe Volte--Vieira <pvv@lmf.cnrs.fr>"
+]
 license: "LICENSE"
 tags: [
   "python" "static types" "type-checking" "org:universite-paris-saclay.fr"
