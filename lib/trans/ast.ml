@@ -10,8 +10,8 @@ module Ident = struct
   type t = ident
   let show ({name;_}:ident) = Printing.mlvar_show name
   let pp fmt id = Format.fprintf fmt "%s" (show id)
-  let pp_pretty fmt id = Format.fprintf fmt "%s%s " (MlVar.get_unique_name id.name)
-      (Parsing.pretty_scope id.scope)
+  let pp_full fmt id = Format.fprintf fmt "%s(%s)" (MlVar.get_unique_name id.name)
+      (Parsing.show_scope id.scope)
   let external_name ({name; _}: ident) =
     match MlVar.get_name name with
       Some s -> s
@@ -43,7 +43,7 @@ struct
   let pp fmt s =
     Format.(pp_print_seq
               ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
-              Ident.pp_pretty fmt (to_seq s))
+              Ident.pp_full fmt (to_seq s))
 end
 let used_identifiers env bid =
   let open Parsing in
@@ -195,7 +195,7 @@ end
 (*  ***  Pretty-printers  ***  *)
 
 let pp_ident fmt id =
-  Format.fprintf fmt "%a" Ident.pp_pretty id
+  Format.fprintf fmt "%a" Ident.pp id
 let pp_binop fmt op =
   Format.fprintf fmt "%s"
     (match op with
@@ -231,7 +231,10 @@ let rec pp_expr' fmt =
     fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
   | Cst c -> pp_const fmt c
   | Lambda (x,idents, e) ->
+    let old_m = pp_get_margin fmt () in
+    pp_set_margin fmt pp_infinity;
     fprintf fmt "@[@[#idents: %a@]@\n" IdentSet.pp idents;
+    pp_set_margin fmt old_m;
     fprintf fmt "@[<hov 2>fun %a -> %a@]@]" pp_spec x pp_expr e
   | Apply (e,p) -> fprintf fmt "@[%a%a@]" pp_expr e pp_params p
   | Tuple el ->  Printing.pp_list  ~sep:"," pp_expr fmt el
