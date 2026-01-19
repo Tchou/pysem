@@ -24,10 +24,13 @@ let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
                      , of_expression env r.right) |> annot r.location
   (* | UnaryOp *)
   | Lambda r ->
-     let lenv = Parsing.BlockId.mk_lambda r.location
-                |> Env.upd env in
-     Lambda ( spec_of_arguments lenv r.args
-            , of_expression lenv r.body ) |> annot r.location
+    let bid =  Parsing.BlockId.mk_lambda r.location in
+    let lenv = Env.upd env bid in
+    let idents = Ast.used_identifiers lenv bid in
+
+    Lambda ( spec_of_arguments lenv r.args
+           , idents
+           , of_expression lenv r.body ) |> annot r.location
   (* | IfExp | Dict | Set | ListComp | SetComp | DictComp | GeneratorExp | Await
      | Yield | YieldFrom *)
   | Compare ({ops=[op];comparators=[right];_} as r) ->
@@ -154,8 +157,8 @@ and to_ml (p,e:expr) : MLAst.t = match e with
   | Binop (e1,bop,e2) ->
      mk_2app p (Binop.to_ml p bop) (to_ml e1) (to_ml e2)
   | Cst c -> mk_value p Const.(to_gty c)
-  | Lambda (args, body) ->
-     ml_lambda p args (to_ml body)
+  | Lambda (args, _idents, body) ->
+    ml_lambda p args (to_ml body)
   | Apply (e,params) ->
      let pos_e = List.map to_ml params.pos in
      let kw_e = List.map (fun (s, e) -> s, to_ml e) params.kwd in
