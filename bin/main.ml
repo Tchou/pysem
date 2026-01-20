@@ -87,14 +87,7 @@ let main () =
     let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
 
     (* MS.Config.infer_overload := false; *)
-    let tt, mce, names =
-      try List.fold_left treat_def (0.,MC.Env.empty, []) ms_exprs
-      with
-      | MSC.Untypeable err ->
-        Format.printf "@[<hov>%s:@\n@ @[<hov 2>%a@]@]" err.title
-          (Format.pp_print_option pp_print_string) err.descr;
-        raise (MSC.Untypeable err)
-    in
+    let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) ms_exprs in
 
     pr "reconstruction environement"
       "%a@\n@{<yellow;italic>checked in %.2fms@}"
@@ -133,7 +126,19 @@ let () =
       file e.line e.column e.end_line e.end_column e.message;
     exit 3
   | Sys_error msg -> Format.eprintf "%s@\n" msg; exit 1
-  | MSC.Untypeable _ -> exit 2 (* printed above *)
+  | MSC.Untypeable err ->
+    let pos = MC.Eid.loc err.eid in
+    let start_p = MC.Position.start_of_position pos in
+    let end_p = MC.Position.end_of_position pos in
+    let message = match err.descr with None -> "" | Some s -> " (" ^ s ^ ")" in
+    Format.eprintf "%s: %d:%d-%d:%d : %s%s@\n"
+      start_p.pos_fname
+      start_p.pos_lnum
+      (start_p.pos_cnum - start_p.pos_bol + 1)
+      end_p.pos_lnum
+      (end_p.pos_cnum - end_p.pos_bol + 1)
+      err.title message;
+    exit 2 (* printed above *)
   | e ->
     Format.eprintf "ERROR: %s@\n%s@\n"
       (Printexc.to_string e)

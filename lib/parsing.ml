@@ -344,6 +344,21 @@ let keyword ~location ~arg ~value =
   let* value in
   PyCo.Keyword.make_t ~location ?arg ~value ()
 
+let check_duplicate_keyword l =
+  let cmp (a : PyCo.Keyword.t) (b : PyCo.Keyword.t) =
+    Option.compare PyCo.Identifier.compare a.arg b.arg
+  in
+  let l = List.sort cmp l in
+  let rec loop l =
+    match l with
+      [ ] | [ _ ] -> ()
+    | a1 :: (a2 :: _ as ll) ->
+      if cmp a1 a2 = 0 then
+        raise_ ~locations:[a1.location;a2.location] (DuplicateArgument (Option.get a1.arg))
+      else loop ll
+  in
+  loop l
+
 let argument ~location ~identifier ~annotation ~type_comment =
   let* _init and*? annotation in
   PyCo.Argument.make_t ~location ~identifier ?annotation ?type_comment ()
@@ -433,6 +448,7 @@ let expression tbl =
   in
   let call ~location ~func ~args ~keywords =
     let* func and*@ args and*@ keywords in
+    check_duplicate_keyword keywords;
     make_call_of_t ~location ~func ~args ~keywords ()
   in
   let formatted_value ~location ~value ~conversion ~format_spec =
@@ -596,6 +612,7 @@ let statement tbl =
     and* body = compute_block_variables tbl location Class name (PyCo.Arguments.make_t()) body
     and*@ decorator_list
     and*@ type_params in
+    check_duplicate_keyword keywords;
     make_classdef_of_t ~location ~name ~bases ~keywords ~body ~decorator_list ~type_params ()
   in
   let return ~location ~value =

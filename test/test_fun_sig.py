@@ -72,3 +72,43 @@ def f5(f, y=42):
         return f
     else:
         return i
+
+def f (a=42,b=43,c=44):
+    return (a,b,c)
+f()
+f(a="a")
+f(b="b")
+f(c="c")
+f(a="a",b="b")
+f(a="a",c="c")
+f(b="b",a="a")
+f(b="b",c="c")
+f(c="c",a="a")
+f(c="c",b="b")
+f(a="a",b="b",c="c")
+f(a="a",c="b",b="c")
+f(b="b",a="a",c="c")
+f(b="b",c="c",a="a")
+f(c="c",a="a",b="b")
+f(c="c",b="b",a="a")
+f("a")
+f("a",b="b")
+f("a",c="c")
+f("a",b="b", c="c")
+f("a",c="c", b="b")
+f("a","b")
+f("a","b",c="c")
+f("a","b","c")
+
+# Failures
+# type error: too many positional arguments
+# f(1,2,3,4)
+# f(1,2,3,4,5)
+# type error: repeated parameters
+#f(1,a=2)
+# f(1,2, c=3, b=2)
+# type error: unknown keyword arguments
+# f(d=4)
+# f(1,2,3,x=9)
+# syntax error duplicate arguments are detected by the parser
+#f(a=1, a=2)
