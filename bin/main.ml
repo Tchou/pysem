@@ -30,7 +30,7 @@ let options = Arg.align []
 
 let ml_type mcenv ast =
   let annot = MS.Reconstruction.infer mcenv
-      (MS.Refinement.refinement_envs mcenv ast) ast in
+      (MS.Refinement.refinements mcenv ast) ast in
   MSC.typeof_def mcenv annot ast
   |> MTS.norm_and_simpl
 

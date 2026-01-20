@@ -36,8 +36,8 @@ module MSAstPrinter = struct
   let pp_projection fmt p =
     let open MSAst in
     match p with
-    | Field str -> pp_print_string fmt str
-    | FieldOpt str -> fprintf fmt "?%s" str
+    | PiField str -> pp_print_string fmt str
+    | PiFieldOpt str -> fprintf fmt "?%s" str
     | Pi (_,i) -> fprintf fmt "[%d]" i
     | _ -> pp_projection fmt p
   let pp_constructor = MSAst.pp_constructor
@@ -45,15 +45,15 @@ module MSAstPrinter = struct
   let pp_Constructor_arg fmt ((c:MSAst.constructor),tl) pp_t =
     match c with
     | Rec (sb_l,b) ->
-       fprintf fmt "@[<hov 2>{ %a%s }@]"
-         (pp_list (fun fmt ((f,opt),t) ->
-              fprintf fmt "@[%s :%s %a@]"
-                f (if opt then "?" else "") pp_t t))
-         (List.combine sb_l tl)
-         (if b then "; .." else "")
+      fprintf fmt "@[<hov 2>{ %a%s }@]"
+        (pp_list (fun fmt (f,t) ->
+             fprintf fmt "@[%s : %a@]"
+               f pp_t t))
+        (List.combine sb_l tl)
+        (if b then "; .." else "")
     | Tuple i ->
-       if List.length tl <> i then failwith "Wrong tuple constructor!"
-       else fprintf fmt "@[<hov 2>(%a)@]" (pp_list ~sep:"," pp_t) tl
+      if List.length tl <> i then failwith "Wrong tuple constructor!"
+      else fprintf fmt "@[<hov 2>(%a)@]" (pp_list ~sep:"," pp_t) tl
     | _ -> fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
 
   let rec pp_e (fmt:formatter) (e:MSAst.e) :unit =
@@ -62,33 +62,36 @@ module MSAstPrinter = struct
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
     | Constructor (c,tl) -> pp_Constructor_arg fmt (c,tl) pp_t
     | Lambda (gty,v,t) ->
-       fprintf fmt "@[<hov 2>fun %a@ : @[%a@] ->@ %a@]"
-         pp_variable v pp_gty gty pp_t t
+      fprintf fmt "@[<hov 2>fun %a@ : @[%a@] ->@ %a@]"
+        pp_variable v pp_gty gty pp_t t
     | LambdaRec l ->
-       pp_print_list
-         ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
-         (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ : @[%a@] ->@ %a@]"
-                                 pp_variable v pp_gty gty pp_t t)
-         fmt
-         l
+      pp_print_list
+        ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
+        (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ : @[%a@] ->@ %a@]"
+            pp_variable v pp_gty gty pp_t t)
+        fmt
+        l
     | Ite (test,ty,t1,t2) ->
-       fprintf fmt
-         "@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n"
-         pp_t test pp_ty ty pp_t t1;
-       fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
-                                | _ -> "@[<hov 2>else@ %a@]@ ")
-         pp_t t2
+      fprintf fmt
+        "@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n"
+        pp_t test pp_gty ty pp_t t1;
+      fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
+                               | _ -> "@[<hov 2>else@ %a@]@ ")
+        pp_t t2
     | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
     | Projection (p,t) -> fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
                             pp_t t pp_projection p
     | Let (tyl,v,t1,t2) ->
-       fprintf fmt "@[@[<hov 2>let %a%s@[%a@] =@ @[%a@]@ in@]@\n%a@]"
-         pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t1 pp_t t2
+      fprintf fmt "@[@[<hov 2>let %a%s@[%a@] =@ @[%a@]@ in@]@\n%a@]"
+        pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t1 pp_t t2
     | TypeCast (t,ty,_) ->
-       fprintf fmt "@[<hov 2>cast [%a]@ to @[%a@]@]" pp_t t pp_ty ty
+      fprintf fmt "@[<hov 2>cast [%a]@ to @[%a@]@]" pp_t t pp_gty ty
     | TypeCoerce (t,gty,_) ->
-       fprintf fmt "@[<hov 2>coerce [%a]@ to @[%a@]@]" pp_t t pp_gty gty
+      fprintf fmt "@[<hov 2>coerce [%a]@ to @[%a@]@]" pp_t t pp_gty gty
     | Alt (t1,t2) -> fprintf fmt "@[<hov 2>Alt(%a,@ %a)@]" pp_t t1 pp_t t2
+    | Operation (op, t) ->
+      fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
+        pp_t t pp_operation op
   and pp_t fmt (_,e) = pp_e fmt e
 end
 
@@ -99,13 +102,14 @@ module MLAstPrinter = struct
   let pp_variable = MSAstPrinter.pp_variable
   let pp_gty = MlGTy.pp
   let pp_ty = MT.Ty.pp
-  let pp_projection = MSAstPrinter.pp_projection
+  let pp_projection = SA.pp_projection
+  let pp_operation = SA.pp_operation
 
   let rec pp_pattern_constructor fmt pc : unit = match pc with
     | PCTuple i -> fprintf fmt "PTuple(%d)" i
     | PCCons -> fprintf fmt "PCCons"
     | PCRec (sl,b) ->
-       fprintf fmt "@[PCR(%a,%b)@]" (pp_list pp_print_string) sl b
+      fprintf fmt "@[PCR(%a,%b)@]" (pp_list pp_print_string) sl b
     | PCTag _ -> fprintf fmt "PCTag"
     | PCEnum _ -> fprintf fmt "PCEnum"
     | PCCustom _ -> fprintf fmt "PCCustom"
@@ -113,12 +117,12 @@ module MLAstPrinter = struct
     | PType _ -> fprintf fmt "PType"
     | PVar (_,v) -> fprintf fmt "@[%a@]" pp_variable v
     | PConstructor (pc,pl) ->
-       fprintf fmt "@[<hov 2>PCtor(%a;@ %a)@]"
-         pp_pattern_constructor pc (pp_list pp_pattern) pl
+      fprintf fmt "@[<hov 2>PCtor(%a;@ %a)@]"
+        pp_pattern_constructor pc (pp_list pp_pattern) pl
     | PAnd (p1,p2) ->
-       fprintf fmt "@[(%a) and (%a)@]" pp_pattern p1 pp_pattern p2
+      fprintf fmt "@[(%a) and (%a)@]" pp_pattern p1 pp_pattern p2
     | POr (p1,p2) ->
-       fprintf fmt "@[(%a) or (%a)@]" pp_pattern p1 pp_pattern p2
+      fprintf fmt "@[(%a) or (%a)@]" pp_pattern p1 pp_pattern p2
     | PAssign (_,v,gty) -> fprintf fmt "P(%a:=%a)" pp_variable v pp_gty gty
   and pp_e (fmt:formatter) (e:MLAst.e) :unit =
     match e with
@@ -131,40 +135,40 @@ module MLAstPrinter = struct
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
     | Constructor (c,tl) -> MSAstPrinter.pp_Constructor_arg fmt (c,tl) pp_t
     | Lambda (_,gty,v,t) ->
-       fprintf fmt "@[<hov 2>fun %a@ : @[%a@] ->@ %a@]"
-         pp_variable v pp_gty gty pp_t t
+      fprintf fmt "@[<hov 2>fun %a@ : @[%a@] ->@ %a@]"
+        pp_variable v pp_gty gty pp_t t
     | LambdaRec l ->
-       pp_print_list
-         ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
-         (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ : @[%a@] ->@ %a@]"
-                                 pp_variable v pp_gty gty pp_t t)
-         fmt
-         l
+      pp_print_list
+        ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
+        (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ : @[%a@] ->@ %a@]"
+            pp_variable v pp_gty gty pp_t t)
+        fmt
+        l
     | Ite (test,ty,t1,t2) ->
-       fprintf fmt
-         "@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n"
-         pp_t test pp_ty ty pp_t t1;
-       fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
-                                | _ -> "@[<hov 2>else@ %a@]@ ")
-         pp_t t2
+      fprintf fmt
+        "@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n"
+        pp_t test pp_gty ty pp_t t1;
+      fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
+                               | _ -> "@[<hov 2>else@ %a@]@ ")
+        pp_t t2
     | PatMatch (t,ptl) ->
-       fprintf fmt "@[match @[%a@]@ with@ | %a@]"
-         pp_t t (pp_print_list ~pp_sep:pp_print_nothing
-                   (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]"
-                                       pp_pattern p pp_t t)) ptl
+      fprintf fmt "@[match @[%a@]@ with@ | %a@]"
+        pp_t t (pp_print_list ~pp_sep:pp_print_nothing
+                  (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]"
+                      pp_pattern p pp_t t)) ptl
     | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
     | Projection (p,t) -> fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
                             pp_t t pp_projection p
     | Declare (v,t) ->
-       fprintf fmt "@[<hov 2>val mut %a =@ %a@]"
-         pp_variable v pp_t t
+      fprintf fmt "@[<hov 2>val mut %a =@ %a@]"
+        pp_variable v pp_t t
     | Let (tyl,v,t1,t2) ->
-       fprintf fmt "@[@[<hov 2>let %a%s@[%a@] =@ @[%a@]@ in@]@\n%a@]"
-         pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t1 pp_t t2
+      fprintf fmt "@[@[<hov 2>let %a%s@[%a@] =@ @[%a@]@ in@]@\n%a@]"
+        pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t1 pp_t t2
     | TypeCast (t,ty,_) ->
-       fprintf fmt "@[<hov 2>cast [%a]@ to @[%a@]@]" pp_t t pp_ty ty
+      fprintf fmt "@[<hov 2>cast [%a]@ to @[%a@]@]" pp_t t pp_gty ty
     | TypeCoerce (t,gty,_) ->
-       fprintf fmt "@[<hov 2>coerce [%a]@ to @[%a@]@]" pp_t t pp_gty gty
+      fprintf fmt "@[<hov 2>coerce [%a]@ to @[%a@]@]" pp_t t pp_gty gty
     | VarAssign (v,t) -> fprintf fmt "@[<hov 2>%a :=@ %a@]"
                            pp_variable v pp_t t
     | Loop t -> fprintf fmt "@[<hov 2>loop:@ %a@]" pp_t t
@@ -176,18 +180,21 @@ module MLAstPrinter = struct
     | Ret (_,ot) -> fprintf fmt "@[<hov 2>Ret:@ %a@]"
                       (pp_print_option pp_t) ot
     | If (test,ty,t,ot) ->
-       fprintf fmt
-         "@[@[<hov 2>if: %a is %a@]@\n@[<hov 2>then@ %a@]@\n\
-          @[<hov 2>else:@ %a@]@]@ "
-         pp_t test pp_ty ty pp_t t (pp_print_option pp_t) ot
+      fprintf fmt
+        "@[@[<hov 2>if: %a is %a@]@\n@[<hov 2>then@ %a@]@\n\
+         @[<hov 2>else:@ %a@]@]@ "
+        pp_t test pp_gty ty pp_t t (pp_print_option pp_t) ot
     | While (test,ty,body) ->
-       fprintf fmt "@[<hov 2>while @[%a@]@ isn't @[%a@] do@ %a@]"
-         pp_t test pp_ty ty pp_t body
+      fprintf fmt "@[<hov 2>while @[%a@]@ isn't @[%a@] do@ %a@]"
+        pp_t test pp_gty ty pp_t body
     | Return t -> fprintf fmt "@[<hov 2>return %a@]" pp_t t
     | Break -> fprintf fmt "break"
+    | Operation (op, t) ->
+      fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
+        pp_t t pp_operation op
+
   and pp_t fmt (_,e) = pp_e fmt e
 end
-
 module PAstPrinter = struct
   open Mlsem_app.PAst
   open Format
@@ -203,15 +210,15 @@ module PAstPrinter = struct
     | PatLit c -> fprintf fmt "@[%a@]" pp_const c
     | PatTag _ -> fprintf fmt "PTag"
     | PatAnd (p1,p2) ->
-       fprintf fmt "@[(%a) and (%a)@]" pp_pattern p1 pp_pattern p2
+      fprintf fmt "@[(%a) and (%a)@]" pp_pattern p1 pp_pattern p2
     | PatOr (p1,p2) ->
-       fprintf fmt "@[(%a) or (%a)@]" pp_pattern p1 pp_pattern p2
+      fprintf fmt "@[(%a) or (%a)@]" pp_pattern p1 pp_pattern p2
     | PatTuple l -> pp_list pp_pattern fmt l
     | PatCons _ -> fprintf fmt "PCons"
     | PatRecord (l,b) ->
-       (fprintf fmt "{@[%a@]%s}"
-          (pp_list pp_var_pattern) l
-          (if b then " .." else ""))
+      (fprintf fmt "{@[%a@]%s}"
+         (pp_list pp_var_pattern) l
+         (if b then " .." else ""))
     | PatAssign ((_,v),c) -> fprintf fmt "P(%s:=%a)" v pp_const c
   and pp_ast (fmt:formatter) (ast:('a,'b,'c,'d,'e) Mlsem_app.PAst.ast) :unit =
     match ast with
@@ -223,21 +230,21 @@ module PAstPrinter = struct
     | Suggest (v,_,t) -> fprintf fmt "@[<hov 2>Suggest %s:@ %a@]" v pp_t t
     | Lambda (v,_,t) -> fprintf fmt "@[<hov 2>fun %s ->@ %a@]" v pp_t t
     | LambdaRec l ->
-       pp_print_list
-         ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
-         (fun fmt (v,_,t) -> fprintf fmt "@[<hov 2>rfun %s ->@ %a@]" v pp_t t)
-         fmt
-         l
+      pp_print_list
+        ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
+        (fun fmt (v,_,t) -> fprintf fmt "@[<hov 2>rfun %s ->@ %a@]" v pp_t t)
+        fmt
+        l
     | Ite (test,_,t1,t2) ->
-       fprintf fmt
-         "@[<hov 2>if %a@]@\n@[<hov 2>then@ %a@]@\n"
-         pp_t test pp_t t1;
-       fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
-                                | _ -> "@[<hov 2>else@ %a@]@ ")
-         pp_t t2
+      fprintf fmt
+        "@[<hov 2>if %a@]@\n@[<hov 2>then@ %a@]@\n"
+        pp_t test pp_t t1;
+      fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
+                               | _ -> "@[<hov 2>else@ %a@]@ ")
+        pp_t t2
     | App (t1,t2) -> fprintf fmt "(@[%a@])@ (@[%a@])" pp_t t1 pp_t t2
     | Let ((_,v),t1,t2) ->
-       fprintf fmt "@[@[<hov 2>let %s =@ @[%a@]@ in@]@\n%a@]" v pp_t t1 pp_t t2
+      fprintf fmt "@[@[<hov 2>let %s =@ @[%a@]@ in@]@\n%a@]" v pp_t t1 pp_t t2
     | Tuple l -> fprintf fmt "@[(%a)@]"
                    (pp_list ~sep:"," pp_t)
                    l
@@ -245,20 +252,20 @@ module PAstPrinter = struct
     | Projection (p,t) -> fprintf fmt "@[<hov 2>proj(@[%a@],@ @[%a@])@]"
                             pp_projection p pp_t t
     | RecordUpdate (t,s,ot) ->
-       let none = fun _ _ -> () in
-       fprintf fmt "@[<hov 2>{upd %a@ %s@ %a}@]"
-         pp_t t s (pp_print_option none) ot
+      let none = fun _ _ -> () in
+      fprintf fmt "@[<hov 2>{upd %a@ %s@ %a}@]"
+        pp_t t s (pp_print_option none) ot
     | TypeCast (t,_,_) -> fprintf fmt "@[<hov 2>cast [%a]@]" pp_t t
     | TypeCoerce (t,_,_) -> fprintf fmt "@[<hov 2>coerce [%a]@]" pp_t t
     | PatMatch (t,ptl) ->
-       fprintf fmt "@[match @[%a@]@ with@\n| %a@]"
-         pp_t t (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "")
-                   (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]"
-                                       pp_pattern p pp_t t)) ptl
+      fprintf fmt "@[match @[%a@]@ with@\n| %a@]"
+        pp_t t (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "")
+                  (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]"
+                      pp_pattern p pp_t t)) ptl
     | Cond (_t1,_,_t2,_ot) -> fprintf fmt "Cond"
     | While (test,_,body) ->
-       fprintf fmt "@[<hov 2>while @[%a@]@ isn't false do@ %a@]"
-         pp_t test pp_t body
+      fprintf fmt "@[<hov 2>while @[%a@]@ isn't false do@ %a@]"
+        pp_t test pp_t body
     | Seq (t1,t2) -> fprintf fmt "@[<hov 2>Seq(%a,@ %a)@]" pp_t t1 pp_t t2
     | _ -> failwith "Not implemented (PAstPrinter)."
   and pp_t fmt (_,ast) = pp_ast fmt ast

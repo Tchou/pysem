@@ -34,11 +34,11 @@ let def_var_name k = mk_id "d_%s" k
 
 (* MAKE TYPES *)
 
-let mk_tv ?(k=MT.TVar.KInfer) str =
+let mk_tv ?(k=MT.KInfer) str =
   MT.TVar.(mk k (Some str) |> typ)
-let mk_rec_disj opn (fbt_ll:(string * (bool * MT.Ty.t)) list list) =
+let mk_rec_disj opn (fbt_ll:(string * (MT.Ty.t*bool)) list list) =
   let open MT in
-  List.map (MT.Record.mk opn) fbt_ll
+  List.map MT.Record.(if opn then mk_open else mk_closed) fbt_ll
   |> Ty.disj
 
 let ty_of_int i =
@@ -71,7 +71,7 @@ let mk_tuple pos l =
   MLAst.Constructor (MSAst.Tuple (List.length l), l) |> ml_annot pos
 let mk_record pos decl_l expr_l =
   MLAst.Constructor
-    ( MSAst.Rec (List.map (fun dec -> dec, false) decl_l, false)
+    ( MSAst.Rec (decl_l, false)
     , expr_l) |> ml_annot pos
 
 let mk_lambda pos ty gty id body =
@@ -104,10 +104,10 @@ let dummy_var_t () = mk_var_t dummy_var
 
 let mk_unit pos = mk_value pos (MlGTy.mk MT.Ty.unit)
 
-let mk_ite_rectest pos record field opn thn els =
+let mk_ite_rectest pos record field _opn thn els =
   mk_ite pos record
-    MT.(Record.mk opn
-          [ field, (false,MT.Ty.any) ])
+    MT.(Record.mk_open
+          [ field, (MT.Ty.any, false) ]|> GTy.mk)
     thn els
 
 let mk_2app pos f x y = mk_app pos (mk_app pos f x) y
