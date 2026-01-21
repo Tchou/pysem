@@ -1,3 +1,4 @@
+U = 42
 def f ():
     x = "toto"
     def u ():
@@ -22,4 +23,3 @@ def f ():
 
 f()
 print(U, V) #if f suceeds, U and V are defined to 3 and 45
-

@@ -4,14 +4,14 @@ type 'a annot = MC.Position.t * 'a
 
 type ident =
   { name : MlVar.t
-  ; scope : Parsing.scope }
+  ; info : Parsing.info }
 
 module Ident = struct
   type t = ident
   let show ({name;_}:ident) = Printing.mlvar_show name
   let pp fmt id = Format.fprintf fmt "%s" (show id)
   let pp_full fmt id = Format.fprintf fmt "%s(%s)" (MlVar.get_unique_name id.name)
-      (Parsing.show_scope id.scope)
+      (Parsing.show_scope id.info.scope)
   let external_name ({name; _}: ident) =
     match MlVar.get_name name with
     | Some s -> s
@@ -25,17 +25,17 @@ module Ident = struct
                   (PCI.to_string id)
                   (Parsing.show_block_kind env.current.kind)
                   env.current.name
-                |> failwith
+        |> failwith
       | Some vi -> vi
     in
     { name = v
-    ; scope = info.scope }
+    ; info }
 
   let of_argument env arg : ident =
     of_identifier env arg.PC.Argument.identifier
   let compare i1 i2 =
     let c = MlVar.compare i1.name i2.name in
-    if c <> 0 then c else compare i1.scope i2.scope
+    if c <> 0 then c else compare i1.info.scope i2.info.scope
 end
 module IdentSet =
 struct
@@ -64,7 +64,7 @@ type expr' =
   | Lambda of spec * IdentSet.t * expr
   | Apply of expr * params
   | Tuple of expr list
-(* | Projection of expr * expr (\* proj, value *\) *)
+  (* | Projection of expr * expr (\* proj, value *\) *)
 and expr = expr' annot
 and spec =
   { posonly : (ident * expr option) list
@@ -89,7 +89,7 @@ type instr' =
   | Break | Continue
 and instr = instr' annot
 
-type prog = instr list
+type prog = IdentSet.t * instr list
 
 let dannot : 'a -> 'a annot = fun x -> Utils.dummy_pos, x
 let env_annot env loc t = env.Env.to_loc loc, t
@@ -99,8 +99,8 @@ let used_identifiers env bid =
   let idents =
     IdentMap.fold
       (fun ident _ acc ->
-         let name, s = IdentMap.find ident env.vars in
-         IdentSet.add ({name; scope=s.scope}) acc)
+         let name, info = IdentMap.find ident env.vars in
+         IdentSet.add ({name; info}) acc)
       infos.identifiers IdentSet.empty
   in
   idents
@@ -121,12 +121,12 @@ module Const = struct
   let to_gty c : MlGTy.t =
     let open Mlsem.Types in
     GTy.mk (match c with
-            | None_ -> failwith "Ty.None"
-            (* | Ellipsis -> failwith "Ty.Ellipsis" *)
-            | Bool b -> if b then Ty.tt else Ty.ff
-            | Int i -> Utils.ty_of_int i
-            (* | Float _ -> Ty.float (\* !! TODO !! *\) *)
-            | String _ -> Ty.string )
+        | None_ -> failwith "Ty.None"
+        (* | Ellipsis -> failwith "Ty.Ellipsis" *)
+        | Bool b -> if b then Ty.tt else Ty.ff
+        | Int i -> Utils.ty_of_int i
+        (* | Float _ -> Ty.float (\* !! TODO !! *\) *)
+        | String _ -> Ty.string )
 end
 
 module Binop = struct
@@ -163,7 +163,7 @@ module Binop = struct
     and int_cmp = MT.(Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.bool))
     and bool_op = MT.(Arrow.mk Ty.bool (Arrow.mk Ty.bool Ty.bool))
     and pol_cmp _ = let tv = mk_tv "bop_tv" in
-                    MT.(Arrow.mk tv    (Arrow.mk tv      Ty.bool)) in
+      MT.(Arrow.mk tv    (Arrow.mk tv      Ty.bool)) in
     let strkey, ty = match op with
       | Add -> "+", int_op
       | Sub -> "-", int_op
@@ -221,6 +221,10 @@ let pp_const fmt = function
   (* | Float f -> Format.fprintf fmt "%.2f" f *)
   | String s -> Format.fprintf fmt "@[\"%s\"@]" s
 
+let pp_indent_info fmt idents =
+  let open Format in
+  fprintf fmt "@[#idents: %a@]@\n" IdentSet.pp idents
+
 let rec pp_expr' fmt =
   let open Format in
   function
@@ -229,11 +233,9 @@ let rec pp_expr' fmt =
     fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
   | Cst c -> pp_const fmt c
   | Lambda (x,idents, e) ->
-    let old_m = pp_get_margin fmt () in
-    pp_set_margin fmt pp_infinity;
-    fprintf fmt "@[@[#idents: %a@]@\n" IdentSet.pp idents;
-    pp_set_margin fmt old_m;
-    fprintf fmt "@[<hov 2>fun %a -> %a@]@]" pp_spec x pp_expr e
+    fprintf fmt "%a@[<hov 2>fun %a -> %a@]" 
+      pp_indent_info idents
+      pp_spec x pp_expr e
   | Apply (e,p) -> fprintf fmt "@[%a%a@]" pp_expr e pp_params p
   | Tuple el ->  Printing.pp_list  ~sep:"," pp_expr fmt el
 (*| Projection (p,e) -> Format.fprintf fmt "@[%a[%a]@]" pp_expr e pp_expr p *)
@@ -275,16 +277,16 @@ let rec pp_instr' fmt instr' : unit =
   let open Format in
   match instr' with
   | Block il ->
-     if il = []
-     then fprintf fmt "@[pass # Empty block@]"
-     else fprintf fmt
-            (if !Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
-            pp_instr_list il
+    if il = []
+    then fprintf fmt "@[pass # Empty block@]"
+    else fprintf fmt
+        (if !Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
+        pp_instr_list il
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]"
                       (pp_ident) x pp_expr e
   | FunDef (i,s,idents, b) ->
-    fprintf fmt "@[@[#idents: %a@]@\n" IdentSet.pp idents;
-    fprintf fmt "@[<hov 2>def %a%a:@\n%a@]@]"
+    fprintf fmt "%a@[<hov 2>def %a%a:@\n%a@]"
+      pp_indent_info idents
       pp_ident i pp_spec s pp_instr b
   | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i
   | If (e,i,io) -> fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"
@@ -298,4 +300,7 @@ and pp_instr fmt (_,instr') = pp_instr' fmt instr'
 and pp_instr_list il =
   Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr il)
 
-let pp_prog = pp_instr_list
+let pp_prog fmt (globals, il) =
+  assert (not (IdentSet.is_empty globals)); 
+  Format.fprintf fmt "%a%a" pp_indent_info globals
+  pp_instr_list il

@@ -84,7 +84,7 @@ let pretty_scope = function
   | Local | Parameter -> "Ⓛ"
   | Nonlocal -> "Ⓝ"
   | Global -> "Ⓖ"
-  | _ -> assert false
+  | Unknown -> assert false
 
 type context = { del : bool; load : bool; store : bool; }
 let default_context = { del = false; load = false; store = false }
@@ -821,14 +821,20 @@ let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
         acc_b@l) (r_vars, []) bids
   in
   BidTable.replace tbl.blocks bid (r_vars, bids);
+  Format.eprintf "FOR : %s, found %a@\n%!"
+    (PyCo.Identifier.to_string bid.name)
+    pp_vars
+    (IdentMap.to_list r_vars)
+  ;
   IdentMap.filter (fun _ i -> i.scope = Global) r_vars,
-  {name = PyCo.Identifier.to_string bid.BlockId.name;
-   filename = tbl.filename;
-   location = bid.BlockId.location;
-   kind = bid.BlockId.kind;
-   identifiers = r_vars;
-   defines = List.map (fun bid ->
-       BlockId.(PyCo.Identifier.to_string bid.name, bid.location, bid.kind)) bids;
+  {
+    name = PyCo.Identifier.to_string bid.BlockId.name;
+    filename = tbl.filename;
+    location = bid.BlockId.location;
+    kind = bid.BlockId.kind;
+    identifiers = r_vars;
+    defines = List.map (fun bid ->
+        BlockId.(PyCo.Identifier.to_string bid.name, bid.location, bid.kind)) bids;
   } :: child_bids
 
 let module_gen (tbl:env) ~body ~type_ignores =

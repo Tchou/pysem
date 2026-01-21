@@ -6,6 +6,7 @@ type t =
   ; infos : block_info BidTable.t
   ; filename : string
   ; vars : (MlVar.t * info) IdentMap.t
+  ; module_id : BlockId.t
   ; to_loc : Utils.loc_converter }
 
 let init globals bil to_loc =
@@ -17,7 +18,8 @@ let init globals bil to_loc =
       | Module -> filename := name
       | _ -> ()
     ) bil;
-  let current = BidTable.find infos (BlockId.mk_module !filename Parsing.dummy_loc) in
+  let module_id = BlockId.mk_module !filename Parsing.dummy_loc in
+  let current = BidTable.find infos module_id in
   { current
   ; infos
   ; filename = !filename
@@ -30,6 +32,7 @@ let init globals bil to_loc =
              vmap )
         globals
         IdentMap.empty
+  ; module_id
   ; to_loc }
 
 let upd env bi =
