@@ -193,7 +193,7 @@ end
 (*  ***  Pretty-printers  ***  *)
 
 let pp_ident fmt id =
-  Format.fprintf fmt "%a" Ident.pp id
+  Format.fprintf fmt "%a" Ident.pp_full id
 let pp_binop fmt op =
   Format.fprintf fmt "%s"
     (match op with

@@ -796,15 +796,15 @@ let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
         if scope = Nonlocal && IdentSet.mem var enclosing then
           Some { infos with scope = Nonlocal }
         else
+          let infos = { infos with scope = Global } in
           let () = tbl.globals <- IdentMap.add var infos tbl.globals in
-          Some { infos with scope = Global }
+          Some infos
       | Global ->
         let () = tbl.globals <- IdentMap.add var infos tbl.globals in
         Some infos
-      | _ ->  Some infos
+      | (Nonlocal|Local|Parameter) ->  Some infos
     ) vars
   in
-  BidTable.replace tbl.blocks bid (r_vars, bids);
   let nscope, nenclosing = match bid.kind with
       Module -> Global, enclosing
     | Fun|AsyncFun|Lambda ->
@@ -814,6 +814,14 @@ let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
         r_vars enclosing
     | Class -> scope, enclosing
   in
+  let r_vars, child_bids =
+    List.fold_left (fun (acc_g, acc_b) cbid ->
+        let g, l = resolve_unknown_scope nenclosing nscope tbl cbid in
+        IdentMap.union (fun k i1 i2 -> Some (merge_info k i1 i2)) g acc_g,
+        acc_b@l) (r_vars, []) bids
+  in
+  BidTable.replace tbl.blocks bid (r_vars, bids);
+  IdentMap.filter (fun _ i -> i.scope = Global) r_vars,
   {name = PyCo.Identifier.to_string bid.BlockId.name;
    filename = tbl.filename;
    location = bid.BlockId.location;
@@ -821,8 +829,7 @@ let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
    identifiers = r_vars;
    defines = List.map (fun bid ->
        BlockId.(PyCo.Identifier.to_string bid.name, bid.location, bid.kind)) bids;
-  } :: List.concat_map (resolve_unknown_scope nenclosing nscope tbl) bids
-
+  } :: child_bids
 
 let module_gen (tbl:env) ~body ~type_ignores =
   let module_name = PyCo.Identifier.make_t tbl.filename () in
@@ -834,7 +841,7 @@ let module_gen (tbl:env) ~body ~type_ignores =
 let module_ (tbl:env) ~body ~type_ignores =
   let m, v, i = module_gen tbl ~body ~type_ignores in
   assert (IdentMap.cardinal v = 1 && List.compare_length_with i 1 = 0); (* The module name *)
-  m,resolve_unknown_scope IdentSet.empty Global tbl (List.hd i)
+  m,(resolve_unknown_scope IdentSet.empty Global tbl (List.hd i) |> snd)
 
 (* after we are done, any remaining variable that has scope Local is changed
    to Global (it is "local" to the module) and any free variable that remains should raise an error.
