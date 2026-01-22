@@ -83,7 +83,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
   (* Expr.to_ml e |> mk_varassign p x.name |> no_var *)
   | While _ -> failwith "TODO while"
   | If (e,i,io) ->
-    mk_ite p (Expr.to_ml e) MT.Ty.tt
+    mk_ite p (Expr.to_ml e) (MT.Ty.tt |> MT.GTy.mk)
       (to_ml i |> snd)
       (match io with None -> mk_unit p | Some i -> to_ml i |> snd)
     |> no_var
