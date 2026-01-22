@@ -72,6 +72,9 @@ let raise_ ?(locations=[]) e = raise (Error (e, locations))
 type scope =
     Local | Parameter | Nonlocal | Global | Unknown
 
+let is_local_scope = function
+    Parameter | Local -> true
+  | _ -> false
 
 let show_scope = function
     Local -> "local"
@@ -731,10 +734,13 @@ let function_type ~argtypes ~returns =
 (* Modules are the entrypoint of parsing *)
 type block_info = {
   name : string;
+  id : int;
   filename : string;
   location : PyCo.Location.t;
   kind : block_kind;
   identifiers : info IdentMap.t;
+  locals : IdentSet.t;
+  nonlocals : (int * IdentSet.t) list;
   defines : (string * PyCo.Location.t * block_kind) list
 }
 let pp_loc fmt (loc : PyCo.Location.t) =
@@ -781,11 +787,19 @@ let pp_block_info fmt bi =
   pp_print_list ~pp_sep:pp_print_space pp_defines fmt bi.defines;
   fprintf fmt "@]@]@\n--"
 
-let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
+let scope_id =
+  let s = ref ~-1 in
+  fun () -> incr s; !s
+
+let mem_stack ident stack =
+  List.exists (fun (_, set) -> IdentSet.mem ident set) stack
+
+let rec resolve_unknown_scope scope stack (tbl : env) bid =
+  let id = scope_id () in
   let vars, bids = BidTable.find tbl.blocks bid in
   let r_vars = IdentMap.filter_map (fun var infos ->
       match infos.scope with
-      | Nonlocal when not (IdentSet.mem var enclosing) ->
+      | Nonlocal when not (mem_stack var stack) ->
         raise_ ~locations:infos.locations (UnboundNonlocal var)
       | (Global|Nonlocal) when not infos.context.load &&
                                not infos.context.store &&
@@ -793,7 +807,7 @@ let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
       (* variable where referenced in nonlocal or global but never used *)
 
       | Unknown ->
-        if scope = Nonlocal && IdentSet.mem var enclosing then
+        if scope = Nonlocal && mem_stack var stack then
           Some { infos with scope = Nonlocal }
         else
           let infos = { infos with scope = Global } in
@@ -805,34 +819,32 @@ let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
       | (Nonlocal|Local|Parameter) ->  Some infos
     ) vars
   in
-  let nscope, nenclosing = match bid.kind with
-      Module -> Global, enclosing
-    | Fun|AsyncFun|Lambda ->
-      Nonlocal,
-      IdentMap.fold (fun var infos acc ->
-          if infos.scope = Local then IdentSet.add var acc else acc)
-        r_vars enclosing
-    | Class -> scope, enclosing
+  let locals = IdentMap.fold (fun id info acc ->
+      if is_local_scope info.scope then IdentSet.add id acc else acc
+    )  r_vars IdentSet.empty
+  in
+  let nscope, nstack = match bid.kind with
+      Module -> Global, stack
+    | Fun|AsyncFun|Lambda -> Nonlocal, (id,locals)::stack
+    | Class -> scope, stack
   in
   let r_vars, child_bids =
     List.fold_left (fun (acc_g, acc_b) cbid ->
-        let g, l = resolve_unknown_scope nenclosing nscope tbl cbid in
+        let g, l = resolve_unknown_scope nscope nstack tbl cbid in
         IdentMap.union (fun k i1 i2 -> Some (merge_info k i1 i2)) g acc_g,
         acc_b@l) (r_vars, []) bids
   in
   BidTable.replace tbl.blocks bid (r_vars, bids);
-  Format.eprintf "FOR : %s, found %a@\n%!"
-    (PyCo.Identifier.to_string bid.name)
-    pp_vars
-    (IdentMap.to_list r_vars)
-  ;
   IdentMap.filter (fun _ i -> i.scope = Global) r_vars,
   {
     name = PyCo.Identifier.to_string bid.BlockId.name;
+    id;
     filename = tbl.filename;
     location = bid.BlockId.location;
     kind = bid.BlockId.kind;
     identifiers = r_vars;
+    locals;
+    nonlocals = stack;
     defines = List.map (fun bid ->
         BlockId.(PyCo.Identifier.to_string bid.name, bid.location, bid.kind)) bids;
   } :: child_bids
@@ -847,7 +859,7 @@ let module_gen (tbl:env) ~body ~type_ignores =
 let module_ (tbl:env) ~body ~type_ignores =
   let m, v, i = module_gen tbl ~body ~type_ignores in
   assert (IdentMap.cardinal v = 1 && List.compare_length_with i 1 = 0); (* The module name *)
-  m,(resolve_unknown_scope IdentSet.empty Global tbl (List.hd i) |> snd)
+  m,(resolve_unknown_scope Global [] tbl (List.hd i) |> snd)
 
 (* after we are done, any remaining variable that has scope Local is changed
    to Global (it is "local" to the module) and any free variable that remains should raise an error.

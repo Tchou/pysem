@@ -5,7 +5,7 @@ type t =
   { current : block_info
   ; infos : block_info BidTable.t
   ; filename : string
-  ; vars : (MlVar.t * info) IdentMap.t
+  ; vars : (MlVar.t * info * int) IdentMap.t
   ; module_id : BlockId.t
   ; to_loc : Utils.loc_converter }
 
@@ -28,27 +28,39 @@ let init globals bil to_loc =
            IdentMap.add
              ident
              ( Utils.mk_var_t ~kind:MlMVar.Immut (PCI.to_string ident)
-             , info )
+             , info
+             , current.id )
              vmap )
         globals
         IdentMap.empty
   ; module_id
   ; to_loc }
 
+let find_scope py_ident nonlocals =
+  match List.find_opt (fun (_ , set) ->
+      Parsing.IdentSet.mem py_ident set
+    ) nonlocals
+  with
+    None -> 0
+  | Some (l, _) -> l
 let upd env bi =
   let open Parsing in
   let current = BidTable.find env.infos bi in
   let vars =
     IdentMap.fold
-      ( fun py_ident py_info vmap ->
-          IdentMap.add py_ident
-            ( begin match py_info.scope with
-                | Local | Parameter ->
-                  Utils.mk_var_t ~kind:MlMVar.Mut (PCI.to_string py_ident)
-                | Nonlocal | Global -> IdentMap.find py_ident env.vars |> fst
-                | Unknown -> assert false
-              end
-            , py_info)
-            vmap)
+      (fun py_ident py_info vmap ->
+         IdentMap.add py_ident
+           (match py_info.scope with
+            | Local | Parameter ->
+              Utils.mk_var_t ~kind:MlMVar.Mut (PCI.to_string py_ident),
+              py_info,
+              current.id
+            | Nonlocal | Global ->
+              IdentMap.find py_ident env.vars |> (fun (x,_,_) -> x),
+              py_info,
+              find_scope py_ident current.nonlocals
+            | Unknown -> assert false
+           )
+           vmap)
       current.identifiers env.vars in
   { env with current; vars }

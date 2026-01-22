@@ -14,10 +14,11 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
     let spec = Expr.spec_of_arguments fenv r.args in
     let body = mk_block (List.map (of_statement fenv) r.body)
                |> annot r.location in
-    let idents = Ast.used_identifiers fenv bid in
+    let idents, scope_id = Ast.used_identifiers fenv bid in
     FunDef ( Ident.of_identifier env r.name
            , spec
            , idents
+           , scope_id
            , body )
     |> annot r.location
   (* | AsyncFunctionDef | ClassDef *)
@@ -73,7 +74,7 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
         let l, last = if is_dummy v then r,e else l,dummy_ml_ast in
         join_let_rev l last |> no_var
     end
-  | FunDef (f, args, _idents, body) ->
+  | FunDef (f, args, _idents,_scope_id, body) ->
     ( f.name
     , Expr.ml_lambda p args (to_ml body |> snd) )
   | Return eo ->

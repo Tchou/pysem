@@ -4,14 +4,15 @@ type 'a annot = MC.Position.t * 'a
 
 type ident =
   { name : MlVar.t
-  ; info : Parsing.info }
+  ; info : Parsing.info
+  ; scope_id : int }
 
 module Ident = struct
   type t = ident
   let show ({name;_}:ident) = Printing.mlvar_show name
   let pp fmt id = Format.fprintf fmt "%s" (show id)
-  let pp_full fmt id = Format.fprintf fmt "%s(%s)" (MlVar.get_unique_name id.name)
-      (Parsing.show_scope id.info.scope)
+  let pp_full fmt id = Format.fprintf fmt "%s%s @%d" (MlVar.get_unique_name id.name)
+      (Parsing.pretty_scope id.info.scope) id.scope_id
   let external_name ({name; _}: ident) =
     match MlVar.get_name name with
     | Some s -> s
@@ -20,16 +21,17 @@ module Ident = struct
   let of_identifier (env:Env.t) id : ident =
     let open Env in
     let open Parsing in
-    let v, info = match IdentMap.find_opt id env.vars with
+    let v, info, scope_id = match IdentMap.find_opt id env.vars with
       | None -> Format.sprintf "id %s not found in %s %s!"
                   (PCI.to_string id)
                   (Parsing.show_block_kind env.current.kind)
                   env.current.name
-        |> failwith
+                |> failwith
       | Some vi -> vi
     in
     { name = v
-    ; info }
+    ; info
+    ; scope_id }
 
   let of_argument env arg : ident =
     of_identifier env arg.PC.Argument.identifier
@@ -61,7 +63,7 @@ type expr' =
   | Var of ident
   | Binop of expr * binop * expr
   | Cst of const
-  | Lambda of spec * IdentSet.t * expr
+  | Lambda of spec * IdentSet.t * int * expr
   | Apply of expr * params
   | Tuple of expr list
   (* | Projection of expr * expr (\* proj, value *\) *)
@@ -80,7 +82,7 @@ type target = ident
 
 type instr' =
   | Block of instr list
-  | FunDef of ident * spec * IdentSet.t * instr
+  | FunDef of ident * spec * IdentSet.t * int * instr
   | Return of expr option
   | Assign of target * expr
   | While of expr * instr
@@ -94,16 +96,15 @@ type prog = IdentSet.t * instr list
 let dannot : 'a -> 'a annot = fun x -> Utils.dummy_pos, x
 let env_annot env loc t = env.Env.to_loc loc, t
 let used_identifiers env bid =
-  let open Parsing in
-  let infos =  BidTable.find env.Env.infos bid in
+  let infos =  Parsing.BidTable.find env.Env.infos bid in
   let idents =
-    IdentMap.fold
+    Parsing.IdentMap.fold
       (fun ident _ acc ->
-         let name, info = IdentMap.find ident env.vars in
-         IdentSet.add ({name; info}) acc)
+         let name, info, scope_id = Parsing.IdentMap.find ident env.vars in
+         IdentSet.add ({name; info; scope_id}) acc)
       infos.identifiers IdentSet.empty
   in
-  idents
+  idents, infos.id
 
 module Const = struct
   let of_constant (c:PC.Constant.t) : const = match c with
@@ -232,8 +233,9 @@ let rec pp_expr' fmt =
   | Binop (e1, b, e2) ->
     fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
   | Cst c -> pp_const fmt c
-  | Lambda (x,idents, e) ->
-    fprintf fmt "%a@[<hov 2>fun %a -> %a@]" 
+  | Lambda (x,idents,scope_id, e) ->
+    fprintf fmt "#scope %d:@\n%a@[<hov 2>fun %a -> %a@]"
+      scope_id
       pp_indent_info idents
       pp_spec x pp_expr e
   | Apply (e,p) -> fprintf fmt "@[%a%a@]" pp_expr e pp_params p
@@ -284,8 +286,9 @@ let rec pp_instr' fmt instr' : unit =
         pp_instr_list il
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]"
                       (pp_ident) x pp_expr e
-  | FunDef (i,s,idents, b) ->
-    fprintf fmt "%a@[<hov 2>def %a%a:@\n%a@]"
+  | FunDef (i,s,idents, scope_id, b) ->
+    fprintf fmt "#scope %d:@\n%a@[<hov 2>def %a%a:@\n%a@]"
+      scope_id
       pp_indent_info idents
       pp_ident i pp_spec s pp_instr b
   | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i
@@ -301,6 +304,6 @@ and pp_instr_list il =
   Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr il)
 
 let pp_prog fmt (globals, il) =
-  assert (not (IdentSet.is_empty globals)); 
+  assert (not (IdentSet.is_empty globals));
   Format.fprintf fmt "%a%a" pp_indent_info globals
-  pp_instr_list il
+    pp_instr_list il

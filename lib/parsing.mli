@@ -4,8 +4,10 @@ exception Syntax of string * PyreAst.Parser.Error.t
 (** Exception that encapsulate PyreAst errors as well as custom errors raised
     during variable analysis. *)
 
-module IdentMap : Map.S with type key = PyreAst.Concrete.Identifier.t
-(** Maps indexed by variable names *)
+module IdentSet : Set.S with type elt = PyreAst.Concrete.Identifier.t
+module IdentMap : Map.S with type key = IdentSet.elt
+
+(** Sets and Maps indexed by variable names *)
 
 type scope = Local | Parameter | Nonlocal | Global | Unknown
 (** The scope of an identifier *)
@@ -40,10 +42,13 @@ module BidTable : Hashtbl.S with type key = BlockId.t
 
 type block_info = {
   name : string;                 (** name: for a module, the filename, for a lambda the string ["<LAMBDA>"] *)
+  id : int;                      (** a unique identifier for the scope *)
   filename : string;             (** filename *)
   location : PyreAst.Concrete.Location.t;         (** location of the block in the file *)
   kind : block_kind;             (** the kind of the block *)
-  identifiers : info IdentMap.t; (** a map of identifers defined in the scope of the block *)
+  identifiers : info IdentMap.t; (** a map of identifers used in the scope of the block *)
+  locals : IdentSet.t;           (** local identifiers defined in this scope *)
+  nonlocals : (int * IdentSet.t) list; (** the stack of enclosing nonlocal scopes *)
   defines : (string * PyreAst.Concrete.Location.t * block_kind) list; (** name, location and kind of the blocks defined in this one. *)
 }
 (** Informations about blocks *)
@@ -67,9 +72,9 @@ val parse : file:string -> PyreAst.Concrete.Module.t * info IdentMap.t * block_i
     - [ast] is the concrete AST of the module defined written in [file]
     - [globals] is the set of global names referenced in the file with their information
     - [bil] is the list of all blocks, in pre-order traversal of the file. The [bil] list
-    starts with the block representing the module, followed by the first scoping construct
-    (class, function or lambda) itself followed by all its descendants, then the second
-    toplevel scoping construct etc…
+      starts with the block representing the module, followed by the first scoping construct
+      (class, function or lambda) itself followed by all its descendants, then the second
+      toplevel scoping construct etc…
     - [conv] is a conversion function from Pyre locations to MLsem
 
     @raise Syntax if a syntax error occurs.
