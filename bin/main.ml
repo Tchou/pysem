@@ -5,27 +5,6 @@ open Printing
 module MSC = MS.Checker
 module MTS = MT.TyScheme
 
-(* CLI *)
-
-let usage_message = Format.sprintf "%s <file.py>" Sys.argv.(0)
-
-let input_file = ref None
-
-let set_user_vars () =
-  Utils.user_vars
-  |> List.map (fun (ref_v, env_var) ->
-      Sys.getenv_opt env_var
-      |> Option.map (fun str ->
-          List.assoc_opt str Utils.sh_values
-          |> Option.map (fun v -> ref_v := v)))
-  |> ignore
-let add_input_file s =
-  match !input_file with
-  | None -> input_file := (Some s)
-  | Some _ -> raise (Arg.Bad "multiple files provided")
-
-let options = Arg.align []
-
 (* TRANSLATE AND TYPE *)
 
 let ml_type mcenv ast =
@@ -61,66 +40,91 @@ let treat_def (tt, mce, lst) (v, ast) =
     MSAstPrinter.pp_t ast MTS.pp ts;
   tt +. elapsed, upd_env mce v ts, v::lst
 
+let treat_file file =
+  let open Format in
+  let m, globals, bil, to_loc = Parsing.parse ~file in
+  (* dbg_pr "pyre-parsed expression" "%a" *)
+  (* Sexplib0.Sexp.pp_hum (PC.Module.sexp_of_t m); *)
+  (* pr "block_infos" "%a" *)
+  (* (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil; *)
+
+  let p = Prog.of_module (Env.init globals bil to_loc) m in
+  dbg_pr "pysem ast" "%a" Ast.pp_prog p;
+
+  let ml = Prog.to_ml p in
+  dbg_pr "mlsem ast" "%a"
+    (pp_print_list ~pp_sep:pp_print_newline pp_ml_top) ml;
+
+  let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
+
+  (* MS.Config.infer_overload := false; *)
+  let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) ms_exprs in
+
+  pr "reconstruction environement"
+    "%a@\n@{<yellow;italic>checked in %.2fms@}"
+    (let nl = ref true in
+     pp_print_list
+       ~pp_sep:(fun fmt _ -> if !nl then fprintf fmt "@\n"; nl := true)
+       ( fun fmt v ->
+           let s = MC.Env.find v mce in
+           if MlVar.show v |> Utils.is_internal |> not
+           then Format.fprintf fmt "@[<hov>%a: %a@]"
+               MlVar.pp v
+               Py_params.pp_py_scheme s
+           else if !Utils.debug
+           then Format.fprintf fmt "@[<hov>%a@]"
+               Printing.pp_ml_tys (v, s)
+           else nl := false ))
+    (List.rev names)
+    (ms_of_us tt)
+
+(* CLI *)
+
+let usage_message = Format.sprintf "%s <file.py>" Sys.argv.(0)
+
+let input_file = ref None
+
+let add_input_file s =
+  match !input_file with
+  | None -> input_file := (Some s)
+  | Some _ -> raise (Arg.Bad "multiple files provided")
+
+let options =
+  Arg.align
+    [ "-debug" , Arg.Set Utils.debug , " Print debug information"
+    ; "-export", Arg.Set Utils.export, " Print code without illegal characters" ]
+
+let set_env_vars () =
+  Utils.user_vars
+  |> List.iter (fun (ref_v, env_var) ->
+      Sys.getenv_opt env_var
+      |> Option.iter (fun str ->
+          List.assoc_opt str Utils.sh_values
+          |> Option.iter (fun v -> ref_v := v)))
+
 (* ENTRY POINT *)
 
 let main () =
+  set_env_vars ();
   Arg.parse options add_input_file usage_message;
   match !input_file with
   | None ->
     Format.eprintf "%s: missing file@\n%s" Sys.argv.(0)
       (Arg.usage_string options usage_message)
   | Some file ->
-    let open Format in
-    let m, globals, bil, to_loc = Parsing.parse ~file in
-    (* dbg_pr "pyre-parsed expression" "%a" *)
-    (* Sexplib0.Sexp.pp_hum (PC.Module.sexp_of_t m); *)
-    (* pr "block_infos" "%a" *)
-    (* (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil; *)
-
-    let p = Prog.of_module (Env.init globals bil to_loc) m in
-    dbg_pr "pysem ast" "%a" Ast.pp_prog p;
-
-    let ml = Prog.to_ml p in
-    dbg_pr "mlsem ast" "%a"
-      (pp_print_list ~pp_sep:pp_print_newline pp_ml_top) ml;
-
-    let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
-
-    (* MS.Config.infer_overload := false; *)
-    let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) ms_exprs in
-
-    pr "reconstruction environement"
-      "%a@\n@{<yellow;italic>checked in %.2fms@}"
-      (let nl = ref true in
-       pp_print_list
-         ~pp_sep:(fun fmt _ -> if !nl then fprintf fmt "@\n"; nl := true)
-         ( fun fmt v ->
-             let s = MC.Env.find v mce in
-             if MlVar.show v |> Utils.is_internal |> not
-             then Format.fprintf fmt "@[<hov>%a: %a@]"
-                 MlVar.pp v
-                 Py_params.pp_py_scheme s
-             else if !Utils.debug
-             then Format.fprintf fmt "@[<hov>%a@]"
-                 Printing.pp_ml_tys (v, s)
-             else nl := false ))
-      (List.rev names)
-      (ms_of_us tt)
-
-let () =
-  if Unix.isatty Unix.stdout then Colors.add_ansi_marking Format.std_formatter;
-  set_user_vars ();
-  let main = MT.PEnv.(sequential_handler empty main) in
-  try
+    let treat_file = MT.PEnv.(sequential_handler empty treat_file) in
     if !Utils.debug
     then begin
       MT.Recording.start_recording ();
-      main () |> fst;
+      treat_file file |> fst;
       MT.Recording.stop_recording ();
       MT.Recording.(tally_calls () |> save_to_file "tally_calls");
     end
-    else main () |> fst
-  with
+    else treat_file file |> fst
+
+let () =
+  if Unix.isatty Unix.stdout then Colors.add_ansi_marking Format.std_formatter;
+  try main () with
   | Parsing.Syntax (file, e) ->
     Format.eprintf "%s: %d:%d-%d:%d : %s@\n"
       file e.line e.column e.end_line e.end_column e.message;
