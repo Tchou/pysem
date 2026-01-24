@@ -231,11 +231,12 @@ let rec pp_expr' fmt =
   | Lambda (x,idents, e) ->
     let old_m = pp_get_margin fmt () in
     pp_set_margin fmt pp_infinity;
-    fprintf fmt "@[@[#idents: %a@]@\n" IdentSet.pp idents;
+    if !Utils.debug then fprintf fmt "@[@[#idents: %a@]@\n" IdentSet.pp idents;
     pp_set_margin fmt old_m;
     fprintf fmt "@[<hov 2>fun %a -> %a@]@]" pp_spec x pp_expr e
   | Apply (e,p) -> fprintf fmt "@[%a%a@]" pp_expr e pp_params p
-  | Tuple el ->  Printing.pp_list  ~sep:"," pp_expr fmt el
+  | Tuple el ->
+     fprintf fmt "@[<hov 1>(%a)@]" (Printing.pp_list  ~sep:"," pp_expr) el
 (*| Projection (p,e) -> Format.fprintf fmt "@[%a[%a]@]" pp_expr e pp_expr p *)
 and pp_expr fmt (_,e') = pp_expr' fmt e'
 and pp_spec fmt s =
@@ -254,7 +255,7 @@ and pp_spec fmt s =
     Printing.pp_list ~sep:"," (fun fmt (i,(e:expr option)) ->
         fprintf fmt "%s%s%a" Ident.(show i) (if e = None then "" else "=")
           (pp_print_option pp_expr) e) in
-  fprintf fmt "@[(%a%s%a%s%a%s%s)@]"
+  fprintf fmt "@[<hov 1>(%a%s@,%a%s@,%a%s@,%s)@]"
     pp_list_i_eo s.posonly
     pos_mix
     pp_list_i_eo s.mixed
@@ -283,7 +284,7 @@ let rec pp_instr' fmt instr' : unit =
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]"
                       (pp_ident) x pp_expr e
   | FunDef (i,s,idents, b) ->
-    fprintf fmt "@[@[#idents: %a@]@\n" IdentSet.pp idents;
+    if !Utils.debug then fprintf fmt "@[@[#idents: %a@]@\n" IdentSet.pp idents;
     fprintf fmt "@[<hov 2>def %a%a:@\n%a@]@]"
       pp_ident i pp_spec s pp_instr b
   | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i
@@ -292,10 +293,12 @@ let rec pp_instr' fmt instr' : unit =
   | Iexpr e -> pp_expr fmt e
   | Return eo -> fprintf fmt "@[<hov 2>return@ %a@]"
                    (pp_print_option pp_expr) eo
-  | Break -> fprintf fmt "break@\n"
-  | Continue -> fprintf fmt "continue@\n"
+  | Break -> fprintf fmt "break"
+  | Continue -> fprintf fmt "continue"
 and pp_instr fmt (_,instr') = pp_instr' fmt instr'
-and pp_instr_list il =
-  Format.(pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr il)
+and pp_instr_list fmt il =
+  Format.(fprintf fmt "%a@\n"
+            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr)
+            il)
 
 let pp_prog = pp_instr_list
