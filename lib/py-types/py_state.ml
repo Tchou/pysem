@@ -1,33 +1,27 @@
 open Aliases
 
 type res_kind = R | V
-
+type ident = Simple of MlVar.t
+           | Source of Ast.ident
 type expr' =
   | Const of Ast.const
-  | Var of Ast.ident
+  | Var of ident
   | Res of res_kind * expr
   | Proj of res_kind * expr
-  | IfNotRes of {cond:expr; v:MlVar.t; s:MlVar.t; body:expr}
+  | IfNotRes of {cond:expr; v:ident; s:ident; body:expr}
   | Ite of expr * expr * expr
   | Tuple of expr list
   | Pi of int * expr
   | EmptyRec
-  | RecUpdate of expr * Ast.ident * expr
-  | Field of expr * Ast.ident
-  | Lambda of Ast.ident * bool * expr (* true ⇒ synthetic *)
+  | RecUpdate of expr * ident * expr
+  | Field of expr * ident
+  | Lambda of ident * bool * expr (* true ⇒ synthetic *)
   | App of expr * expr
 and expr = MC.Position.t * expr'
 
-let mkvar () = MlVar.create None
-let var v = Ast.{name=v; scope=Parsing.Local}
-
-(*
-  IfNotRes e1 e2
-  <=>
-  match e1 with
-  | Tuple [Res (R, v); s] as r -> r
-  | Tuple [Res (V, v); s] -> e2 v s
- *)
+let mlvar = function 
+    Simple v -> v
+  | Source(Ast.{name; _ }) -> name
 
 let subst e s =
   let rec loop (pos, e) =
@@ -35,7 +29,7 @@ let subst e s =
   and loop_expr e =
     match e with
     | Var id -> 
-      begin match List.find (fun (v, _) -> MlVar.compare v id.name = 0) s with
+      begin match List.find (fun (v, _) -> MlVar.compare (mlvar v) (mlvar id) = 0) s with
           (_, e') -> snd e'
         | exception Not_found -> e
       end
@@ -52,9 +46,9 @@ let subst e s =
     | App (e1, e2) -> App (loop e1, loop e2)
   in loop e
 
-let rec find_field (_, e) (f:Ast.ident) =
+let rec find_field (_, e) (f:ident) =
   match e with
-    RecUpdate (e1, id, e2) -> if MlVar.equal id.name f.name then e2
+    RecUpdate (e1, id, e2) -> if MlVar.equal (mlvar id) (mlvar f) then e2
     else find_field e1 f
   | _ -> raise Not_found
 
@@ -92,6 +86,62 @@ let reduce e =
       let e1 = loop e1 in
       let e2 = loop e2 in
       match snd e1 with
-      | Lambda(id, true, e) -> snd (loop (subst e2 [id.name, e]))
+      | Lambda(id, true, e) -> snd (loop (subst e2 [id, e]))
       | _ -> App (e1, e2)
   in loop e
+
+let mk_ident () = Simple (MlVar.create None)
+let pair pos e1 e2 = 
+  pos, Tuple[e1; e2]
+
+let res pos k e =
+  pos, Res(k, e)
+
+let app pos e1 e2 =
+  pos, App(e1, e2)
+
+let const pos c =
+  let s = mk_ident () in
+  pos, Lambda (s, true, pair pos 
+                 (res pos V (pos, Const c)) 
+                 (pos, Var s) )
+
+let var_get pos id =
+  let s = mk_ident () in
+  pos, Lambda (s, true, pair pos 
+                 (res pos V (pos, Field ((pos, Var s), id))) 
+                 (pos, Var s))
+
+let return pos e =
+  let v = mk_ident () in
+  let s = mk_ident () in
+  let s0 = mk_ident () in
+  pos, IfNotRes{cond = app pos e (pos, Var s0);
+                v; s; 
+                body= 
+                  pair pos 
+                    (res pos R (pos, Var v))
+                    (pos, Var s) }
+
+let ite pos cond e1 e2 =
+  let s0 = mk_ident () in
+  let v = mk_ident () in
+  let s = mk_ident () in
+  let ps = pos, Var s in
+  pos, Lambda(s0, true, 
+              (pos, IfNotRes { cond = app pos cond (pos, Var s0); v; s;
+                               body = pos, Ite ((pos, Var v), app pos e1 ps,
+                                                app pos e2 ps)
+                             }))
+
+let seq pos e1 e2 =
+  let s0 = mk_ident () in
+  let v = mk_ident () in
+  let s = mk_ident () in
+  pos, Lambda(s0, true,
+              (pos, IfNotRes { 
+                  cond = app pos e1 (pos, Var s0); v; s;
+                  body = app pos e2 (pos, Var s);
+                }
+              )           )
+
