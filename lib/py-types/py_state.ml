@@ -45,6 +45,18 @@ let subst e s =
     | Lambda (id, b, e) ->  Lambda(id, b, loop e)
     | App (e1, e2) -> App (loop e1, loop e2)
   in loop e
+let is_simple e =
+  let rec loop (_, e) = loop_expr e
+  and loop_expr = function
+      Var _ | EmptyRec | Const _  |Lambda _ -> true
+    | Res (_, e) | Proj(_, e) | Pi (_ , e) | Field (e, _) -> loop e
+    | IfNotRes { cond; body; _ } -> loop cond && loop body
+    | Ite(e1, e2, e3) -> loop e1 && loop e2 && loop e3
+    | RecUpdate(e1, _, e2) -> loop e1 && loop e2
+    | Tuple l -> List.for_all loop l
+    | App _ -> false
+  in
+  loop e
 
 let rec find_field (_, e) (f:ident) =
   match e with
@@ -72,15 +84,17 @@ let reduce e =
     | Ite(e1, e2, e3) -> Ite(loop e1, loop e2, loop e3)
     | Tuple l -> Tuple (List.map loop l)
     | Pi (i, e) -> (match loop e with
-          _, Tuple l when List.length l > i -> snd (List.nth l i)
+          _, Tuple l when List.length l > i && List.for_all is_simple l -> snd (List.nth l i)
         | e' -> Pi(i, e')
       )
     | RecUpdate (e1, id, e2) -> RecUpdate(loop e1, id, loop e2)
     | Field (e, id) ->
       let e = loop e in
-      (match find_field e id with
-         e' -> snd e'
-       |exception Not_found -> snd e)
+      if is_simple e then
+        (match find_field e id with
+           e' -> snd e'
+         |exception Not_found -> snd e)
+      else snd e
     | Lambda (id, b, e) ->  Lambda(id, b, loop e)
     | App(e1, e2) ->
       let e1 = loop e1 in
@@ -100,6 +114,8 @@ let res pos k e =
 let app pos e1 e2 =
   pos, App(e1, e2)
 let none = Ast.Const.of_constant (PC.Constant.make_none_of_t ())
+
+(* Combinators *)
 let const pos c =
   let s = mk_ident () in
   pos, Lambda (s, true, pair pos
@@ -123,12 +139,13 @@ let return pos e =
   let v = mk_ident () in
   let s = mk_ident () in
   let s0 = mk_ident () in
-  pos, IfNotRes{cond = app pos e (pos, Var s0);
-                v; s;
-                body=
-                  pair pos
-                    (res pos R (pos, Var v))
-                    (pos, Var s) }
+  pos, Lambda(s0, true, (pos,
+                         IfNotRes{cond = app pos e (pos, Var s0);
+                                  v; s;
+                                  body=
+                                    pair pos
+                                      (res pos R (pos, Var v))
+                                      (pos, Var s) }))
 
 let ite pos cond e1 e2 =
   let s0 = mk_ident () in
@@ -179,15 +196,15 @@ let apply pos e1 e2 =
   let s1 = mk_ident () in
   let arg = mk_ident () in
   let s2 = mk_ident () in
-  pos, IfNotRes {
-    cond = app pos e1 (pos, Var s0);
-    v = f;
-    s = s1;
-    body =
-      pos, IfNotRes {
-        cond = app pos e2 (pos, Var s1);
-        v = arg;
-        s = s2;
-        body = app pos (app pos (pos, Var f) (pos, Var arg)) (pos, Var s2)
-      }
-  }
+  pos, Lambda(s0, true, (pos, IfNotRes {
+      cond = app pos e1 (pos, Var s0);
+      v = f;
+      s = s1;
+      body =
+        pos, IfNotRes {
+          cond = app pos e2 (pos, Var s1);
+          v = arg;
+          s = s2;
+          body = app pos (app pos (pos, Var f) (pos, Var arg)) (pos, Var s2)
+        }
+    }))
