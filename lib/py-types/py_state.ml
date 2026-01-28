@@ -19,7 +19,7 @@ type expr' =
   | App of expr * expr
 and expr = MC.Position.t * expr'
 
-let mlvar = function 
+let mlvar = function
     Simple v -> v
   | Source(Ast.{name; _ }) -> name
 
@@ -28,7 +28,7 @@ let subst e s =
     (pos, loop_expr e)
   and loop_expr e =
     match e with
-    | Var id -> 
+    | Var id ->
       begin match List.find (fun (v, _) -> MlVar.compare (mlvar v) (mlvar id) = 0) s with
           (_, e') -> snd e'
         | exception Not_found -> e
@@ -53,7 +53,7 @@ let rec find_field (_, e) (f:ident) =
   | _ -> raise Not_found
 
 let reduce e =
-  let rec loop (pos, e) = pos, loop_expr e 
+  let rec loop (pos, e) = pos, loop_expr e
   and loop_expr e =
     match e with
     | Const _ | Var _ | EmptyRec -> e
@@ -72,11 +72,11 @@ let reduce e =
     | Ite(e1, e2, e3) -> Ite(loop e1, loop e2, loop e3)
     | Tuple l -> Tuple (List.map loop l)
     | Pi (i, e) -> (match loop e with
-          _, Tuple l when List.length l > i -> snd (List.nth l i) 
+          _, Tuple l when List.length l > i -> snd (List.nth l i)
         | e' -> Pi(i, e')
       )
     | RecUpdate (e1, id, e2) -> RecUpdate(loop e1, id, loop e2)
-    | Field (e, id) -> 
+    | Field (e, id) ->
       let e = loop e in
       (match find_field e id with
          e' -> snd e'
@@ -91,7 +91,7 @@ let reduce e =
   in loop e
 
 let mk_ident () = Simple (MlVar.create None)
-let pair pos e1 e2 = 
+let pair pos e1 e2 =
   pos, Tuple[e1; e2]
 
 let res pos k e =
@@ -99,27 +99,34 @@ let res pos k e =
 
 let app pos e1 e2 =
   pos, App(e1, e2)
-
+let none = Ast.Const.of_constant (PC.Constant.make_none_of_t ())
 let const pos c =
   let s = mk_ident () in
-  pos, Lambda (s, true, pair pos 
-                 (res pos V (pos, Const c)) 
+  pos, Lambda (s, true, pair pos
+                 (res pos V (pos, Const c))
                  (pos, Var s) )
 
 let var_get pos id =
   let s = mk_ident () in
-  pos, Lambda (s, true, pair pos 
-                 (res pos V (pos, Field ((pos, Var s), id))) 
+  pos, Lambda (s, true, pair pos
+                 (res pos V (pos, Field ((pos, Var s), id)))
                  (pos, Var s))
+
+let var_set pos id e =
+  let s = mk_ident () in
+  pos, Lambda(s, true, pair pos
+                (res pos V (pos, Const none))
+                (pos, RecUpdate ((pos, Var s),id, e)
+                ))
 
 let return pos e =
   let v = mk_ident () in
   let s = mk_ident () in
   let s0 = mk_ident () in
   pos, IfNotRes{cond = app pos e (pos, Var s0);
-                v; s; 
-                body= 
-                  pair pos 
+                v; s;
+                body=
+                  pair pos
                     (res pos R (pos, Var v))
                     (pos, Var s) }
 
@@ -128,7 +135,7 @@ let ite pos cond e1 e2 =
   let v = mk_ident () in
   let s = mk_ident () in
   let ps = pos, Var s in
-  pos, Lambda(s0, true, 
+  pos, Lambda(s0, true,
               (pos, IfNotRes { cond = app pos cond (pos, Var s0); v; s;
                                body = pos, Ite ((pos, Var v), app pos e1 ps,
                                                 app pos e2 ps)
@@ -139,9 +146,48 @@ let seq pos e1 e2 =
   let v = mk_ident () in
   let s = mk_ident () in
   pos, Lambda(s0, true,
-              (pos, IfNotRes { 
+              (pos, IfNotRes {
                   cond = app pos e1 (pos, Var s0); v; s;
                   body = app pos e2 (pos, Var s);
                 }
               )           )
 
+let lambda pos x e =
+  let s1  = mk_ident () in
+  let v = mk_ident () in
+  let s = mk_ident () in
+  let f = Lambda (x, true,
+                  (pos,
+                   Lambda (s1, true,
+                           (pos,
+                            IfNotRes {
+                              cond = app pos e
+                                  (pos, RecUpdate ((pos, Var s1), x, (pos, Var s1)));
+                              v;
+                              s;
+                              body = pair pos (res pos V (pos, Const none)) (pos, Var s);
+                            }
+                           )))
+                 )
+  in
+  let s0 = mk_ident () in
+  pos, Lambda(s0, true, pair pos (res pos V (pos,f)) (pos, Var s0))
+
+let apply pos e1 e2 =
+  let s0 = mk_ident () in
+  let f = mk_ident () in
+  let s1 = mk_ident () in
+  let arg = mk_ident () in
+  let s2 = mk_ident () in
+  pos, IfNotRes {
+    cond = app pos e1 (pos, Var s0);
+    v = f;
+    s = s1;
+    body =
+      pos, IfNotRes {
+        cond = app pos e2 (pos, Var s1);
+        v = arg;
+        s = s2;
+        body = app pos (app pos (pos, Var f) (pos, Var arg)) (pos, Var s2)
+      }
+  }
