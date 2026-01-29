@@ -77,8 +77,8 @@ let reduce e =
         let cond = loop r.cond in
         let body = loop r.body in
         match snd cond with
-        | Res (R, _) as r ->r
-        | Res (V,e) -> snd (subst body [r.v, e])
+        | Tuple [_,Res (R, _);_] as r -> r
+        | Tuple [_,Res (V,e) ;s] -> snd (subst body [r.v, e; r.s, s])
         | _ -> IfNotRes{r with cond; body }
       )
     | Ite(e1, e2, e3) -> Ite(loop e1, loop e2, loop e3)
