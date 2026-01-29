@@ -216,7 +216,7 @@ let pp_binop fmt op =
 let pp_const fmt = function
   | None_ -> Format.fprintf fmt "None"
   (* | Ellipsis -> Format.fprintf fmt "..." *)
-  | Bool b -> Format.fprintf fmt "%b" b
+  | Bool b -> Format.fprintf fmt "%s" (if b then "True" else "False")
   | Int i -> Format.fprintf fmt "%d" i
   (* | Float f -> Format.fprintf fmt "%.2f" f *)
   | String s -> Format.fprintf fmt "@[\"%s\"@]" s
