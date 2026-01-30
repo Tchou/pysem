@@ -121,12 +121,12 @@ module Const = struct
   let to_gty c : MlGTy.t =
     let open Mlsem.Types in
     GTy.mk (match c with
-            | None_ -> failwith "Ty.None"
-            (* | Ellipsis -> failwith "Ty.Ellipsis" *)
-            | Bool b -> if b then Ty.tt else Ty.ff
-            | Int i -> Utils.ty_of_int i
-            (* | Float _ -> Ty.float (\* !! TODO !! *\) *)
-            | String _ -> Ty.string )
+        | None_ -> Sstt.Enum.mk "None" |> Sstt.Descr.mk_enum |> Sstt.Ty.mk_descr
+        (* | Ellipsis -> failwith "Ty.Ellipsis" *)
+        | Bool b -> if b then Ty.tt else Ty.ff
+        | Int i -> Utils.ty_of_int i
+        (* | Float _ -> Ty.float (\* !! TODO !! *\) *)
+        | String _ -> Ty.string )
 end
 
 module Binop = struct
