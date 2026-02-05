@@ -33,10 +33,12 @@ module Ident = struct
 
   let of_argument env arg : ident =
     of_identifier env arg.PC.Argument.identifier
+
   let compare i1 i2 =
     let c = MlVar.compare i1.name i2.name in
     if c <> 0 then c else compare i1.scope i2.scope
 end
+
 module IdentSet =
 struct
   include Set.Make(Ident)
@@ -220,6 +222,15 @@ let pp_const fmt = function
   | Int i -> Format.fprintf fmt "%d" i
   (* | Float f -> Format.fprintf fmt "%.2f" f *)
   | String s -> Format.fprintf fmt "@[\"%s\"@]" s
+let pp_identset fmt id =
+  let open Format in
+  if !Utils.debug
+  then begin
+    let old_m = pp_get_margin fmt () in
+    pp_set_margin fmt pp_infinity;
+    fprintf fmt "@[#idents: %a@]@\n" IdentSet.pp id;
+    pp_set_margin fmt old_m
+  end else pp_print_nothing fmt ()
 
 let rec pp_expr' fmt =
   let open Format in
@@ -229,11 +240,8 @@ let rec pp_expr' fmt =
     fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
   | Cst c -> pp_const fmt c
   | Lambda (x,idents, e) ->
-    let old_m = pp_get_margin fmt () in
-    pp_set_margin fmt pp_infinity;
-    if !Utils.debug then fprintf fmt "@[@[#idents: %a@]@\n" IdentSet.pp idents;
-    pp_set_margin fmt old_m;
-    fprintf fmt "@[<hov 2>fun %a -> %a@]@]" pp_spec x pp_expr e
+    fprintf fmt "@[@[%a@]@[<hov 2>fun %a -> %a@]@]"
+      pp_identset idents pp_spec x pp_expr e
   | Apply (e,p) -> fprintf fmt "@[%a%a@]" pp_expr e pp_params p
   | Tuple el ->
      fprintf fmt "@[<hov 1>(%a)@]" (Printing.pp_list  ~sep:"," pp_expr) el
@@ -284,8 +292,8 @@ let rec pp_instr' fmt instr' : unit =
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]"
                       (pp_ident) x pp_expr e
   | FunDef (i,s,idents, b) ->
-    if !Utils.debug then fprintf fmt "@[@[#idents: %a@]@\n" IdentSet.pp idents;
-    fprintf fmt "@[<hov 2>def %a%a:@\n%a@]@]"
+    fprintf fmt "@[@[%a@]@[<hov 2>def %a%a:@\n%a@]@]"
+      pp_identset idents
       pp_ident i pp_spec s pp_instr b
   | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i
   | If (e,i,io) -> fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"
@@ -297,7 +305,7 @@ let rec pp_instr' fmt instr' : unit =
   | Continue -> fprintf fmt "continue"
 and pp_instr fmt (_,instr') = pp_instr' fmt instr'
 and pp_instr_list fmt il =
-  Format.(fprintf fmt "%a@\n"
+  Format.(fprintf fmt "%a"
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr)
             il)
 
