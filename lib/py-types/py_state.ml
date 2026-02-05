@@ -9,6 +9,7 @@ type expr' =
   | Res of res_kind * expr
   | Proj of res_kind * expr
   | IfNotRes of {cond:expr; v:ident; s:ident; body:expr}
+  | Val of {cond:expr; v:ident; s:ident; body:expr}
   | Ite of expr * expr * expr
   | Tuple of expr list
   | Pi of int * expr
@@ -36,6 +37,7 @@ let subst e s =
     | Res (k, e) -> Res (k, loop e)
     | Proj (k, e) -> Proj(k, loop e)
     | IfNotRes r -> IfNotRes { r with cond = loop r.cond; body = loop r.body }
+    | Val r -> Val { r with cond = loop r.cond; body = loop r.body }
     | Ite (e1, e2, e3) -> Ite(loop e1, loop e2, loop e3)
     | Tuple l -> Tuple (List.map loop l)
     | Pi (i, e) -> Pi(i, loop e)
@@ -51,6 +53,7 @@ let is_simple e =
       Var _ | EmptyRec | Const _  |Lambda _ -> true
     | Res (_, e) | Proj(_, e) | Pi (_ , e) | Field (e, _) -> loop e
     | IfNotRes { cond; body; _ } -> loop cond && loop body
+    | Val { cond; body; _ } -> loop cond && loop body
     | Ite(e1, e2, e3) -> loop e1 && loop e2 && loop e3
     | RecUpdate(e1, _, e2) -> loop e1 && loop e2
     | Tuple l -> List.for_all loop l
@@ -81,6 +84,7 @@ let reduce e =
         | Tuple [_,Res (V,e) ;s] -> snd (subst body [r.v, e; r.s, s])
         | _ -> IfNotRes{r with cond; body }
       )
+    | Val r -> Val r (* TODO *)
     | Ite(e1, e2, e3) -> Ite(loop e1, loop e2, loop e3)
     | Tuple l -> Tuple (List.map loop l)
     | Pi (i, e) -> (match loop e with
@@ -208,3 +212,58 @@ let apply pos e1 e2 =
           body = app pos (app pos (pos, Var f) (pos, Var arg)) (pos, Var s2)
         }
     }))
+
+let tuple2 pos e1 e2 =
+  let s0 = mk_ident ()
+  and s1 = mk_ident ()
+  and s2 = mk_ident () in
+  let v1 = mk_ident ()
+  and v2 = mk_ident () in
+  pos, Lambda (s0, true, (pos, IfNotRes {
+      cond = app pos e1 (pos, Var s0);
+      v = v1; s = s1;
+      body = pos, IfNotRes {
+          cond = app pos e2 (pos, Var s1);
+          v = v2;
+          s = s2;
+          body = pair pos (pos, Var v1) (pos, Var v2)}}))
+
+let rec of_expr (p,e:Ast.expr) : expr = match e with
+  | Var id -> (* λs.V(s.x),s *)
+    var_get p (Source id)
+  | Binop _ ->
+    (* λs0. bind v1, s1 = [e1] s0 in
+            bind v2, s2 = [e2] s1 in
+            bind op, s3 = [op] s2 in
+            ((op e1) e2) s3 (??) *)
+    failwith "TODO Binop"
+  | Cst c -> (* λs.V(c),s *)
+    const p c
+  | Lambda (spec,_,body) ->
+    let x = of_spec spec in
+    let e = of_expr body in
+    lambda p x e
+  | Apply (e,param) ->
+    (* λs0. bind f, s1 = [e] s0 in
+            bind x, s2 = [p] s1 in
+            (f x) s2 *)
+    let e1 = of_expr e
+    and e2 = of_param param in
+    apply p e1 e2
+  | Tuple [e1;e2] ->
+    let e1 = of_expr e1
+    and e2 = of_expr e2 in
+    tuple2 p e1 e2
+  | Tuple _ ->
+    (* λs0. bind x1, s1 = [e1] s0 in ... bind xn, sn = [en] sn-1 in
+            (x1, ..., xn), sn *)
+    failwith "TODO all tuples"
+
+and of_spec {posonly;_} = match posonly with
+  | [ (x,None) ] -> Source x
+  | _ -> failwith "TODO not just 1 posonly"
+
+and of_param {pos;_} = match pos with
+  | [] -> Var (mk_ident ()) |> Ast.dannot
+  | [ e ] -> of_expr e
+  | _ -> failwith "TODO not just 1 pos parameter"
