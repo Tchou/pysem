@@ -117,7 +117,7 @@ let res pos k e =
 
 let app pos e1 e2 =
   pos, App(e1, e2)
-let none = Ast.Const.of_constant (PC.Constant.make_none_of_t ())
+let none = Ast.None_
 
 (* Combinators *)
 let const pos c =
@@ -200,6 +200,8 @@ let apply pos e1 e2 =
   let s1 = mk_ident () in
   let arg = mk_ident () in
   let s2 = mk_ident () in
+  let v = mk_ident () in
+  let s3 = mk_ident () in
   pos, Lambda(s0, true, (pos, IfNotRes {
       cond = app pos e1 (pos, Var s0);
       v = f;
@@ -209,7 +211,13 @@ let apply pos e1 e2 =
           cond = app pos e2 (pos, Var s1);
           v = arg;
           s = s2;
-          body = app pos (app pos (pos, Var f) (pos, Var arg)) (pos, Var s2)
+          body =
+            pos, Val {
+              cond = app pos (app pos (pos, Var f) (pos, Var arg)) (pos, Var s2);
+              v;
+              s = s3;
+              body = pair pos (res pos V (pos, Const none)) (pos, Var s3)
+            }
         }
     }))
 
