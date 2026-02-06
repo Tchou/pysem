@@ -352,26 +352,24 @@ let pp_approx_sig fmt (lpos, lkwd) =
   let l = List.map Either.left lpos in
   let l = l @ List.map Either.right lkwd in
   let (s, _, _) = Prec.varop_info Tuple in
-  fprintf fmt "@[(";
-  Prec.print_seq (fun fmt e ->
-      match e with
-      | Either.Left ty -> fprintf fmt "%a" Printer.print_descr ty
-      | Either.Right (s, ty) -> fprintf fmt "%s=%a"s Printer.print_descr ty)
-    s fmt l;
-  fprintf fmt ")@]"
+  fprintf fmt "@[(%a)@]"
+    (Prec.print_seq (fun fmt e ->
+         match e with
+         | Either.Left ty -> fprintf fmt "%a" Printer.print_descr ty
+         | Either.Right (s, ty) -> fprintf fmt "%s=%a"s Printer.print_descr ty)
+        s)
+    l
 
 let print_approx prec assoc fmt b l =
   let open Format in
   let open Sstt in
   let (sym,_,_) as cup_info = Prec.(varop_info Cup) in
   let need_par = Prec.need_parentheses prec assoc cup_info in
-  fprintf fmt "@[<hov 1>";
-  if need_par then fprintf fmt "(";
-  Prec.print_seq pp_approx_sig sym fmt l;
-  if not b
-  then (match l with [] -> fprintf fmt "..." | _ -> fprintf fmt ";@ ..." );
-  if need_par then fprintf fmt ")";
-  fprintf fmt "@]"
+  fprintf fmt "@[<hov 1>%s%a%t%s@]"
+    (if need_par then "(" else "")
+    (Prec.print_seq pp_approx_sig sym) l
+    (dprintf (if not b then if l = [] then "..." else ";@ ..." else ""))
+    (if need_par then ")" else "")
 
 let print prec assoc fmt d =
   match d with
@@ -406,18 +404,20 @@ let pp_py_scheme fmt s =
     | _ -> List.mapi (fun i _ -> ("X" ^ string_of_int i)) vars
   in
   let mapping = List.map2 mk vars new_names in
-  let () = pp_mapping fmt mapping in
   let subst = mapping
               |> List.map (fun (x, n) -> x, MT.TVar.typ n)
               |> MT.Subst.of_list1
   in
   let pp_ty = Sstt.Printer.print_ty (MT.PEnv.printer_params ()) in
-  let inf, sup = MT.GTy.destruct gty in
-  let inf' = MT.Subst.apply subst inf in
-  if MT.Ty.equiv inf sup
-  then Format.fprintf fmt "@[%a@]" pp_ty inf'
-  else
-    let sup' = MT.Subst.apply subst sup in
-    Format.fprintf fmt "@[@[%a@] <:@ Any <:@ @[%a@]@]"
-      pp_ty inf'
-      pp_ty sup'
+  let pp_gty fmt gty =
+    let inf, sup = MT.GTy.destruct gty in
+    let inf' = MT.Subst.apply subst inf in
+    if MT.Ty.equiv inf sup
+    then Format.fprintf fmt "@[%a@]" pp_ty inf'
+    else
+      let sup' = MT.Subst.apply subst sup in
+      Format.fprintf fmt "@[@[%a@] <:@ Any <:@ @[%a@]@]"
+        pp_ty inf'
+        pp_ty sup'
+  in
+  Format.fprintf fmt "@[%a@,%a@]%!" pp_mapping mapping pp_gty gty
