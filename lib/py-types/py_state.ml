@@ -342,11 +342,12 @@ let rec pp_expr' fmt e =
       "@[@[<hov 2>if %a@]@\n@[<hov 2>then %a@]@\n@[<hov 2>else %a@]@]@\n"
       pp_expr e1 pp_expr e2 pp_expr e3
   | Tuple el ->
-    fprintf fmt "@[(@[%a@])@]" (Printing.pp_list ~sep:",@\n" pp_expr) el
+    fprintf fmt "@[(@[%a@])@]" (Printing.pp_list ~sep:",@ " pp_expr) el
   | Pi (i, e) -> fprintf fmt "@[π%d(%a)@]" i pp_expr e
   | EmptyRec -> fprintf fmt "{}"
   | RecUpdate (e1, id, e2) ->
-    fprintf fmt "@[<hov 2>{ %a with@ %a = %a }@]" pp_expr e1 pp_ident id pp_expr e2
+    fprintf fmt "@[<hov 2>{ %a with@ %a = %a }@]"
+      pp_expr e1 pp_ident id pp_expr e2
   | Field (e, id) -> fprintf fmt "@[%a@,.%a@]" pp_expr e pp_ident id
   | Lambda (id, b, e) ->
     fprintf fmt "@[<hov 2>%s %a.@ %a@]"
