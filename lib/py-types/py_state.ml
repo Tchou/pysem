@@ -306,6 +306,8 @@ let rec of_instr (p,i:Ast.instr) = match i with
   | Iexpr e -> of_expr e
   | Break | Continue -> failwith "TODO while control flow"
 
+let of_prog p = List.map of_instr p
+
 (* Print *)
 
 let show_res_kind = function R -> "R" | V -> "V"
