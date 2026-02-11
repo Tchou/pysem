@@ -133,11 +133,16 @@ let var_get pos id =
                  (pos, Var s))
 
 let var_set pos id e =
-  let s = mk_ident () in
-  pos, Lambda(s, true, pair pos
-                (res pos V (pos, Const none))
-                (pos, RecUpdate ((pos, Var s),id, e)
-                ))
+  let s0 = mk_ident ()
+  and s1 = mk_ident () in
+  let v = mk_ident () in
+  pos, Lambda(s0, true,
+              (pos, IfNotRes {cond=app pos e (pos, Var s0);v;s=s1;
+                        body=pair pos
+                            (res pos V (pos, Const none))
+                            (pos, RecUpdate ((pos, Var s1),id, (pos, Var v))
+                            )})
+                )
 
 let return pos e =
   let v = mk_ident () in
@@ -177,20 +182,20 @@ let lambda pos x e =
   let s1  = mk_ident () in
   let v = mk_ident () in
   let s = mk_ident () in
-  let f = Lambda (x, true,
-                  (pos,
-                   Lambda (s1, true,
-                           (pos,
-                            IfNotRes {
-                              cond = app pos e
-                                  (pos, RecUpdate ((pos, Var s1), x, (pos, Var s1)));
-                              v;
-                              s;
-                              body = pair pos (res pos V (pos, Const none)) (pos, Var s);
-                            }
-                           )))
-                 )
-
+  let f =
+    Lambda
+      (x, false,
+       (pos, Lambda
+          (s1, true,
+           (pos, IfNotRes {
+               cond = app pos e
+                   (pos, RecUpdate ((pos, Var s1), x, (pos, Var (s1))));
+               v;
+               s;
+               body = pair pos (res pos V (pos, Const none)) (pos, Var s);
+             }
+           )))
+      )
   in
   let s0 = mk_ident () in
   pos, Lambda(s0, true, pair pos (res pos V (pos,f)) (pos, Var s0))
@@ -214,7 +219,8 @@ let apply pos e1 e2 =
           s = s2;
           body =
             pos, Val {
-              cond = app pos (app pos (pos, Var f) (pos, Var arg)) (pos, Var s2);
+              cond = app pos (app pos (pos, Var f) (pos, Var arg))
+                  (pos, Var s2);
               v;
               s = s3;
               body = pair pos (res pos V (pos, Const none)) (pos, Var s3)
