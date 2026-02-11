@@ -236,6 +236,12 @@ let tuple2 pos e1 e2 =
           s = s2;
           body = pair pos (pos, Var v1) (pos, Var v2)}}))
 
+(* translation *)
+
+let of_opt p eo f = match eo with
+  | None -> const p none
+  | Some e -> f e
+
 let rec of_expr (p,e:Ast.expr) : expr = match e with
   | Var id -> (* λs.V(s.x),s *)
     var_get p (Source id)
@@ -275,6 +281,32 @@ and of_param {pos;_} = match pos with
   | [] -> Var (mk_ident ()) |> Ast.dannot
   | [ e ] -> of_expr e
   | _ -> failwith "TODO not just 1 pos parameter"
+
+let rec of_instr (p,i:Ast.instr) = match i with
+  | Block il ->
+    begin match List.map of_instr il with
+      | [] -> const p none
+      | e1::l -> List.fold_left (fun sq ((p,_) as e) -> seq p sq e ) e1 l
+    end
+  | FunDef (id, spec, _, body)  ->
+    let x = of_spec spec in
+    let e = of_instr body in
+    var_set p (Source id) (lambda p x e)
+  | Return eo ->
+    of_opt p eo of_expr
+    |> return p
+  | Assign (tg, e) ->
+    var_set p (Source tg) (of_expr e)
+  | While (_e, _i) -> failwith "TODO while control flow"
+  | If (test, i, io) ->
+    ite p
+      (of_expr test)
+      (of_instr i)
+      (of_opt p io of_instr)
+  | Iexpr e -> of_expr e
+  | Break | Continue -> failwith "TODO while control flow"
+
+(* Print *)
 
 let show_res_kind = function R -> "R" | V -> "V"
 let pp_res_kind fmt r = Format.fprintf fmt "%s" (show_res_kind r)
