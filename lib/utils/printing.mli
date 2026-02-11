@@ -11,7 +11,8 @@ val dbg_pr : string -> ('a, Format.formatter, unit, unit) format4 -> 'a
  *)
 
 val pp_list :
-  ?sep:string -> (Format.formatter -> 'a -> unit) ->
+  ?sep:(unit,Format.formatter,unit) format ->
+  (Format.formatter -> 'a -> unit) ->
   Format.formatter -> 'a list -> unit
 (** [pp_list] acts like [Format.pp_print_list]. *)
 

@@ -190,6 +190,7 @@ let lambda pos x e =
                             }
                            )))
                  )
+
   in
   let s0 = mk_ident () in
   pos, Lambda(s0, true, pair pos (res pos V (pos,f)) (pos, Var s0))
@@ -325,24 +326,24 @@ let rec pp_expr' fmt e =
   | Res (r, e) -> fprintf fmt "@[<hov 2>%a(%a)@]" pp_res_kind r pp_expr e
   | Proj (r, e) -> fprintf fmt "@[<hov 2>(%a).%a@]" pp_expr e pp_res_kind r
   | IfNotRes {cond;v;s;body} ->
-    fprintf fmt "@[<hov 2>bind %a, %a =@ %a in@ %a@]"
+    fprintf fmt "@[@[<hov 2>bind %a, %a =@ %a in@]@ %a@]"
       pp_ident v pp_ident s pp_expr cond pp_expr body
   | Val {cond; v; s; body} ->
-    fprintf fmt "@[<hov 2>bindv %a, %a =@ %a in %a@]"
+    fprintf fmt "@[@[<hov 2>bindv %a, %a =@ %a in@]@ %a@]"
       pp_ident v pp_ident s pp_expr cond pp_expr body
   | Ite (e1, e2, e3) ->
     fprintf fmt
       "@[@[<hov 2>if %a@]@\n@[<hov 2>then %a@]@\n@[<hov 2>else %a@]@]@\n"
       pp_expr e1 pp_expr e2 pp_expr e3
   | Tuple el ->
-    fprintf fmt "@[<hov 1>(%a)@]" (Printing.pp_list ~sep:"," pp_expr) el
+    fprintf fmt "@[(@[%a@])@]" (Printing.pp_list ~sep:",@\n" pp_expr) el
   | Pi (i, e) -> fprintf fmt "@[π%d(%a)@]" i pp_expr e
   | EmptyRec -> fprintf fmt "{}"
   | RecUpdate (e1, id, e2) ->
-    fprintf fmt "@[{ %a@ @[with %a = %a @]}@]" pp_expr e1 pp_ident id pp_expr e2
+    fprintf fmt "@[<hov 2>{ %a with@ %a = %a }@]" pp_expr e1 pp_ident id pp_expr e2
   | Field (e, id) -> fprintf fmt "@[%a@,.%a@]" pp_expr e pp_ident id
   | Lambda (id, b, e) ->
     fprintf fmt "@[<hov 2>%s %a.@ %a@]"
       (if b then "ƛ" else "λ") pp_ident id pp_expr e
-  | App (e1, e2) -> fprintf fmt "@[<hov 2>%a@ %a@]" pp_expr e1 pp_expr e2
+  | App (e1, e2) -> fprintf fmt "@[<hov 2>(%a)@ %a@]" pp_expr e1 pp_expr e2
 and pp_expr fmt (_,e) = pp_expr' fmt e

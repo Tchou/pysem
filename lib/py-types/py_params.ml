@@ -344,7 +344,7 @@ let print_exact _prec _assoc fmt l =
     | Str s -> pp_print_string fmt s
   in
   fprintf fmt "@[<hov 1>(%a)@]"
-    (Printing.pp_list ~sep:"," pr) l
+    (Printing.pp_list ~sep:",@ " pr) l
 
 let pp_approx_sig fmt (lpos, lkwd) =
   let open Format in
@@ -390,7 +390,7 @@ let pp_mapping fmt m =
   match m with
   | [] -> ()
   | _ -> Format.fprintf fmt "@[<hov 1>[%a]@]"
-           (Printing.pp_list ~sep:"," (fun fmt (_, s) -> MT.TVar.pp fmt s)) m
+           (Printing.pp_list ~sep:",@ " (fun fmt (_, s) -> MT.TVar.pp fmt s)) m
 
 let pp_py_scheme fmt s =
   let vars, gty = MT.TyScheme.get s in

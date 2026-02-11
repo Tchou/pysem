@@ -244,7 +244,7 @@ let rec pp_expr' fmt =
       pp_identset idents pp_spec x pp_expr e
   | Apply (e,p) -> fprintf fmt "@[%a%a@]" pp_expr e pp_params p
   | Tuple el ->
-     fprintf fmt "@[<hov 1>(%a)@]" (Printing.pp_list  ~sep:"," pp_expr) el
+     fprintf fmt "@[<hov 1>(%a)@]" (Printing.pp_list ~sep:",@ " pp_expr) el
 (*| Projection (p,e) -> Format.fprintf fmt "@[%a[%a]@]" pp_expr e pp_expr p *)
 and pp_expr fmt (_,e') = pp_expr' fmt e'
 and pp_spec fmt s =
@@ -260,7 +260,7 @@ and pp_spec fmt s =
   let kwarg =
     match s.kwdarg with None -> "" | Some id -> "**" ^ Ident.(show id) in
   let pp_list_i_eo =
-    Printing.pp_list ~sep:"," (fun fmt (i,(e:expr option)) ->
+    Printing.pp_list ~sep:",@ " (fun fmt (i,(e:expr option)) ->
         fprintf fmt "%s%s%a" Ident.(show i) (if e = None then "" else "=")
           (pp_print_option pp_expr) e) in
   fprintf fmt "@[<hov 1>(%a%s@,%a%s@,%a%s@,%s)@]"
@@ -275,9 +275,9 @@ and pp_params fmt {pos;kwd} =
   let open Format in
   let open Printing in
   fprintf fmt "@[(%a%s%a)@]"
-    (pp_list ~sep:"," pp_expr) pos
+    (pp_list ~sep:",@ " pp_expr) pos
     (if pos<>[] && kwd<>[] then ", " else "")
-    (pp_list ~sep:"," (fun fmt (k,e) ->
+    (pp_list ~sep:",@ " (fun fmt (k,e) ->
          fprintf fmt "@[%a=%a@]" pp_print_string k pp_expr e)) kwd
 
 let rec pp_instr' fmt instr' : unit =
@@ -287,7 +287,7 @@ let rec pp_instr' fmt instr' : unit =
      if il = []
      then fprintf fmt "@[pass # Empty block@]"
      else fprintf fmt
-            (if !Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
+            (if !Utils.debug then "@[# Block [@\n%a# ] Block@]" else "%a")
             pp_instr_list il
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]"
                       (pp_ident) x pp_expr e
@@ -305,8 +305,13 @@ let rec pp_instr' fmt instr' : unit =
   | Continue -> fprintf fmt "continue"
 and pp_instr fmt (_,instr') = pp_instr' fmt instr'
 and pp_instr_list fmt il =
+<<<<<<< HEAD
   Format.(fprintf fmt "%a"
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr)
+=======
+  Format.(fprintf fmt "%a@\n"
+            (Printing.pp_list ~sep:"@\n" pp_instr)
+>>>>>>> 496ec4d (generic pp_list)
             il)
 
 let pp_prog = pp_instr_list

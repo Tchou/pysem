@@ -19,8 +19,8 @@ and dbg_pr str =
     kfprintf pp_end std_formatter
   ) else ikfprintf ignore std_formatter
 
-let pp_list ?(sep=";") =
-  Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "%s@ "sep)
+let pp_list ?(sep:(unit,Format.formatter,unit) format=";@ ") =
+  Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt sep)
 let pp_nel str = function [] -> "" | _ -> str
 
 let mlvar_show = MlVar.(if !Utils.debug && not !Utils.export
@@ -53,7 +53,7 @@ module MSAstPrinter = struct
         (if b then "; .." else "")
     | Tuple i ->
       if List.length tl <> i then failwith "Wrong tuple constructor!"
-      else fprintf fmt "@[<hov 2>(%a)@]" (pp_list ~sep:"," pp_t) tl
+      else fprintf fmt "@[<hov 2>(%a)@]" (pp_list ~sep:",@ " pp_t) tl
     | _ -> fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
 
   let rec pp_e (fmt:formatter) (e:MSAst.e) :unit =
@@ -65,8 +65,8 @@ module MSAstPrinter = struct
       fprintf fmt "@[<hov 2>fun %a@ : @[%a@] ->@ %a@]"
         pp_variable v pp_gty gty pp_t t
     | LambdaRec l ->
-      pp_print_list
-        ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
+      pp_list
+        ~sep:"@\nand "
         (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ : @[%a@] ->@ %a@]"
             pp_variable v pp_gty gty pp_t t)
         fmt
@@ -138,8 +138,8 @@ module MLAstPrinter = struct
       fprintf fmt "@[<hov 2>fun %a@ : @[%a@] ->@ %a@]"
         pp_variable v pp_gty gty pp_t t
     | LambdaRec l ->
-      pp_print_list
-        ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
+      pp_list
+        ~sep:"@\nand "
         (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ : @[%a@] ->@ %a@]"
             pp_variable v pp_gty gty pp_t t)
         fmt
@@ -153,7 +153,7 @@ module MLAstPrinter = struct
         pp_t t2
     | PatMatch (t,ptl) ->
       fprintf fmt "@[match @[%a@]@ with@ | %a@]"
-        pp_t t (pp_print_list ~pp_sep:pp_print_nothing
+        pp_t t (pp_list ~sep:""
                   (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]"
                       pp_pattern p pp_t t)) ptl
     | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
@@ -230,8 +230,8 @@ module PAstPrinter = struct
     | Suggest (v,_,t) -> fprintf fmt "@[<hov 2>Suggest %s:@ %a@]" v pp_t t
     | Lambda (v,_,t) -> fprintf fmt "@[<hov 2>fun %s ->@ %a@]" v pp_t t
     | LambdaRec l ->
-      pp_print_list
-        ~pp_sep:(fun fmt () -> fprintf fmt "@\nand ")
+      pp_list
+        ~sep:"@\nand "
         (fun fmt (v,_,t) -> fprintf fmt "@[<hov 2>rfun %s ->@ %a@]" v pp_t t)
         fmt
         l
@@ -246,7 +246,7 @@ module PAstPrinter = struct
     | Let ((_,v),t1,t2) ->
       fprintf fmt "@[@[<hov 2>let %s =@ @[%a@]@ in@]@\n%a@]" v pp_t t1 pp_t t2
     | Tuple l -> fprintf fmt "@[(%a)@]"
-                   (pp_list ~sep:"," pp_t)
+                   (pp_list ~sep:",@ " pp_t)
                    l
     | Cons (t1,t2) -> fprintf fmt "@[Cons(@[%a@],@[%a@])@]" pp_t t1 pp_t t2
     | Projection (p,t) -> fprintf fmt "@[<hov 2>proj(@[%a@],@ @[%a@])@]"
@@ -259,7 +259,7 @@ module PAstPrinter = struct
     | TypeCoerce (t,_,_) -> fprintf fmt "@[<hov 2>coerce [%a]@]" pp_t t
     | PatMatch (t,ptl) ->
       fprintf fmt "@[match @[%a@]@ with@\n| %a@]"
-        pp_t t (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "")
+        pp_t t (pp_list ~sep:""
                   (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]"
                       pp_pattern p pp_t t)) ptl
     | Cond (_t1,_,_t2,_ot) -> fprintf fmt "Cond"

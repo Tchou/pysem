@@ -1,3 +1,5 @@
+[@@@warning "-32-33"]
+
 open Pysem
 open Aliases
 open Printing
@@ -46,14 +48,14 @@ let treat_file file =
   (* dbg_pr "pyre-parsed expression" "%a" *)
   (* Sexplib0.Sexp.pp_hum (PC.Module.sexp_of_t m); *)
   (* pr "block_infos" "%a" *)
-  (* (pp_print_list ~pp_sep:pp_print_space Parsing.pp_block_info) bil; *)
+  (* (pp_list ~sep:"@\n" Parsing.pp_block_info) bil; *)
 
   let p = Prog.of_module (Env.init globals bil to_loc) m in
   dbg_pr "pysem ast" "%a" Ast.pp_prog p;
 
   let ml = Prog.to_ml p in
   dbg_pr "mlsem ast" "%a"
-    (pp_print_list ~pp_sep:pp_print_newline pp_ml_top) ml;
+    (pp_list ~sep:"@\n" pp_ml_top) ml;
 
   let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
 
