@@ -357,29 +357,29 @@ let rec to_ml (p,e) =
   | Var id -> mlvar id |> var_of_vart p
   | Res (r, r_e) -> mk_tag p (res_tag r) (to_ml r_e)
   | Proj (r, p_e) -> mk_proj_tag p (res_tag r) (to_ml p_e)
-  | IfNotRes {cond;body;_} -> (*
-    let r = cond in
-    let tag = r.tag in
-    if tag is V
-    then let v = r.content.1 in
-         let s = r.content.2 in
-         body
-    else r *)
-    let r = mk_ident_ml ()
-    and tag = mk_ident_ml () in
+  | IfNotRes {cond;v;s;body} ->
+    let c = mk_ident_ml ()
+    and r = mk_ident_ml () in
+    let c_ml = mlvar c
+    and r_ml = mlvar r in
+    let c_var = var_of_vart p c_ml
+    and r_var = var_of_vart p r_ml in
     mk_let p []
-      (mlvar r) (to_ml cond)
+      c_ml (to_ml cond)
       (mk_let p []
-         (mlvar tag) (mk_proj_tag p
-                        (res_tag V (*?!*)) (mlvar r |> var_of_vart p))
-         (mk_ite p (mlvar tag |> var_of_vart p) (failwith "tag")(*res_tag V*)
-            (to_ml body)
-            (mlvar r |> var_of_vart p)))
+         r_ml (mk_proj_tuple p 2 0 c_var)
+         (mk_ite p r_var v_tag_gt
+            (mk_let p []
+               (mlvar v) (mk_proj_tag p v_tag r_var)
+               (mk_let p []
+                  (mlvar s) (mk_proj_tuple p 2 1 c_var)
+                  (to_ml body)))
+            (c_var)))
   | Val _ -> failwith "TODO bind_return"
   | Ite (test, e1, e2) ->
     mk_ite p (to_ml test) MT.(GTy.mk Ty.tt) (to_ml e1) (to_ml e2)
   | Tuple el -> mk_tuple p List.(map to_ml el)
-  | Pi (i,e) -> mk_proj_tuple p i 2 (to_ml e) (* FIXME arity 2 hard coded! *)
+  | Pi (i,e) -> mk_proj_tuple p 2 i (to_ml e) (* FIXME arity 2 hard coded! *)
   | EmptyRec -> mk_record p [] []
   | RecUpdate (_r, x, e) -> (* FIXME how to use MLAst.Operation ? *)
     mk_record_update p
@@ -387,7 +387,7 @@ let rec to_ml (p,e) =
       (to_ml e)
   | Field (e, id) -> mk_projection p (MSAst.PiField (ident_name id)) (to_ml e)
   | Lambda (id,_,e) ->
-    mk_lambda p [] MT.(TVar.(mk KInfer (Some "??") |> typ)|> GTy.mk)
+    mk_lambda p [] MT.(TVar.(mk KInfer (Some "α") |> typ)|> GTy.mk)
       (mlvar id) (to_ml e)
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
 
