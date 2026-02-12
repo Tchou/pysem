@@ -398,10 +398,7 @@ let rec to_ml (p,e) =
   | Tuple el -> mk_tuple p List.(map to_ml el)
   | Pi (i,e) -> mk_proj_tuple p 2 i (to_ml e) (* FIXME arity 2 hard coded! *)
   | EmptyRec -> mk_record p [] []
-  | RecUpdate (_r, x, e) -> (* FIXME how to use MLAst.Operation ? *)
-    mk_record_update p
-      (ident_name x)
-      (to_ml e)
+  | RecUpdate (r, x, e) -> mk_record_update p (ident_name x) (to_ml e) (to_ml r)
   | Field (e, id) -> mk_projection p (MSAst.PiField (ident_name id)) (to_ml e)
   | Lambda (id,_,e) ->
     mk_lambda p [] MT.(TVar.(mk KInfer (Some "α") |> typ)|> GTy.mk)
