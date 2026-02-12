@@ -47,6 +47,7 @@ let subst e s =
     | Lambda (id, b, e) ->  Lambda(id, b, loop e)
     | App (e1, e2) -> App (loop e1, loop e2)
   in loop e
+
 let is_simple e =
   let rec loop (_, e) = loop_expr e
   and loop_expr = function
@@ -97,18 +98,20 @@ let reduce e =
       if is_simple e then
         (match find_field e id with
            e' -> snd e'
-         |exception Not_found -> snd e)
+         | exception Not_found -> Field (e,id))
       else snd e
     | Lambda (id, b, e) ->  Lambda(id, b, loop e)
     | App(e1, e2) ->
       let e1 = loop e1 in
       let e2 = loop e2 in
       match snd e1 with
-      | Lambda(id, true, e) -> snd (loop (subst e2 [id, e]))
+      | Lambda(id, true, e) -> snd (loop (subst e [id, e2]))
       | _ -> App (e1, e2)
   in loop e
 
-let mk_ident () = Simple (MlVar.create None)
+let mk_ident s = Simple (Some Utils.(internal s) |> MlVar.create)
+let mk_ident_v () = mk_ident "v"
+let mk_ident_s () = mk_ident "s"
 let pair pos e1 e2 =
   pos, Tuple[e1; e2]
 
@@ -121,119 +124,134 @@ let none = Ast.None_
 
 (* Combinators *)
 let const pos c =
-  let s = mk_ident () in
-  pos, Lambda (s, true, pair pos
-                 (res pos V (pos, Const c))
-                 (pos, Var s) )
+  let s = mk_ident_s () in
+  pos, Lambda
+    (s, true, pair pos
+       (res pos V (pos, Const c))
+       (pos, Var s) )
 
 let var_get pos id =
-  let s = mk_ident () in
-  pos, Lambda (s, true, pair pos
-                 (res pos V (pos, Field ((pos, Var s), id)))
-                 (pos, Var s))
+  let s = mk_ident_s () in
+  pos, Lambda
+    (s, true, pair pos
+       (res pos V (pos, Field ((pos, Var s), id)))
+       (pos, Var s))
 
 let var_set pos id e =
-  let s0 = mk_ident ()
-  and s1 = mk_ident () in
-  let v = mk_ident () in
-  pos, Lambda(s0, true,
-              (pos, IfNotRes {cond=app pos e (pos, Var s0);v;s=s1;
-                        body=pair pos
-                            (res pos V (pos, Const none))
-                            (pos, RecUpdate ((pos, Var s1),id, (pos, Var v))
-                            )})
-                )
+  let s0 = mk_ident_s ()
+  and s1 = mk_ident_s () in
+  let v = mk_ident_v () in
+  pos, Lambda
+    (s0, true,
+     (pos, IfNotRes
+        { cond=app pos e (pos, Var s0);
+          v; s=s1;
+          body=pair pos
+              (res pos V (pos, Const none))
+              (pos, RecUpdate ((pos, Var s1),id, (pos, Var v)))
+        }))
 
 let return pos e =
-  let v = mk_ident () in
-  let s = mk_ident () in
-  let s0 = mk_ident () in
-  pos, Lambda(s0, true, (pos,
-                         IfNotRes{cond = app pos e (pos, Var s0);
-                                  v; s;
-                                  body=
-                                    pair pos
-                                      (res pos R (pos, Var v))
-                                      (pos, Var s) }))
+  let s0 = mk_ident_s ()
+  and s = mk_ident_s () in
+  let v = mk_ident_v () in
+  pos, Lambda
+    (s0, true,
+     (pos,
+      IfNotRes
+        { cond = app pos e (pos, Var s0);
+          v; s;
+          body=
+            pair pos
+              (res pos R (pos, Var v))
+              (pos, Var s)
+        }))
 
 let ite pos cond e1 e2 =
-  let s0 = mk_ident () in
-  let v = mk_ident () in
-  let s = mk_ident () in
+  let s0 = mk_ident_s ()
+  and s = mk_ident_s () in
+  let v = mk_ident_v () in
   let ps = pos, Var s in
-  pos, Lambda(s0, true,
-              (pos, IfNotRes { cond = app pos cond (pos, Var s0); v; s;
-                               body = pos, Ite ((pos, Var v), app pos e1 ps,
-                                                app pos e2 ps)
-                             }))
+  pos, Lambda
+    (s0, true,
+     (pos, IfNotRes
+        { cond = app pos cond (pos, Var s0);
+          v; s;
+          body =
+            pos, Ite
+              ((pos, Var v),
+               app pos e1 ps,
+               app pos e2 ps)
+        }))
 
 let seq pos e1 e2 =
-  let s0 = mk_ident () in
-  let v = mk_ident () in
-  let s = mk_ident () in
-  pos, Lambda(s0, true,
-              (pos, IfNotRes {
-                  cond = app pos e1 (pos, Var s0); v; s;
-                  body = app pos e2 (pos, Var s);
-                }
-              )           )
+  let s0 = mk_ident_s ()
+  and s = mk_ident_s () in
+  let v = mk_ident_v () in
+  pos, Lambda
+    (s0, true,
+     (pos, IfNotRes
+        { cond = app pos e1 (pos, Var s0);
+          v; s;
+          body = app pos e2 (pos, Var s);
+        }))
 
 let lambda pos x e =
-  let s1  = mk_ident () in
-  let v = mk_ident () in
-  let s = mk_ident () in
+  let s0  = mk_ident_s ()
+  and s = mk_ident_v () in
+  let v = mk_ident_v () in
   let f =
     Lambda
       (x, false,
        (pos, Lambda
-          (s1, true,
-           (pos, IfNotRes {
-               cond = app pos e
-                   (pos, RecUpdate ((pos, Var s1), x, (pos, Var (s1))));
-               v;
-               s;
-               body = pair pos (res pos V (pos, Const none)) (pos, Var s);
-             }
-           )))
-      )
+          (s0, true,
+           (pos, IfNotRes
+              { cond = app pos e
+                    (pos, RecUpdate ((pos, Var s0), x, (pos, Var x)));
+                v; s;
+                body = pair pos (res pos V (pos, Const none)) (pos, Var s);
+              }))))
   in
-  let s0 = mk_ident () in
+  let s0 = mk_ident_s () in
   pos, Lambda(s0, true, pair pos (res pos V (pos,f)) (pos, Var s0))
 
 let apply pos e1 e2 =
-  let s0 = mk_ident () in
-  let f = mk_ident () in
-  let s1 = mk_ident () in
-  let arg = mk_ident () in
-  let s2 = mk_ident () in
-  let v = mk_ident () in
-  let s3 = mk_ident () in
-  pos, Lambda(s0, true, (pos, IfNotRes {
-      cond = app pos e1 (pos, Var s0);
-      v = f;
-      s = s1;
-      body =
-        pos, IfNotRes {
-          cond = app pos e2 (pos, Var s1);
-          v = arg;
-          s = s2;
+  let s0 = mk_ident_s ()
+  and s1 = mk_ident_s ()
+  and s2 = mk_ident_s ()
+  and s3 = mk_ident_s () in
+  let f = mk_ident_v ()
+  and arg = mk_ident_v ()
+  and v = mk_ident_v () in
+  pos, Lambda
+    (s0, true,
+     (pos, IfNotRes
+        { cond = app pos e1 (pos, Var s0);
+          v = f; s = s1;
           body =
-            pos, Val {
-              cond = app pos (app pos (pos, Var f) (pos, Var arg))
-                  (pos, Var s2);
-              v;
-              s = s3;
-              body = pair pos (res pos V (pos, Const none)) (pos, Var s3)
-            }
-        }
-    }))
+            pos, IfNotRes
+              { cond = app pos e2 (pos, Var s1);
+                v = arg;
+                s = s2;
+                body =
+                  pos, Val
+                    { cond = app pos
+                          (app pos (pos, Var f) (pos, Var arg))
+                          (pos, Var s2);
+                      v; s = s3;
+                      body = pair pos
+                          (res pos V (pos, Const none))
+                          (pos, Var s3)
+                    }
+              }
+        }))
 
 let tuple2 pos e1 e2 =
-  let s0 = mk_ident ()
-  and s1 = mk_ident ()
-  and s2 = mk_ident () in
-  let v1 = mk_ident ()
-  and v2 = mk_ident () in
+  let s0 = mk_ident_s ()
+  and s1 = mk_ident_s ()
+  and s2 = mk_ident_s () in
+  let v1 = mk_ident_v ()
+  and v2 = mk_ident_v () in
   pos, Lambda (s0, true, (pos, IfNotRes {
       cond = app pos e1 (pos, Var s0);
       v = v1; s = s1;
@@ -241,9 +259,11 @@ let tuple2 pos e1 e2 =
           cond = app pos e2 (pos, Var s1);
           v = v2;
           s = s2;
-          body = pair pos (pos, Var v1) (pos, Var v2)}}))
+          body = pair pos (pair pos (pos, Var v1) (pos, Var v2))
+              (pos, Var s2)
+        }}))
 
-(* translation *)
+(* Translation pysem -> pystate *)
 
 let of_opt p eo f = match eo with
   | None -> const p none
@@ -285,7 +305,7 @@ and of_spec {posonly;_} = match posonly with
   | _ -> failwith "TODO not just 1 posonly"
 
 and of_param {pos;_} = match pos with
-  | [] -> Var (mk_ident ()) |> Ast.dannot
+  | [] -> Var (mk_ident "dummy") |> Ast.dannot
   | [ e ] -> of_expr e
   | _ -> failwith "TODO not just 1 pos parameter"
 
@@ -315,12 +335,20 @@ let rec of_instr (p,i:Ast.instr) = match i with
 
 let of_prog p = List.map of_instr p
 
+(* Translation pystate -> mlsem *)
 
+let mk_ident_ml () = mk_ident "m"
 let ident_name id = mlvar id |> Printing.mlvar_show
 
-let res_tag = function
-  | R -> MT.Tag.define "R"
-  | V -> MT.Tag.define "V"
+let r_tag = MT.Tag.define "R"
+and v_tag = MT.Tag.define "V"
+let r_tag_t = MT.(Tag.mk r_tag Ty.any )
+and v_tag_t = MT.(Tag.mk v_tag Ty.any )
+let r_tag_gt = MlGTy.mk r_tag_t
+and v_tag_gt = MlGTy.mk v_tag_t
+
+let res_tag =
+  function R -> r_tag | V -> v_tag
 
 let rec to_ml (p,e) =
   let open Utils in
@@ -329,7 +357,24 @@ let rec to_ml (p,e) =
   | Var id -> mlvar id |> var_of_vart p
   | Res (r, r_e) -> mk_tag p (res_tag r) (to_ml r_e)
   | Proj (r, p_e) -> mk_proj_tag p (res_tag r) (to_ml p_e)
-  | IfNotRes _ -> failwith "TODO bind_value"
+  | IfNotRes {cond;body;_} -> (*
+    let r = cond in
+    let tag = r.tag in
+    if tag is V
+    then let v = r.content.1 in
+         let s = r.content.2 in
+         body
+    else r *)
+    let r = mk_ident_ml ()
+    and tag = mk_ident_ml () in
+    mk_let p []
+      (mlvar r) (to_ml cond)
+      (mk_let p []
+         (mlvar tag) (mk_proj_tag p
+                        (res_tag V (*?!*)) (mlvar r |> var_of_vart p))
+         (mk_ite p (mlvar tag |> var_of_vart p) (failwith "tag")(*res_tag V*)
+            (to_ml body)
+            (mlvar r |> var_of_vart p)))
   | Val _ -> failwith "TODO bind_return"
   | Ite (test, e1, e2) ->
     mk_ite p (to_ml test) MT.(GTy.mk Ty.tt) (to_ml e1) (to_ml e2)
@@ -352,7 +397,7 @@ let show_res_kind = function R -> "R" | V -> "V"
 let pp_res_kind fmt r = Format.fprintf fmt "%s" (show_res_kind r)
 
 let pp_ident fmt = function
-  | Simple mlv -> Format.fprintf fmt "@[%%%s@]" (Printing.mlvar_show mlv)
+  | Simple mlv -> Format.fprintf fmt "@[%s@]" (Printing.mlvar_show mlv)
   | Source id -> Ast.Ident.pp fmt id
 
 let rec pp_expr' fmt e =
