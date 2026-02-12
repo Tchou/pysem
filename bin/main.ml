@@ -53,6 +53,16 @@ let treat_file file =
   let p = Prog.of_module (Env.init globals bil to_loc) m in
   dbg_pr "pysem ast" "%a" Ast.pp_prog p;
 
+  let e = Py_state.of_prog p in
+  pr "pystate ast" "%a"
+    (pp_print_list ~pp_sep:pp_print_newline Py_state.pp_expr)
+    e;
+  let er = List.map Py_state.reduce e in
+  pr "reduced pystate ast" "%a"
+    (pp_print_list ~pp_sep:pp_print_newline Py_state.pp_expr)
+    er
+
+  (* * )
   let ml = Prog.to_ml p in
   dbg_pr "mlsem ast" "%a"
     (pp_list ~sep:"@\n" pp_ml_top) ml;
@@ -78,7 +88,7 @@ let treat_file file =
                Printing.pp_ml_tys (v, s)
            else nl := false ))
     (List.rev names)
-    (ms_of_us tt)
+    (ms_of_us tt) ( * *)
 
 (* CLI *)
 
