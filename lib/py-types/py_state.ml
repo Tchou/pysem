@@ -375,7 +375,24 @@ let rec to_ml (p,e) =
                   (mlvar s) (mk_proj_tuple p 2 1 c_var)
                   (to_ml body)))
             (c_var)))
-  | Val _ -> failwith "TODO bind_return"
+  | Val {cond;v;s;body} ->
+    let c = mk_ident_ml ()
+    and r = mk_ident_ml () in
+    let c_ml = mlvar c
+    and r_ml = mlvar r in
+    let c_var = var_of_vart p c_ml
+    and r_var = var_of_vart p r_ml in
+    mk_let p []
+      c_ml (to_ml cond)
+      (mk_let p []
+         r_ml (mk_proj_tuple p 2 0 c_var)
+         (mk_ite p r_var r_tag_gt
+            (mk_let p []
+               (mlvar v) (mk_proj_tag p r_tag r_var)
+               (mk_let p []
+                  (mlvar s) (mk_proj_tuple p 2 1 c_var)
+                  (to_ml body)))
+            (c_var)))
   | Ite (test, e1, e2) ->
     mk_ite p (to_ml test) MT.(GTy.mk Ty.tt) (to_ml e1) (to_ml e2)
   | Tuple el -> mk_tuple p List.(map to_ml el)
