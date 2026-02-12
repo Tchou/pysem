@@ -315,6 +315,37 @@ let rec of_instr (p,i:Ast.instr) = match i with
 
 let of_prog p = List.map of_instr p
 
+
+let ident_name id = mlvar id |> Printing.mlvar_show
+
+let res_tag = function
+  | R -> MT.Tag.define "R"
+  | V -> MT.Tag.define "V"
+
+let rec to_ml (p,e) =
+  let open Utils in
+  match e with
+  | Const c -> mk_value p Ast.Const.(to_gty c)
+  | Var id -> mlvar id |> var_of_vart p
+  | Res (r, r_e) -> mk_tag p (res_tag r) (to_ml r_e)
+  | Proj (r, p_e) -> mk_proj_tag p (res_tag r) (to_ml p_e)
+  | IfNotRes _ -> failwith "TODO bind_value"
+  | Val _ -> failwith "TODO bind_return"
+  | Ite (test, e1, e2) ->
+    mk_ite p (to_ml test) MT.(GTy.mk Ty.tt) (to_ml e1) (to_ml e2)
+  | Tuple el -> mk_tuple p List.(map to_ml el)
+  | Pi (i,e) -> mk_proj_tuple p i 2 (to_ml e) (* FIXME arity 2 hard coded! *)
+  | EmptyRec -> mk_record p [] []
+  | RecUpdate (_r, x, e) -> (* FIXME how to use MLAst.Operation ? *)
+    mk_record_update p
+      (ident_name x)
+      (to_ml e)
+  | Field (e, id) -> mk_projection p (MSAst.PiField (ident_name id)) (to_ml e)
+  | Lambda (id,_,e) ->
+    mk_lambda p [] MT.(TVar.(mk KInfer (Some "??") |> typ)|> GTy.mk)
+      (mlvar id) (to_ml e)
+  | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
+
 (* Print *)
 
 let show_res_kind = function R -> "R" | V -> "V"

@@ -74,6 +74,9 @@ let mk_record pos decl_l expr_l =
     ( MSAst.Rec (decl_l, false)
     , expr_l) |> ml_annot pos
 
+let mk_record_update pos id expr = (* FIXME update *r* with id = expr ?? *)
+  MLAst.Operation (MS.Ast.RecUpd id, expr) |> ml_annot pos
+
 let mk_lambda pos ty gty id body =
   MLAst.Lambda (ty, gty, id, body) |> ml_annot pos
 
