@@ -8,6 +8,12 @@ type t =
   ; vars : (MlVar.t * info) IdentMap.t
   ; to_loc : Utils.loc_converter }
 
+let top_kind = ref MlMVar.Immut
+let local_kind = ref MlMVar.Mut
+
+let set_mut_top b = top_kind := MlMVar.(if b then Mut else Immut)
+let set_mut_local b = local_kind := MlMVar.(if b then Mut else Immut)
+
 let init globals bil to_loc =
   let infos = BidTable.create 16 in
   let filename = ref "" in
@@ -25,7 +31,7 @@ let init globals bil to_loc =
         (fun ident info vmap ->
            IdentMap.add
              ident
-             ( Utils.mk_var_t ~kind:MlMVar.Immut (PCI.to_string ident)
+             ( Utils.mk_var_t ~kind:!top_kind (PCI.to_string ident)
              , info )
              vmap )
         globals
@@ -41,7 +47,7 @@ let upd env bi =
           IdentMap.add py_ident
             ( begin match py_info.scope with
                 | Local | Parameter ->
-                  Utils.mk_var_t ~kind:MlMVar.Mut (PCI.to_string py_ident)
+                  Utils.mk_var_t ~kind:!local_kind (PCI.to_string py_ident)
                 | Nonlocal | Global -> IdentMap.find py_ident env.vars |> fst
                 | Unknown -> assert false
               end
