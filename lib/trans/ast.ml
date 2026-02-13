@@ -305,13 +305,8 @@ let rec pp_instr' fmt instr' : unit =
   | Continue -> fprintf fmt "continue"
 and pp_instr fmt (_,instr') = pp_instr' fmt instr'
 and pp_instr_list fmt il =
-<<<<<<< HEAD
-  Format.(fprintf fmt "%a"
-            (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_instr)
-=======
   Format.(fprintf fmt "%a@\n"
             (Printing.pp_list ~sep:"@\n" pp_instr)
->>>>>>> 496ec4d (generic pp_list)
             il)
 
 let pp_prog = pp_instr_list
