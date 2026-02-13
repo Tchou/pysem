@@ -17,7 +17,7 @@ let sh_values = [ "true",true ]
 
 (* STRINGS *)
 
-let internal_prefix = "%%"
+let internal_prefix = "%"
 let is_internal = String.starts_with ~prefix:internal_prefix
 let internal s = internal_prefix ^ s
 let strip_internal s =
@@ -31,6 +31,12 @@ let ml_fun_arg_name = mk_id "fun_arg"
 let ml_fun_packed_name = mk_id "fun_packed"
 let ml_fun_darg_name = mk_id "def_arg"
 let def_var_name k = mk_id "d_%s" k
+
+let gen_cpt () =
+  let cpt = ref (-1) in
+  let get () = cpt :=!cpt+1 ; !cpt in
+  let str_get () = get () |> string_of_int in
+  (get,str_get)
 
 (* MAKE TYPES *)
 
