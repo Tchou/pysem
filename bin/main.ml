@@ -56,19 +56,21 @@ let treat_file file =
   dbg_pr "pysem ast" "%a" Ast.pp_prog p;
 
   let e = Py_state.of_prog p in
-  dbg_pr "pystate ast" "%a"
-    (pp_list ~sep:"@\n" Py_state.pp_expr)
-    e;
+  dbg_pr "pystate ast" "%a" (pp_list ~sep:"@\n" Py_state.pp_expr) e;
+
   let er = List.map Py_state.reduce e in
-  pr "reduced pystate ast" "%a"
-    (pp_list ~sep:"@\n" Py_state.pp_expr)
-    er;
+  pr "reduced pystate ast" "%a" (pp_list ~sep:"@\n" Py_state.pp_expr) er;
 
   let ml_er = List.map Py_state.to_ml er in
-  let mlsys = List.map ML.Transform.transform ml_er in
   pr "ml reduced pst ast" "%a"
-    (pp_list ~sep:"@\n" Printing.MSAstPrinter.pp_t)
-    mlsys
+    (pp_list ~sep:"@\n" Printing.MLAstPrinter.pp_t) ml_er;
+
+  let mlsys = List.map ML.Transform.transform ml_er in
+  pr "mlsys reduced pst ast" "%a"
+    (pp_list ~sep:"@\n" Printing.MSAstPrinter.pp_t) mlsys;
+
+  let v_t = List.map (fun t -> MlVar.create None, t) mlsys in
+  let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) v_t in
 
   (* * )
   let ml = Prog.to_ml p in
@@ -79,6 +81,8 @@ let treat_file file =
 
   (* MS.Config.infer_overload := false; *)
   let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) ms_exprs in
+
+  ( * *)
 
   pr "reconstruction environement"
     "%a@\n@{<yellow;italic>checked in %.2fms@}"
@@ -96,7 +100,7 @@ let treat_file file =
                Printing.pp_ml_tys (v, s)
            else nl := false ))
     (List.rev names)
-    (ms_of_us tt) ( * *)
+    (ms_of_us tt) (* *)
 
 (* CLI *)
 
