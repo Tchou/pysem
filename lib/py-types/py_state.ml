@@ -341,7 +341,9 @@ let of_prog p = List.map of_instr p
 
 (* Translation pystate -> mlsem *)
 
-let mk_ident_ml () = mk_ident "m"
+let mk_ident_ml =
+  let _, sn = Utils.gen_cpt () in
+  fun () -> mk_ident ("m" ^ sn ())
 let ident_name id = mlvar id |> Printing.mlvar_show
 
 let r_tag = MT.Tag.define "R"
@@ -353,6 +355,8 @@ and v_tag_gt = MlGTy.mk v_tag_t
 
 let res_tag =
   function R -> r_tag | V -> v_tag
+
+let lcpt = Utils.gen_cpt () |> snd
 
 let rec to_ml (p,e) =
   let open Utils in
@@ -405,7 +409,7 @@ let rec to_ml (p,e) =
   | RecUpdate (r, x, e) -> mk_record_update p (ident_name x) (to_ml e) (to_ml r)
   | Field (e, id) -> mk_projection p (MSAst.PiField (ident_name id)) (to_ml e)
   | Lambda (id,_,e) ->
-    mk_lambda p [] MT.(TVar.(mk KInfer (Some "α") |> typ)|> GTy.mk)
+    mk_lambda p [] MT.(TVar.(mk KInfer (Some ("α" ^ lcpt ())) |> typ)|> GTy.mk)
       (mlvar id) (to_ml e)
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
 
