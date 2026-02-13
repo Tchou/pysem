@@ -50,17 +50,25 @@ let treat_file file =
   (* pr "block_infos" "%a" *)
   (* (pp_list ~sep:"@\n" Parsing.pp_block_info) bil; *)
 
+  Env.(set_mut_top false; set_mut_local false);
+
   let p = Prog.of_module (Env.init globals bil to_loc) m in
   dbg_pr "pysem ast" "%a" Ast.pp_prog p;
 
   let e = Py_state.of_prog p in
-  pr "pystate ast" "%a"
-    (pp_print_list ~pp_sep:pp_print_newline Py_state.pp_expr)
+  dbg_pr "pystate ast" "%a"
+    (pp_list ~sep:"@\n" Py_state.pp_expr)
     e;
   let er = List.map Py_state.reduce e in
   pr "reduced pystate ast" "%a"
-    (pp_print_list ~pp_sep:pp_print_newline Py_state.pp_expr)
-    er
+    (pp_list ~sep:"@\n" Py_state.pp_expr)
+    er;
+
+  let ml_er = List.map Py_state.to_ml er in
+  let mlsys = List.map ML.Transform.transform ml_er in
+  pr "ml reduced pst ast" "%a"
+    (pp_list ~sep:"@\n" Printing.MSAstPrinter.pp_t)
+    mlsys
 
   (* * )
   let ml = Prog.to_ml p in
