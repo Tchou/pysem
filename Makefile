@@ -1,5 +1,11 @@
+RUN=dune exec --
+MAINEXE=./bin/main.exe
+DEBUG=-debug
+
+RUNM=$(RUN) $(MAINEXE)
+
 run:build
-	dune exec ./bin/main.exe ./test/test_num.py
+	$(RUNM) ./test/test_num.py
 
 build:
 	dune build
@@ -7,8 +13,16 @@ build:
 clean:
 	dune clean
 
+
 test_params:build
-	dune exec ./bin/main.exe ./test/test_params.py
+	$(RUNM) ./test/test_params.py
+
+test_paramsd:build
+	$(RUNM) $(DEBUG) ./test/test_params.py
+
 
 pystate:build
-	dune exec ./bin/main.exe ./test/test_state.py
+	$(RUNM) ./test/test_state.py
+
+pystated:build
+	$(RUNM) $(DEBUG) ./test/test_state.py
