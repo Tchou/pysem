@@ -408,8 +408,11 @@ let rec to_ml (p,e) =
   | EmptyRec -> mk_record p [] []
   | RecUpdate (r, x, e) -> mk_record_update p (ident_name x) (to_ml e) (to_ml r)
   | Field (e, id) -> mk_projection p (MSAst.PiField (ident_name id)) (to_ml e)
-  | Lambda (id,_,e) ->
-    mk_lambda p [] MT.(TVar.(mk KInfer (Some ("α" ^ lcpt ())) |> typ)|> GTy.mk)
+  | Lambda (id,b,e) ->
+    let tyvar = MT.TVar.(mk KInfer (Some ("α" ^ lcpt ())) |> typ) in
+    let ty = if b then MT.Ty.(cap tyvar MT.Record.any) else tyvar in
+    let gty = MT.( ty |> GTy.mk) in
+    mk_lambda p [] gty
       (mlvar id) (to_ml e)
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
 
