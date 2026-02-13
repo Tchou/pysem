@@ -33,12 +33,18 @@ module MSAstPrinter = struct
   let pp_variable fmt v = Format.fprintf fmt "%s" (mlvar_show v)
   let pp_gty = MlGTy.pp
   let pp_ty = MT.Ty.pp
+  let pp_tag = MT.Tag.pp
   let pp_projection fmt p =
     let open MSAst in
     match p with
     | PiField str -> pp_print_string fmt str
     | PiFieldOpt str -> fprintf fmt "?%s" str
-    | Pi (_,i) -> fprintf fmt "[%d]" i
+    | Pi (n,i) -> begin match (n,i) with
+        | 2,0 -> fprintf fmt "fst"
+        | 2,1 -> fprintf fmt "snd"
+        | _,i -> fprintf fmt "[%d]" i
+      end
+    | PiTag t -> fprintf fmt "@[#%a@]" pp_tag t
     | _ -> pp_projection fmt p
   let pp_constructor = MSAst.pp_constructor
 
@@ -54,11 +60,25 @@ module MSAstPrinter = struct
     | Tuple i ->
       if List.length tl <> i then failwith "Wrong tuple constructor!"
       else fprintf fmt "@[<hov 2>(%a)@]" (pp_list ~sep:",@ " pp_t) tl
+    | Tag t -> fprintf fmt "@[%a#[%a]@]" pp_tag t (pp_list ~sep:",@ " pp_t) tl
     | _ -> fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
+
+  let pp_projection_arg fmt (p,t) pp_t =
+    let open MSAst in
+    match p with
+    | PiField str -> fprintf fmt "@[@[%a@].%s@]" pp_t t str
+    | PiFieldOpt str -> fprintf fmt "@[@[%a@]?.%s@]" pp_t t str
+    | Pi (n,i) -> begin match (n,i) with
+        | 2,0 -> fprintf fmt "fst @[%a@]" pp_t t
+        | 2,1 -> fprintf fmt "snd @[%a@]" pp_t t
+        | _,i -> fprintf fmt "@[%a@]@,.[%d]" pp_t t i
+      end
+    | PiTag tag -> fprintf fmt "@[@[%a@]@,#%a@]" pp_t t pp_tag tag
+    | _ -> fprintf fmt "@[@[%a@].@[%a@]@]" pp_t t pp_projection p
 
   let rec pp_e (fmt:formatter) (e:MSAst.e) :unit =
     match e with
-    | Value gty -> fprintf fmt "@[<hov 2>(%a)@]" pp_gty gty
+    | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
     | Constructor (c,tl) -> pp_Constructor_arg fmt (c,tl) pp_t
     | Lambda (gty,v,t) ->
@@ -79,8 +99,20 @@ module MSAstPrinter = struct
                                | _ -> "@[<hov 2>else@ %a@]@ ")
         pp_t t2
     | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
-    | Projection (p,t) -> fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
-                            pp_t t pp_projection p
+    | Operation (op, t) -> begin match op with
+        | RecUpd field -> begin match t with
+            | (_, Constructor (Tuple 2, [t1; t2])) ->
+              fprintf fmt "@[<hov 2>{ %a with@ %s =@ %a }@]"
+                pp_t t1 field pp_t t2
+            | _ -> fprintf fmt "@[<hov 2>{ %a with %s }@]" pp_t t field
+          end
+        | RecDel field ->
+          fprintf fmt "@[<hov 2>{ %a without %s }@]" pp_t t field
+        | OCustom _ ->
+          fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
+            pp_t t pp_operation op
+      end
+    | Projection (p,t) -> pp_projection_arg fmt (p,t) pp_t
     | Let (tyl,v,t1,t2) ->
       fprintf fmt "@[@[<hov 2>let %a%s@[%a@] =@ @[%a@]@ in@]@\n%a@]"
         pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t1 pp_t t2
@@ -89,9 +121,6 @@ module MSAstPrinter = struct
     | TypeCoerce (t,gty,_) ->
       fprintf fmt "@[<hov 2>coerce [%a]@ to @[%a@]@]" pp_t t pp_gty gty
     | Alt (t1,t2) -> fprintf fmt "@[<hov 2>Alt(%a,@ %a)@]" pp_t t1 pp_t t2
-    | Operation (op, t) ->
-      fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
-        pp_t t pp_operation op
   and pp_t fmt (_,e) = pp_e fmt e
 end
 
@@ -102,7 +131,7 @@ module MLAstPrinter = struct
   let pp_variable = MSAstPrinter.pp_variable
   let pp_gty = MlGTy.pp
   let pp_ty = MT.Ty.pp
-  let pp_projection = SA.pp_projection
+  let pp_projection = MSAstPrinter.pp_projection
   let pp_operation = SA.pp_operation
 
   let rec pp_pattern_constructor fmt pc : unit = match pc with
@@ -157,8 +186,20 @@ module MLAstPrinter = struct
                   (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]"
                       pp_pattern p pp_t t)) ptl
     | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
-    | Projection (p,t) -> fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
-                            pp_t t pp_projection p
+    | Operation (op, t) -> begin match op with
+        | RecUpd field -> begin match t with
+            | (_, Constructor (Tuple 2, [t1; t2])) ->
+              fprintf fmt "@[<hov 2>{ %a with@ %s =@ %a }@]"
+                pp_t t1 field pp_t t2
+            | _ -> fprintf fmt "@[<hov 2>{ %a with %s }@]" pp_t t field
+          end
+        | RecDel field ->
+          fprintf fmt "@[<hov 2>{ %a without %s }@]" pp_t t field
+        | OCustom _ ->
+          fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
+            pp_t t pp_operation op
+      end
+    | Projection (p,t) -> MSAstPrinter.pp_projection_arg fmt (p,t) pp_t
     | Declare (v,t) ->
       fprintf fmt "@[<hov 2>val mut %a =@ %a@]"
         pp_variable v pp_t t
@@ -189,9 +230,6 @@ module MLAstPrinter = struct
         pp_t test pp_gty ty pp_t body
     | Return t -> fprintf fmt "@[<hov 2>return %a@]" pp_t t
     | Break -> fprintf fmt "break"
-    | Operation (op, t) ->
-      fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
-        pp_t t pp_operation op
 
   and pp_t fmt (_,e) = pp_e fmt e
 end
