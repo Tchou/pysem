@@ -110,8 +110,12 @@ let reduce e =
   in loop e
 
 let mk_ident s = Simple (Some Utils.(internal s) |> MlVar.create)
-let mk_ident_v () = mk_ident "v"
-let mk_ident_s () = mk_ident "s"
+let mk_ident_v =
+  let _, sn = Utils.gen_cpt () in
+  fun () -> mk_ident ("v" ^ sn ())
+let mk_ident_s =
+  let _, sn = Utils.gen_cpt () in
+  fun () -> mk_ident ("s" ^ sn ())
 let pair pos e1 e2 =
   pos, Tuple[e1; e2]
 
