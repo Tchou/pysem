@@ -244,7 +244,7 @@ let apply pos e1 e2 =
                           (pos, Var s2);
                       v; s = s3;
                       body = pair pos
-                          (res pos V (pos, Const none))
+                          (res pos V (pos, Var v))
                           (pos, Var s3)
                     }
               }
@@ -263,7 +263,8 @@ let tuple2 pos e1 e2 =
           cond = app pos e2 (pos, Var s1);
           v = v2;
           s = s2;
-          body = pair pos (pair pos (pos, Var v1) (pos, Var v2))
+          body = pair pos
+              (res pos V (pair pos (pos, Var v1) (pos, Var v2)))
               (pos, Var s2)
         }}))
 
