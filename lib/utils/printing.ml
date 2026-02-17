@@ -59,7 +59,7 @@ module MSAstPrinter = struct
         (if b then "; .." else "")
     | Tuple i ->
       if List.length tl <> i then failwith "Wrong tuple constructor!"
-      else fprintf fmt "@[<hov 2>(%a)@]" (pp_list ~sep:",@ " pp_t) tl
+      else fprintf fmt "@[<hov 2>( %a )@]" (pp_list ~sep:",@ " pp_t) tl
     | Tag t -> fprintf fmt "@[%a#[%a]@]" pp_tag t (pp_list ~sep:",@ " pp_t) tl
     | _ -> fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
 
