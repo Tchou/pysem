@@ -416,6 +416,24 @@ let rec to_ml (p,e) =
       (mlvar id) (to_ml e)
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
 
+let fold_ml ml_l =
+  let open Utils in
+  let cpt = gen_cpt () |> snd in
+  let mk_tmp_state () =
+    "S" ^ cpt () |> internal |> mk_var_t ~kind:MlMVar.Immut in
+  let rec loop el (s, acc) = match el with
+    | [] -> acc
+    | (p,e)::l ->
+      let s2 = mk_tmp_state () in
+      ( s2
+      , ( s2
+        , mk_app dummy_pos (p,e) (var_of_vart dummy_pos s)
+          |> mk_proj_tuple dummy_pos 2 1) :: acc)
+      |> loop l in
+  let s = mk_tmp_state () in
+  (s, [ s, mk_record dummy_pos [] [] ])
+  |> loop ml_l |> List.rev
+
 (* Print *)
 
 let show_res_kind = function R -> "R" | V -> "V"

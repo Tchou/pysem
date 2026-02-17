@@ -65,11 +65,17 @@ let treat_file file =
   pr "ml reduced pst ast" "%a"
     (pp_list ~sep:"@\n" Printing.MLAstPrinter.pp_t) ml_er;
 
-  let mlsys = List.map ML.Transform.transform ml_er in
+  let ml_er = Py_state.fold_ml ml_er in
+  let v_t = List.map (fun (v,t) -> v, ML.Transform.transform t) ml_er in
   pr "mlsys reduced pst ast" "%a"
-    (pp_list ~sep:"@\n" Printing.MSAstPrinter.pp_t) mlsys;
+    (pp_list ~sep:"@\n"
+       (fun fmt (v,t) ->
+          Format.fprintf fmt "@[%a: @[%a@]@]@."
+            Printing.MSAstPrinter.pp_variable v
+            Printing.MSAstPrinter.pp_t t)) v_t;
 
-  let v_t = List.map (fun t -> MlVar.create None, t) mlsys in
+  (* let v_t = List.map (fun t -> MlVar.create None, t) mlsys in *)
+  (* MS.Config.infer_overload := false; *)
   let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) v_t in
 
   (* * )
@@ -91,7 +97,8 @@ let treat_file file =
        ~pp_sep:(fun fmt _ -> if !nl then fprintf fmt "@\n"; nl := true)
        ( fun fmt v ->
            let s = MC.Env.find v mce in
-           if MlVar.show v |> Utils.is_internal |> not
+           if true
+             (* MlVar.show v |> Utils.is_internal |> not *)
            then Format.fprintf fmt "@[<hov>%a: %a@]"
                MlVar.pp v
                Py_params.pp_py_scheme s
