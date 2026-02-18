@@ -58,15 +58,19 @@ type const =
   | Int of int
   (* | Float of float *)
   | String of string
-
+type scoped_identifiers = {
+  nl_used : IdentSet.t;
+  nl_unused : IdentSet.t;
+  locals : IdentSet.t
+}
 type expr' =
   | Var of ident
   | Binop of expr * binop * expr
   | Cst of const
-  | Lambda of spec * IdentSet.t * expr
+  | Lambda of spec * scoped_identifiers * expr
   | Apply of expr * params
   | Tuple of expr list
-(* | Projection of expr * expr (\* proj, value *\) *)
+  (* | Projection of expr * expr (\* proj, value *\) *)
 and expr = expr' annot
 and spec =
   { posonly : (ident * expr option) list
@@ -82,7 +86,7 @@ type target = ident
 
 type instr' =
   | Block of instr list
-  | FunDef of ident * spec * IdentSet.t * instr
+  | FunDef of ident * spec * scoped_identifiers * instr
   | Return of expr option
   | Assign of target * expr
   | While of expr * instr
@@ -95,17 +99,29 @@ type prog = instr list
 
 let dannot : 'a -> 'a annot = fun x -> Utils.dummy_pos, x
 let env_annot env loc t = env.Env.to_loc loc, t
-let used_identifiers env bid =
+
+(** [scoped_identifier env bid] returns the pairs of sets of
+    identifiers [s] where:
+    - [s.used] is the set of global or non local identifiers that
+      are accessed by [bid]
+    - [s.unused] is the set of global or non local identifiers that
+      are in scope but not used by [bid]
+*)
+let scoped_identifiers env bid =
   let open Parsing in
   let infos =  BidTable.find env.Env.infos bid in
-  let idents =
-    IdentMap.fold
-      (fun ident _ acc ->
-         let name, s = IdentMap.find ident env.vars in
-         IdentSet.add ({name; scope=s.scope}) acc)
-      infos.identifiers IdentSet.empty
-  in
-  idents
+  IdentMap.fold
+    (fun ident (name, s) ({nl_used; nl_unused;locals} as acc) ->
+       let id = { name; scope = s.scope } in
+       match s.scope,infos.kind with
+         ((Local | Parameter),_)
+       | (Global,Module ) -> {acc with locals = IdentSet.(add id locals)}
+       | _ ->
+         if IdentMap.mem ident infos.identifiers then
+           {acc with nl_used = IdentSet.(add id nl_used)}
+         else
+           {acc with nl_unused = IdentSet.(add id nl_unused)})
+    env.vars IdentSet.{nl_used=empty;nl_unused=empty;locals=empty}
 
 module Const = struct
   let of_constant (c:PC.Constant.t) : const = match c with
@@ -165,7 +181,7 @@ module Binop = struct
     and int_cmp = MT.(Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.bool))
     and bool_op = MT.(Arrow.mk Ty.bool (Arrow.mk Ty.bool Ty.bool))
     and pol_cmp _ = let tv = mk_tv "bop_tv" in
-                    MT.(Arrow.mk tv    (Arrow.mk tv      Ty.bool)) in
+      MT.(Arrow.mk tv    (Arrow.mk tv      Ty.bool)) in
     let strkey, ty = match op with
       | Add -> "+", int_op
       | Sub -> "-", int_op
@@ -239,12 +255,12 @@ let rec pp_expr' fmt =
   | Binop (e1, b, e2) ->
     fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
   | Cst c -> pp_const fmt c
-  | Lambda (x,idents, e) ->
-    fprintf fmt "@[@[%a@]@[<hov 2>fun %a -> %a@]@]"
-      pp_identset idents pp_spec x pp_expr e
+  | Lambda (x,si, e) ->
+    fprintf fmt "@[unused: @[%a@],used: @[%a@]@[<hov 2>fun %a -> %a@]@]"
+      pp_identset si.nl_unused pp_identset si.nl_used pp_spec x pp_expr e
   | Apply (e,p) -> fprintf fmt "@[%a%a@]" pp_expr e pp_params p
   | Tuple el ->
-     fprintf fmt "@[<hov 1>(%a)@]" (Printing.pp_list ~sep:",@ " pp_expr) el
+    fprintf fmt "@[<hov 1>(%a)@]" (Printing.pp_list ~sep:",@ " pp_expr) el
 (*| Projection (p,e) -> Format.fprintf fmt "@[%a[%a]@]" pp_expr e pp_expr p *)
 and pp_expr fmt (_,e') = pp_expr' fmt e'
 and pp_spec fmt s =
@@ -284,16 +300,16 @@ let rec pp_instr' fmt instr' : unit =
   let open Format in
   match instr' with
   | Block il ->
-     if il = []
-     then fprintf fmt "@[pass # Empty block@]"
-     else fprintf fmt
-            (if !Utils.debug then "@[# Block [@\n%a# ] Block@]" else "%a")
-            pp_instr_list il
+    if il = []
+    then fprintf fmt "@[pass # Empty block@]"
+    else fprintf fmt
+        (if !Utils.debug then "@[# Block [@\n%a# ] Block@]" else "%a")
+        pp_instr_list il
   | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]"
                       (pp_ident) x pp_expr e
-  | FunDef (i,s,idents, b) ->
-    fprintf fmt "@[@[%a@]@[<hov 2>def %a%a:@\n%a@]@]"
-      pp_identset idents
+  | FunDef (i,s,si, b) ->
+    fprintf fmt "@[unused: @[%a@],used: @[%a@]@[<hov 2>def %a%a:@\n%a@]@]"
+      pp_identset si.nl_unused pp_identset si.nl_used
       pp_ident i pp_spec s pp_instr b
   | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i
   | If (e,i,io) -> fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"

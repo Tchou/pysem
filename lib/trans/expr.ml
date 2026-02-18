@@ -26,10 +26,10 @@ let rec of_expression (env:Env.t) (e:PC.Expression.t) : expr =
   | Lambda r ->
     let bid =  Parsing.BlockId.mk_lambda r.location in
     let lenv = Env.upd env bid in
-    let idents = Ast.used_identifiers lenv bid in
+    let si = Ast.scoped_identifiers lenv bid in
 
     Lambda ( spec_of_arguments lenv r.args
-           , idents
+           , si
            , of_expression lenv r.body ) |> annot r.location
   (* | IfExp | Dict | Set | ListComp | SetComp | DictComp | GeneratorExp | Await
      | Yield | YieldFrom *)

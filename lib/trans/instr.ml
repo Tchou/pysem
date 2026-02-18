@@ -14,10 +14,10 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
     let spec = Expr.spec_of_arguments fenv r.args in
     let body = mk_block (List.map (of_statement fenv) r.body)
                |> annot r.location in
-    let idents = Ast.used_identifiers fenv bid in
+    let sid = Ast.scoped_identifiers fenv bid in
     FunDef ( Ident.of_identifier env r.name
            , spec
-           , idents
+           , sid
            , body )
     |> annot r.location
   (* | AsyncFunctionDef | ClassDef *)

@@ -288,16 +288,18 @@ let ty_var =
       HMlVar.add h mlv t; t
 
 let row_id = ref 0
-let make_state_record ids =
+let make_state_record sid =
+  (* ; `si row variable but this is too expensive ! *)
   let _tail = MT.RVar.(mk KInfer (Some (Format.sprintf "s%d" !row_id))|> fty) in
-  let tail = MT.FTy.any in
+  let ids = Ast.(IdentSet.union sid.used sid.unused) in
+  let tail = MT.FTy.any in (* ; .. *)
   incr row_id;
   MT.Record.mk' tail
     (List.filter_map (fun id ->
          if id.Ast.scope = Parsing.Parameter then None
          else
            let v =  id.Ast.name in
-           Some (MlVar.get_unique_name v, (MT.FTy.of_oty (ty_var v, false))))
+           Some (MlVar.get_unique_name v, (MT.FTy.of_oty (ty_var v, Ast.IdentSet.mem id sid.unused))))
         (Ast.IdentSet.to_list ids))
 
 let of_opt p st eo f = match eo with
@@ -351,10 +353,10 @@ let rec of_instr st (p,i:Ast.instr) = match i with
       | [] -> const p st none
       | e1::l -> List.fold_left (fun sq ((p,_) as e) -> seq p st sq e ) e1 l
     end
-  | FunDef (id, spec, ids, body)  ->
-    Format.printf "Function %a has scope: %a\n%!"
-      Ast.Ident.pp_full id Ast.IdentSet.pp ids;
-    let lam_st = make_state_record ids in
+  | FunDef (id, spec, sid, body)  ->
+    Format.printf "Function %a has scope: used:%a,unused:%a\n%!"
+      Ast.Ident.pp_full id Ast.IdentSet.pp sid.Ast.used Ast.IdentSet.pp sid.Ast.unused;
+    let lam_st = make_state_record sid in
     let x = of_spec spec in
     let e = of_instr lam_st body in
     var_set p st (Source id) (lambda p st x lam_st e)
@@ -423,7 +425,7 @@ let rec to_ml (p,e) =
     let tyvar = MT.TVar.(mk KInfer (Some ("α" ^ lcpt ())) |> typ) in
     let ty = match k with
         Normal -> tyvar
-      | State t -> t
+      | State t -> MT.Ty.cap t tyvar
     in
     let gty = MT.( ty |> GTy.mk) in
     mk_lambda p [] gty
@@ -449,7 +451,7 @@ and mk_match p tag_gt tag cond v s body =
                 (to_ml body)))
           (c_var)))
 
-let fold_ml global_ids ml_l =
+let fold_ml _global_ids ml_l =
   let open Utils in
   let cpt = gen_cpt () |> snd in
   let mk_tmp_state () =
@@ -464,8 +466,8 @@ let fold_ml global_ids ml_l =
           |> mk_proj_tuple dummy_pos 2 1) :: acc)
       |> loop l in
   let s = mk_tmp_state () in
-  let gty = initial_env global_ids |> MT.GTy.mk in
-  (s, [ s, mk_value dummy_pos gty ])
+  (*let _gty = initial_env global_ids |> MT.GTy.mk in*)
+  (s, [ s, mk_record dummy_pos [][] ])
   |> loop ml_l |> List.rev
 
 (* Print *)

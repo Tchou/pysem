@@ -43,11 +43,11 @@ let cpt_x = let n = ref (-1) in fun () -> n := !n+1; !n
 let rand_str len =
   String.init len
     ( fun i ->
-      let j = if i = 0 then 0 else 1 in
-      char_of_int
-        (if j * Random.int 53 = 1
-         then 95
-         else 65 + (Random.int 26) + (j * 32 * Random.int 2)) )
+        let j = if i = 0 then 0 else 1 in
+        char_of_int
+          (if j * Random.int 53 = 1
+           then 95
+           else 65 + (Random.int 26) + (j * 32 * Random.int 2)) )
 
 (** If the list is not empty, returns a random item. Calls the second argument
     otherwise. *)
@@ -88,14 +88,14 @@ let ident_str kind =
 (** Randomly generates an [ident]. *)
 let rec rand_ident () =
   begin match Random.int 7 with
-  | 0 -> Ppos
-  | 1 -> Pmix
-  | 2 -> Pva
-  | 3 -> Pkwd
-  | 4 -> Pvk
-  | 5 -> Fun
-  | 6 -> Oth
-  | _ -> assert false
+    | 0 -> Ppos
+    | 1 -> Pmix
+    | 2 -> Pva
+    | 3 -> Pkwd
+    | 4 -> Pvk
+    | 5 -> Fun
+    | 6 -> Oth
+    | _ -> assert false
   end |> gen_ident
 
 (** Generates an id (named after its kind). *)
@@ -226,8 +226,8 @@ and rand_expr_lambda () =
     (rand_expr ())
 and rand_expr_lambda_simple () = (* 1 mix argument, 1 cst expression *)
   gen_expr_lambda (rand_spec_d 0 1 0 false 0 0 false) (rand_expr_cst ())
-and gen_expr_lambda spec ?(idset=IdentSet.empty) expr =
-  Lambda (spec, idset, expr) |> dannot
+and gen_expr_lambda spec ?(sid=Ast.{used=IdentSet.empty; unused=IdentSet.empty}) expr =
+  Lambda (spec, sid, expr) |> dannot
 
 (** Generates a random [expr] of [Ast.Apply] kind with random expression and
     parameters. *)
@@ -352,8 +352,8 @@ and rand_instr_fundef_bodylen size =
   gen_instr_fundef_ spec body
 and gen_instr_fundef_ spec body =
   gen_instr_fundef (gen_ident Fun) spec body
-and gen_instr_fundef f spec ?(idset=IdentSet.empty) body =
-  FunDef (f, spec, idset, body) |> dannot
+and gen_instr_fundef f spec ?(sid=Ast.{used=IdentSet.empty; unused=IdentSet.empty}) body =
+  FunDef (f, spec, sid, body) |> dannot
 
 (** Generates an [instr] value of kind [Ast.Return]. *)
 and rand_instr_return () =
@@ -423,7 +423,7 @@ let decr (a,b,c) =
      .     b<=0        b>0
      a<=0  bot         a,b-1,c+1
      a >0  a-1,b+1+c,0 a,b-1,c+1
-   *)
+  *)
   if b > 0
   then a,b-1,c+1
   else if a > 0
@@ -456,10 +456,10 @@ let all_fundef ?(defaults=true) i =
   fold_spec [] (i,0,0)
   |> List.rev
   |> List.map (fun spec ->
-         idents_of_spec spec
-         |> gen_expr_tuple_vars
-         |> gen_instr_iexpr
-         |> gen_instr_fundef_ spec)
+      idents_of_spec spec
+      |> gen_expr_tuple_vars
+      |> gen_instr_iexpr
+      |> gen_instr_fundef_ spec)
 
 (** Generate function definition for all specs from [0] to [n] arguments ([n]
     included). *)
@@ -467,5 +467,5 @@ let rec all_fundef_till n =
   if n < 0
   then []
   else let fbeg = all_fundef_till (n-1)
-       and fend = all_fundef n in
-       fbeg @ fend
+    and fend = all_fundef n in
+    fbeg @ fend
