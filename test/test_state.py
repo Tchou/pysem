@@ -1,4 +1,3 @@
 def f (x,/):
-  return (x,2)
-
+  return x
 y = f(10)

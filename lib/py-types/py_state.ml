@@ -1,6 +1,8 @@
 open Aliases
 
 type res_kind = R | V
+type lambda_kind = Normal | State of Sstt.Ty.t
+let is_admin = function Normal -> false | State _ -> true
 type ident = Simple of MlVar.t
            | Source of Ast.ident
 type expr' =
@@ -16,7 +18,7 @@ type expr' =
   | EmptyRec
   | RecUpdate of expr * ident * expr
   | Field of expr * ident
-  | Lambda of ident * bool * expr (* true ⇒ synthetic *)
+  | Lambda of ident * lambda_kind * expr (* true ⇒ synthetic *)
   | App of expr * expr
 and expr = MC.Position.t * expr'
 
@@ -24,7 +26,8 @@ let mlvar = function
     Simple v -> v
   | Source(Ast.{name; _ }) -> name
 
-let subst e s =
+let subst e s = (* unsound in general but ok since it's only called for administrative lambdas
+                   that have unique argument names *)
   let rec loop (pos, e) =
     (pos, loop_expr e)
   and loop_expr e =
@@ -44,7 +47,7 @@ let subst e s =
     | EmptyRec | Const _ -> e
     | RecUpdate (e1, id, e2) -> RecUpdate(loop e1, id, loop e2)
     | Field(e, id) -> Field (loop e, id)
-    | Lambda (id, b, e) ->  Lambda(id, b, loop e)
+    | Lambda (id, k, e) -> Lambda(id, k, loop e)
     | App (e1, e2) -> App (loop e1, loop e2)
   in loop e
 
@@ -100,12 +103,12 @@ let reduce e =
            e' -> snd e'
          | exception Not_found -> Field (e,id))
       else snd e
-    | Lambda (id, b, e) ->  Lambda(id, b, loop e)
+    | Lambda (id, k, e) ->  Lambda(id, k, loop e)
     | App(e1, e2) ->
       let e1 = loop e1 in
       let e2 = loop e2 in
       match snd e1 with
-      | Lambda(id, true, e) -> snd (loop (subst e [id, e2]))
+      | Lambda(id, k, e) when is_admin k -> snd (loop (subst e [id, e2]))
       | _ -> App (e1, e2)
   in loop e
 
@@ -127,26 +130,26 @@ let app pos e1 e2 =
 let none = Ast.None_
 
 (* Combinators *)
-let const pos c =
+let const pos st c =
   let s = mk_ident_s () in
   pos, Lambda
-    (s, true, pair pos
+    (s, State st, pair pos
        (res pos V (pos, Const c))
        (pos, Var s) )
 
-let var_get pos id =
+let var_get pos st id =
   let s = mk_ident_s () in
   pos, Lambda
-    (s, true, pair pos
+    (s, State st, pair pos
        (res pos V (pos, Field ((pos, Var s), id)))
        (pos, Var s))
 
-let var_set pos id e =
+let var_set pos st id e =
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s () in
   let v = mk_ident_v () in
   pos, Lambda
-    (s0, true,
+    (s0, State st ,
      (pos, IfNotRes
         { cond=app pos e (pos, Var s0);
           v; s=s1;
@@ -155,12 +158,12 @@ let var_set pos id e =
               (pos, RecUpdate ((pos, Var s1),id, (pos, Var v)))
         }))
 
-let return pos e =
+let return pos st e =
   let s0 = mk_ident_s ()
   and s = mk_ident_s () in
   let v = mk_ident_v () in
   pos, Lambda
-    (s0, true,
+    (s0, State st,
      (pos,
       IfNotRes
         { cond = app pos e (pos, Var s0);
@@ -171,13 +174,13 @@ let return pos e =
               (pos, Var s)
         }))
 
-let ite pos cond e1 e2 =
+let ite pos st cond e1 e2 =
   let s0 = mk_ident_s ()
   and s = mk_ident_s () in
   let v = mk_ident_v () in
   let ps = pos, Var s in
   pos, Lambda
-    (s0, true,
+    (s0, State st,
      (pos, IfNotRes
         { cond = app pos cond (pos, Var s0);
           v; s;
@@ -188,27 +191,27 @@ let ite pos cond e1 e2 =
                app pos e2 ps)
         }))
 
-let seq pos e1 e2 =
+let seq pos st e1 e2 =
   let s0 = mk_ident_s ()
   and s = mk_ident_s () in
   let v = mk_ident_v () in
   pos, Lambda
-    (s0, true,
+    (s0, State st,
      (pos, IfNotRes
         { cond = app pos e1 (pos, Var s0);
           v; s;
           body = app pos e2 (pos, Var s);
         }))
 
-let lambda pos x e =
+let lambda pos st x lam_st e =
   let s0  = mk_ident_s ()
   and s = mk_ident_v () in
   let v = mk_ident_v () in
   let f =
     Lambda
-      (x, false,
+      (x, Normal,
        (pos, Lambda
-          (s0, true,
+          (s0, State lam_st,
            (pos, IfNotRes
               { cond = app pos e
                     (pos, RecUpdate ((pos, Var s0), x, (pos, Var x)));
@@ -217,9 +220,9 @@ let lambda pos x e =
               }))))
   in
   let s0 = mk_ident_s () in
-  pos, Lambda(s0, true, pair pos (res pos V (pos,f)) (pos, Var s0))
+  pos, Lambda(s0, State st, pair pos (res pos V (pos,f)) (pos, Var s0))
 
-let apply pos e1 e2 =
+let apply pos st e1 e2 =
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s ()
   and s2 = mk_ident_s ()
@@ -228,7 +231,7 @@ let apply pos e1 e2 =
   and arg = mk_ident_v ()
   and v = mk_ident_v () in
   pos, Lambda
-    (s0, true,
+    (s0, State st,
      (pos, IfNotRes
         { cond = app pos e1 (pos, Var s0);
           v = f; s = s1;
@@ -250,13 +253,13 @@ let apply pos e1 e2 =
               }
         }))
 
-let tuple2 pos e1 e2 =
+let tuple2 pos st e1 e2 =
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s ()
   and s2 = mk_ident_s () in
   let v1 = mk_ident_v ()
   and v2 = mk_ident_v () in
-  pos, Lambda (s0, true, (pos, IfNotRes {
+  pos, Lambda (s0, State st, (pos, IfNotRes {
       cond = app pos e1 (pos, Var s0);
       v = v1; s = s1;
       body = pos, IfNotRes {
@@ -270,13 +273,40 @@ let tuple2 pos e1 e2 =
 
 (* Translation pysem -> pystate *)
 
-let of_opt p eo f = match eo with
-  | None -> const p none
-  | Some e -> f e
+module HMlVar = Hashtbl.Make(struct
+    include MlVar
+    let hash v = String.hash (MlVar.get_unique_name v)
+  end)
 
-let rec of_expr (p,e:Ast.expr) : expr = match e with
+let ty_var =
+  let h = HMlVar.create 16 in
+  fun mlv ->
+    match HMlVar.find_opt h mlv with
+      Some t -> t
+    | None ->
+      let t = Utils.mk_tv ~k:MT.KInfer ("ɑ" ^ MlVar.get_unique_name mlv) in
+      HMlVar.add h mlv t; t
+
+let row_id = ref 0
+let make_state_record ids =
+  let _tail = MT.RVar.(mk KInfer (Some (Format.sprintf "s%d" !row_id))|> fty) in
+  let tail = MT.FTy.any in
+  incr row_id;
+  MT.Record.mk' tail
+    (List.filter_map (fun id ->
+         if id.Ast.scope = Parsing.Parameter then None
+         else
+           let v =  id.Ast.name in
+           Some (MlVar.get_unique_name v, (MT.FTy.of_oty (ty_var v, false))))
+        (Ast.IdentSet.to_list ids))
+
+let of_opt p st eo f = match eo with
+  | None -> const p st none
+  | Some e -> f st e
+
+let rec of_expr st (p,e:Ast.expr) : expr = match e with
   | Var id -> (* λs.V(s.x),s *)
-    var_get p (Source id)
+    var_get p st (Source id)
   | Binop _ ->
     (* λs0. bind v1, s1 = [e1] s0 in
             bind v2, s2 = [e2] s1 in
@@ -284,22 +314,23 @@ let rec of_expr (p,e:Ast.expr) : expr = match e with
             ((op e1) e2) s3 (??) *)
     failwith "TODO Binop"
   | Cst c -> (* λs.V(c),s *)
-    const p c
-  | Lambda (spec,_,body) ->
+    const p st c
+  | Lambda (spec,ids,body) ->
+    let lam_st = make_state_record ids in
     let x = of_spec spec in
-    let e = of_expr body in
-    lambda p x e
+    let e = of_expr lam_st body in
+    lambda p st x lam_st e
   | Apply (e,param) ->
     (* λs0. bind f, s1 = [e] s0 in
             bind x, s2 = [p] s1 in
             (f x) s2 *)
-    let e1 = of_expr e
-    and e2 = of_param param in
-    apply p e1 e2
+    let e1 = of_expr st e
+    and e2 = of_param st param in
+    apply p st e1 e2
   | Tuple [e1;e2] ->
-    let e1 = of_expr e1
-    and e2 = of_expr e2 in
-    tuple2 p e1 e2
+    let e1 = of_expr st e1
+    and e2 = of_expr st e2 in
+    tuple2 p st e1 e2
   | Tuple _ ->
     (* λs0. bind x1, s1 = [e1] s0 in ... bind xn, sn = [en] sn-1 in
             (x1, ..., xn), sn *)
@@ -309,43 +340,56 @@ and of_spec {posonly;_} = match posonly with
   | [ (x,None) ] -> Source x
   | _ -> failwith "TODO not just 1 posonly"
 
-and of_param {pos;_} = match pos with
+and of_param st {pos;_} = match pos with
   | [] -> Var (mk_ident "dummy") |> Ast.dannot
-  | [ e ] -> of_expr e
+  | [ e ] -> of_expr st e
   | _ -> failwith "TODO not just 1 pos parameter"
 
-let rec of_instr (p,i:Ast.instr) = match i with
+let rec of_instr st (p,i:Ast.instr) = match i with
   | Block il ->
-    begin match List.map of_instr il with
-      | [] -> const p none
-      | e1::l -> List.fold_left (fun sq ((p,_) as e) -> seq p sq e ) e1 l
+    begin match List.map (of_instr st) il with
+      | [] -> const p st none
+      | e1::l -> List.fold_left (fun sq ((p,_) as e) -> seq p st sq e ) e1 l
     end
-  | FunDef (id, spec, _, body)  ->
+  | FunDef (id, spec, ids, body)  ->
+    Format.printf "Function %a has scope: %a\n%!"
+      Ast.Ident.pp_full id Ast.IdentSet.pp ids;
+    let lam_st = make_state_record ids in
     let x = of_spec spec in
-    let e = of_instr body in
-    var_set p (Source id) (lambda p x e)
+    let e = of_instr lam_st body in
+    var_set p st (Source id) (lambda p st x lam_st e)
   | Return eo ->
-    of_opt p eo of_expr
-    |> return p
+    of_opt p st eo of_expr
+    |> return p st
   | Assign (tg, e) ->
-    var_set p (Source tg) (of_expr e)
+    var_set p st (Source tg) (of_expr st e)
   | While (_e, _i) -> failwith "TODO while control flow"
   | If (test, i, io) ->
-    ite p
-      (of_expr test)
-      (of_instr i)
-      (of_opt p io of_instr)
-  | Iexpr e -> of_expr e
+    ite p st
+      (of_expr st test)
+      (of_instr st i)
+      (of_opt p st io of_instr)
+  | Iexpr e -> of_expr st e
   | Break | Continue -> failwith "TODO while control flow"
 
-let of_prog p = List.map of_instr p
+let of_prog p ids =
+  let tyrec = make_state_record ids in
+  List.map (of_instr tyrec) p
+
+let ty_undef = MT.Enum.(define "%py_uninitialized" |> typ)
+let initial_env ids =
+  Utils.mk_rec_disj false
+    [(List.map (fun id ->
+         let v =  id.Ast.name in
+         (MlVar.get_unique_name v, (ty_undef, false)))
+         (Ast.IdentSet.to_list ids))]
 
 (* Translation pystate -> mlsem *)
 
 let mk_ident_ml =
   let _, sn = Utils.gen_cpt () in
   fun () -> mk_ident ("m" ^ sn ())
-let ident_name id = mlvar id |> Printing.mlvar_show
+let ident_name id = mlvar id |> MlVar.get_unique_name
 
 let r_tag = MT.Tag.define "R"
 and v_tag = MT.Tag.define "V"
@@ -366,42 +410,8 @@ let rec to_ml (p,e) =
   | Var id -> mlvar id |> var_of_vart p
   | Res (r, r_e) -> mk_tag p (res_tag r) (to_ml r_e)
   | Proj (r, p_e) -> mk_proj_tag p (res_tag r) (to_ml p_e)
-  | IfNotRes {cond;v;s;body} ->
-    let c = mk_ident_ml ()
-    and r = mk_ident_ml () in
-    let c_ml = mlvar c
-    and r_ml = mlvar r in
-    let c_var = var_of_vart p c_ml
-    and r_var = var_of_vart p r_ml in
-    mk_let p []
-      c_ml (to_ml cond)
-      (mk_let p []
-         r_ml (mk_proj_tuple p 2 0 c_var)
-         (mk_ite p r_var v_tag_gt
-            (mk_let p []
-               (mlvar v) (mk_proj_tag p v_tag r_var)
-               (mk_let p []
-                  (mlvar s) (mk_proj_tuple p 2 1 c_var)
-                  (to_ml body)))
-            (c_var)))
-  | Val {cond;v;s;body} ->
-    let c = mk_ident_ml ()
-    and r = mk_ident_ml () in
-    let c_ml = mlvar c
-    and r_ml = mlvar r in
-    let c_var = var_of_vart p c_ml
-    and r_var = var_of_vart p r_ml in
-    mk_let p []
-      c_ml (to_ml cond)
-      (mk_let p []
-         r_ml (mk_proj_tuple p 2 0 c_var)
-         (mk_ite p r_var r_tag_gt
-            (mk_let p []
-               (mlvar v) (mk_proj_tag p r_tag r_var)
-               (mk_let p []
-                  (mlvar s) (mk_proj_tuple p 2 1 c_var)
-                  (to_ml body)))
-            (c_var)))
+  | IfNotRes {cond;v;s;body} -> mk_match p v_tag_gt v_tag cond v s body
+  | Val {cond;v;s;body} -> mk_match p r_tag_gt r_tag cond v s body
   | Ite (test, e1, e2) ->
     mk_ite p (to_ml test) MT.(GTy.mk Ty.tt) (to_ml e1) (to_ml e2)
   | Tuple el -> mk_tuple p List.(map to_ml el)
@@ -409,15 +419,37 @@ let rec to_ml (p,e) =
   | EmptyRec -> mk_record p [] []
   | RecUpdate (r, x, e) -> mk_record_update p (ident_name x) (to_ml e) (to_ml r)
   | Field (e, id) -> mk_projection p (MSAst.PiField (ident_name id)) (to_ml e)
-  | Lambda (id,b,e) ->
+  | Lambda (id,k,e) ->
     let tyvar = MT.TVar.(mk KInfer (Some ("α" ^ lcpt ())) |> typ) in
-    let ty = if b then MT.Ty.(cap tyvar MT.Record.any) else tyvar in
+    let ty = match k with
+        Normal -> tyvar
+      | State t -> t
+    in
     let gty = MT.( ty |> GTy.mk) in
     mk_lambda p [] gty
       (mlvar id) (to_ml e)
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
+and mk_match p tag_gt tag cond v s body =
+  let open Utils in
+  let c = mk_ident_ml () in
+  let r = mk_ident_ml () in
+  let c_ml = mlvar c in
+  let r_ml = mlvar r in
+  let c_var = var_of_vart p c_ml in
+  let r_var = var_of_vart p r_ml in
+  mk_let p []
+    c_ml (to_ml cond)
+    (mk_let p []
+       r_ml (mk_proj_tuple p 2 0 c_var)
+       (mk_ite_approx p r_var tag_gt
+          (mk_let p []
+             (mlvar v) (mk_proj_tag p tag r_var)
+             (mk_let p []
+                (mlvar s) (mk_proj_tuple p 2 1 c_var)
+                (to_ml body)))
+          (c_var)))
 
-let fold_ml ml_l =
+let fold_ml global_ids ml_l =
   let open Utils in
   let cpt = gen_cpt () |> snd in
   let mk_tmp_state () =
@@ -432,7 +464,8 @@ let fold_ml ml_l =
           |> mk_proj_tuple dummy_pos 2 1) :: acc)
       |> loop l in
   let s = mk_tmp_state () in
-  (s, [ s, mk_record dummy_pos [] [] ])
+  let gty = initial_env global_ids |> MT.GTy.mk in
+  (s, [ s, mk_value dummy_pos gty ])
   |> loop ml_l |> List.rev
 
 (* Print *)
@@ -469,8 +502,11 @@ let rec pp_expr' fmt e =
     fprintf fmt "@[<hov 2>{ %a with@ %a = %a }@]"
       pp_expr e1 pp_ident id pp_expr e2
   | Field (e, id) -> fprintf fmt "@[%a@,.%a@]" pp_expr e pp_ident id
-  | Lambda (id, b, e) ->
-    fprintf fmt "@[<hov 2>%s %a.@ %a@]"
-      (if b then "ƛ" else "λ") pp_ident id pp_expr e
+  | Lambda (id, State ty, e) ->  fprintf fmt "@[<hov 2>ƛ %a:%a.@ %a@]"
+                                   pp_ident id
+                                   MT.Ty.pp ty
+                                   pp_expr e
+  | Lambda (id, Normal, e) -> fprintf fmt "@[<hov 2>λ %a.@ %a@]"
+                                pp_ident id pp_expr e
   | App (e1, e2) -> fprintf fmt "@[<hov 2>(%a)@ %a@]" pp_expr e1 pp_expr e2
 and pp_expr fmt (_,e) = pp_expr' fmt e

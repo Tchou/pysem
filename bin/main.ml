@@ -30,12 +30,17 @@ let ms_of_us t = t *. 1000.
 
 let treat_def (tt, mce, lst) (v, ast) =
   let time0 = Unix.gettimeofday () in
-  let ts = ml_type mce ast in
   let v_str = MlVar.show v in
+  Format.printf "TYPING:%s\n%!" v_str;
+  let ts = ml_type mce ast in
+  let _, gy = MTS.get ts in
+  let ts = MTS.mk_poly gy in
+  let ts = MTS.bot_instance ts in
+
   let time1 = Unix.gettimeofday () in
 
   let elapsed = time1 -. time0 in
-  dbg_pr ("typing "^ v_str)
+  pr ("typing "^ v_str)
     "@{<italic;yellow>%.2fms@}@\n@{<bold;blue>ast@}: @[%a@]@\n\
      @{<bold;blue>tys@}: @[%a@]"
     (ms_of_us elapsed)
@@ -51,11 +56,12 @@ let treat_file file =
   (* (pp_list ~sep:"@\n" Parsing.pp_block_info) bil; *)
 
   Env.(set_mut_top false; set_mut_local false);
+  MS.Config.infer_overload := false;
 
-  let p = Prog.of_module (Env.init globals bil to_loc) m in
+  let p, global_ids = Prog.of_module (Env.init globals bil to_loc) m in
   dbg_pr "pysem ast" "%a" Ast.pp_prog p;
 
-  let e = Py_state.of_prog p in
+  let e = Py_state.of_prog p global_ids in
   dbg_pr "pystate ast" "%a" (pp_list ~sep:"@\n" Py_state.pp_expr) e;
 
   let er = List.map Py_state.reduce e in
@@ -65,7 +71,7 @@ let treat_file file =
   pr "ml reduced pst ast" "%a"
     (pp_list ~sep:"@\n" Printing.MLAstPrinter.pp_t) ml_er;
 
-  let ml_er = Py_state.fold_ml ml_er in
+  let ml_er = Py_state.fold_ml global_ids ml_er in
   let v_t = List.map (fun (v,t) -> v, ML.Transform.transform t) ml_er in
   pr "mlsys reduced pst ast" "%a"
     (pp_list ~sep:"@\n"
@@ -85,7 +91,6 @@ let treat_file file =
 
   let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
 
-  (* MS.Config.infer_overload := false; *)
   let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) ms_exprs in
 
   ( * *)

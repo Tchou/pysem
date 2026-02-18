@@ -93,6 +93,10 @@ let mk_lambda pos ty gty id body =
 
 let mk_ite pos test ty thn els = MLAst.Ite (test,ty,thn,els) |> ml_annot pos
 
+let mk_ite_approx pos cond gty then_ else_ =
+  let ty = MlGTy.ub gty in
+  MLAst.Constructor ((MSAst.Ternary ty) ,[cond;then_;else_]) |> ml_annot pos
+
 let mk_app pos f x = MLAst.App (f,x) |> ml_annot pos
 
 let mk_projection pos proj ast = MLAst.Projection (proj, ast) |> ml_annot pos
