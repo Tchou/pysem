@@ -291,7 +291,7 @@ let row_id = ref 0
 let make_state_record sid =
   (* ; `si row variable but this is too expensive ! *)
   let _tail = MT.RVar.(mk KInfer (Some (Format.sprintf "s%d" !row_id))|> fty) in
-  let ids = Ast.(IdentSet.union sid.used sid.unused) in
+  let ids = Ast.(IdentSet.union sid.nl_used sid.nl_unused) in
   let tail = MT.FTy.any in (* ; .. *)
   incr row_id;
   MT.Record.mk' tail
@@ -299,7 +299,7 @@ let make_state_record sid =
          if id.Ast.scope = Parsing.Parameter then None
          else
            let v =  id.Ast.name in
-           Some (MlVar.get_unique_name v, (MT.FTy.of_oty (ty_var v, Ast.IdentSet.mem id sid.unused))))
+           Some (MlVar.get_unique_name v, (MT.FTy.of_oty (ty_var v, Ast.IdentSet.mem id sid.nl_unused))))
         (Ast.IdentSet.to_list ids))
 
 let of_opt p st eo f = match eo with
@@ -355,7 +355,7 @@ let rec of_instr st (p,i:Ast.instr) = match i with
     end
   | FunDef (id, spec, sid, body)  ->
     Format.printf "Function %a has scope: used:%a,unused:%a\n%!"
-      Ast.Ident.pp_full id Ast.IdentSet.pp sid.Ast.used Ast.IdentSet.pp sid.Ast.unused;
+      Ast.Ident.pp_full id Ast.IdentSet.pp sid.Ast.nl_used Ast.IdentSet.pp sid.Ast.nl_unused;
     let lam_st = make_state_record sid in
     let x = of_spec spec in
     let e = of_instr lam_st body in

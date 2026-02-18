@@ -226,7 +226,7 @@ and rand_expr_lambda () =
     (rand_expr ())
 and rand_expr_lambda_simple () = (* 1 mix argument, 1 cst expression *)
   gen_expr_lambda (rand_spec_d 0 1 0 false 0 0 false) (rand_expr_cst ())
-and gen_expr_lambda spec ?(sid=Ast.{used=IdentSet.empty; unused=IdentSet.empty}) expr =
+and gen_expr_lambda spec ?(sid=Ast.{nl_used=IdentSet.empty; nl_unused=IdentSet.empty;locals=IdentSet.empty}) expr =
   Lambda (spec, sid, expr) |> dannot
 
 (** Generates a random [expr] of [Ast.Apply] kind with random expression and
@@ -352,7 +352,7 @@ and rand_instr_fundef_bodylen size =
   gen_instr_fundef_ spec body
 and gen_instr_fundef_ spec body =
   gen_instr_fundef (gen_ident Fun) spec body
-and gen_instr_fundef f spec ?(sid=Ast.{used=IdentSet.empty; unused=IdentSet.empty}) body =
+and gen_instr_fundef f spec ?(sid=Ast.{nl_used=IdentSet.empty; nl_unused=IdentSet.empty;locals=IdentSet.empty}) body =
   FunDef (f, spec, sid, body) |> dannot
 
 (** Generates an [instr] value of kind [Ast.Return]. *)
