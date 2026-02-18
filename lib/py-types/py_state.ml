@@ -470,6 +470,16 @@ let fold_ml _global_ids ml_l =
   (s, [ s, mk_record dummy_pos [][] ])
   |> loop ml_l |> List.rev
 
+let prepare_toplevel le =
+  let open Utils in
+  List.mapi (fun i (p,e) ->
+      let v = mk_var_t ~kind:MlMVar.Immut 
+          (internal Format.(sprintf "s%d" i))
+      in
+      v, (mk_app dummy_pos (p,e) (var_of_vart dummy_pos v))
+    ) le
+
+
 (* Print *)
 
 let show_res_kind = function R -> "R" | V -> "V"

@@ -56,7 +56,7 @@ let treat_file file =
   (* (pp_list ~sep:"@\n" Parsing.pp_block_info) bil; *)
 
   Env.(set_mut_top false; set_mut_local false);
-  MS.Config.infer_overload := false;
+  (*MS.Config.infer_overload := false;*)
 
   let p, global_ids = Prog.of_module (Env.init globals bil to_loc) m in
   dbg_pr "pysem ast" "%a" Ast.pp_prog p;
