@@ -64,14 +64,14 @@ let treat_file file =
   let e = Py_state.of_prog p global_ids in
   dbg_pr "pystate ast" "%a" (pp_list ~sep:"@\n" Py_state.pp_expr) e;
 
-  let er = List.map Py_state.reduce e in
-  pr "reduced pystate ast" "%a" (pp_list ~sep:"@\n" Py_state.pp_expr) er;
+  let e = Py_state.prepare_toplevel e in
+  let er = List.map (fun (v, e) -> (v, Py_state.reduce e)) e in
+  pr "reduced pystate ast" "%a" (pp_list ~sep:"@\n" Py_state.pp_expr) (List.map snd er);
 
-  let ml_er = List.map Py_state.to_ml er in
+  let ml_er = List.map (fun (v,e) -> v, Py_state.to_ml e) er in
   pr "ml reduced pst ast" "%a"
-    (pp_list ~sep:"@\n" Printing.MLAstPrinter.pp_t) ml_er;
+    (pp_list ~sep:"@\n" Printing.MLAstPrinter.pp_t) (List.map snd ml_er);
 
-  let ml_er = Py_state.fold_ml global_ids ml_er in
   let v_t = List.map (fun (v,t) -> v, ML.Transform.transform t) ml_er in
   pr "mlsys reduced pst ast" "%a"
     (pp_list ~sep:"@\n"
@@ -85,15 +85,15 @@ let treat_file file =
   let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) v_t in
 
   (* * )
-  let ml = Prog.to_ml p in
-  dbg_pr "mlsem ast" "%a"
-    (pp_list ~sep:"@\n" pp_ml_top) ml;
+     let ml = Prog.to_ml p in
+     dbg_pr "mlsem ast" "%a"
+     (pp_list ~sep:"@\n" pp_ml_top) ml;
 
-  let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
+     let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
 
-  let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) ms_exprs in
+     let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) ms_exprs in
 
-  ( * *)
+     ( * *)
 
   pr "reconstruction environement"
     "%a@\n@{<yellow;italic>checked in %.2fms@}"
@@ -103,7 +103,7 @@ let treat_file file =
        ( fun fmt v ->
            let s = MC.Env.find v mce in
            if true
-             (* MlVar.show v |> Utils.is_internal |> not *)
+           (* MlVar.show v |> Utils.is_internal |> not *)
            then Format.fprintf fmt "@[<hov>%a: %a@]"
                MlVar.pp v
                Py_params.pp_py_scheme s

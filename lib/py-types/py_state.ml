@@ -425,7 +425,7 @@ let rec to_ml (p,e) =
     let tyvar = MT.TVar.(mk KInfer (Some ("α" ^ lcpt ())) |> typ) in
     let ty = match k with
         Normal -> tyvar
-      | State t -> MT.Ty.cap t tyvar
+      | State t -> t (*MT.Ty.cap t tyvar*)
     in
     let gty = MT.( ty |> GTy.mk) in
     mk_lambda p [] gty
@@ -472,13 +472,19 @@ let fold_ml _global_ids ml_l =
 
 let prepare_toplevel le =
   let open Utils in
-  List.mapi (fun i (p,e) ->
-      let v = mk_var_t ~kind:MlMVar.Immut 
-          (internal Format.(sprintf "s%d" i))
-      in
-      v, (mk_app dummy_pos (p,e) (var_of_vart dummy_pos v))
-    ) le
-
+  let var i = mk_var_t ~kind:MlMVar.Immut 
+      (internal Format.(sprintf "s%d" i))
+  in 
+  let v0 = var 0 in
+  let _, _, le =
+    List.fold_left (fun (i, v, accl) (p, e) ->
+        let vn = var (i+1) in
+        let e1 : expr = (p,e) in
+        let e2 : expr = (p, Var (Simple v)) in
+        (i+1, vn, ((vn, (p, (Pi(1,(p, App(e1,e2))))))::accl)))
+      (0, v0, [v0,(MC.Position.dummy, EmptyRec)]) le
+  in
+  List.rev le
 
 (* Print *)
 
