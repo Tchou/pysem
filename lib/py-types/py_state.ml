@@ -18,6 +18,7 @@ type expr' =
   | EmptyRec
   | RecUpdate of expr * ident * expr
   | Field of expr * ident
+  | DelStateFields of ident list * expr
   | Lambda of ident * lambda_kind * expr (* true ⇒ synthetic *)
   | App of expr * expr
 and expr = MC.Position.t * expr'
@@ -49,6 +50,7 @@ let subst e s = (* unsound in general but ok since it's only called for administ
     | Field(e, id) -> Field (loop e, id)
     | Lambda (id, k, e) -> Lambda(id, k, loop e)
     | App (e1, e2) -> App (loop e1, loop e2)
+    | DelStateFields (l, e) -> DelStateFields(l, loop e)
   in loop e
 
 let is_simple e =
@@ -61,6 +63,7 @@ let is_simple e =
     | Ite(e1, e2, e3) -> loop e1 && loop e2 && loop e3
     | RecUpdate(e1, _, e2) -> loop e1 && loop e2
     | Tuple l -> List.for_all loop l
+    | DelStateFields (_, e) -> loop e
     | App _ -> false
   in
   loop e
@@ -102,7 +105,8 @@ let reduce e =
         (match find_field e id with
            e' -> snd e'
          | exception Not_found -> Field (e,id))
-      else snd e
+      else Field(e,id)
+    | DelStateFields(l, e) -> DelStateFields(l, loop e) (* TODO simplify *)
     | Lambda (id, k, e) ->  Lambda(id, k, loop e)
     | App(e1, e2) ->
       let e1 = loop e1 in
@@ -203,7 +207,7 @@ let seq pos st e1 e2 =
           body = app pos e2 (pos, Var s);
         }))
 
-let lambda pos st x lam_st e =
+let lambda pos st x lam_st locals e =
   let s0  = mk_ident_s ()
   and s = mk_ident_v () in
   let v = mk_ident_v () in
@@ -213,8 +217,9 @@ let lambda pos st x lam_st e =
        (pos, Lambda
           (s0, State lam_st,
            (pos, IfNotRes
-              { cond = app pos e
-                    (pos, RecUpdate ((pos, Var s0), x, (pos, Var x)));
+              { cond = pos,
+                       (DelStateFields(locals,app pos e
+                                         (pos, RecUpdate ((pos, Var s0), x, (pos, Var x)))));
                 v; s;
                 body = pair pos (res pos V (pos, Const none)) (pos, Var s);
               }))))
@@ -290,16 +295,20 @@ let ty_var =
 let row_id = ref 0
 let make_state_record sid =
   (* ; `si row variable but this is too expensive ! *)
+  let field_row = MT.RVar.(mk KInfer (Some (Format.sprintf "s%d" !row_id))|> fty) in
+  let absent = MT.(FTy.of_oty (Ty.empty,true)) in
   let _tail = MT.RVar.(mk KInfer (Some (Format.sprintf "s%d" !row_id))|> fty) in
-  let ids = Ast.(IdentSet.union sid.nl_used sid.nl_unused) in
-  let tail = MT.FTy.any in (* ; .. *)
+  let ids = Ast.(IdentSet.union sid.nl_used (IdentSet.union sid.nl_unused sid.locals)) in
   incr row_id;
-  MT.Record.mk' tail
+  MT.Record.mk' field_row
     (List.filter_map (fun id ->
          if id.Ast.scope = Parsing.Parameter then None
          else
            let v =  id.Ast.name in
-           Some (MlVar.get_unique_name v, (MT.FTy.of_oty (ty_var v, Ast.IdentSet.mem id sid.nl_unused))))
+           Some (MlVar.get_unique_name v,
+                 if Ast.IdentSet.mem id sid.locals then absent
+                 else field_row
+                ))
         (Ast.IdentSet.to_list ids))
 
 let of_opt p st eo f = match eo with
@@ -317,11 +326,14 @@ let rec of_expr st (p,e:Ast.expr) : expr = match e with
     failwith "TODO Binop"
   | Cst c -> (* λs.V(c),s *)
     const p st c
-  | Lambda (spec,ids,body) ->
-    let lam_st = make_state_record ids in
+  | Lambda (spec,sid,body) ->
+    let lam_st = make_state_record sid in
+    let locals = sid.locals |> Ast.IdentSet.to_list
+                 |> List.map (fun id -> Source id)
+    in
     let x = of_spec spec in
     let e = of_expr lam_st body in
-    lambda p st x lam_st e
+    lambda p st x lam_st locals e
   | Apply (e,param) ->
     (* λs0. bind f, s1 = [e] s0 in
             bind x, s2 = [p] s1 in
@@ -357,9 +369,12 @@ let rec of_instr st (p,i:Ast.instr) = match i with
     Format.printf "Function %a has scope: used:%a,unused:%a\n%!"
       Ast.Ident.pp_full id Ast.IdentSet.pp sid.Ast.nl_used Ast.IdentSet.pp sid.Ast.nl_unused;
     let lam_st = make_state_record sid in
+    let locals = sid.locals |> Ast.IdentSet.to_list
+                 |> List.map (fun id -> Source id)
+    in
     let x = of_spec spec in
     let e = of_instr lam_st body in
-    var_set p st (Source id) (lambda p st x lam_st e)
+    var_set p st (Source id) (lambda p st x lam_st locals e)
   | Return eo ->
     of_opt p st eo of_expr
     |> return p st
@@ -405,6 +420,19 @@ let res_tag =
 
 let lcpt = Utils.gen_cpt () |> snd
 
+let mk_delete_fields p e l =
+  let open Utils in
+  let x = mk_ident_ml () |> mlvar in
+  let xt = x |> var_of_vart p in
+  let v1 = mk_proj_tuple p 2 0 xt in
+  let v2 = mk_proj_tuple p 2 1 xt in
+  let dv2 = List.fold_left (fun e f ->
+      mk_rec_del p (ident_name f) e
+    ) v2 l
+  in
+  mk_let p [] x e
+    (mk_tuple p [v1; dv2])
+
 let rec to_ml (p,e) =
   let open Utils in
   match e with
@@ -431,6 +459,8 @@ let rec to_ml (p,e) =
     mk_lambda p [] gty
       (mlvar id) (to_ml e)
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
+  | DelStateFields (l, e) -> mk_delete_fields p (to_ml e) l
+
 and mk_match p tag_gt tag cond v s body =
   let open Utils in
   let c = mk_ident_ml () in
@@ -443,7 +473,7 @@ and mk_match p tag_gt tag cond v s body =
     c_ml (to_ml cond)
     (mk_let p []
        r_ml (mk_proj_tuple p 2 0 c_var)
-       (mk_ite_approx p r_var tag_gt
+       (mk_ite p r_var tag_gt
           (mk_let p []
              (mlvar v) (mk_proj_tag p tag r_var)
              (mk_let p []
@@ -472,9 +502,9 @@ let fold_ml _global_ids ml_l =
 
 let prepare_toplevel le =
   let open Utils in
-  let var i = mk_var_t ~kind:MlMVar.Immut 
+  let var i = mk_var_t ~kind:MlMVar.Immut
       (internal Format.(sprintf "s%d" i))
-  in 
+  in
   let v0 = var 0 in
   let _, _, le =
     List.fold_left (fun (i, v, accl) (p, e) ->
@@ -520,6 +550,8 @@ let rec pp_expr' fmt e =
     fprintf fmt "@[<hov 2>{ %a with@ %a = %a }@]"
       pp_expr e1 pp_ident id pp_expr e2
   | Field (e, id) -> fprintf fmt "@[%a@,.%a@]" pp_expr e pp_ident id
+  | DelStateFields(l, e) -> fprintf fmt "@[%a@,\\{%a}@]"
+                              pp_expr e (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_ident) l
   | Lambda (id, State ty, e) ->  fprintf fmt "@[<hov 2>ƛ %a:%a.@ %a@]"
                                    pp_ident id
                                    MT.Ty.pp ty

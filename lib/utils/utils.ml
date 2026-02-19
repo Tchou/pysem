@@ -112,6 +112,8 @@ let mk_return pos ast = MLAst.Return ast |> ml_annot pos
 
 let mk_break pos = MLAst.Break |> ml_annot pos
 
+let mk_rec_del pos id e =
+  MLAst.(Operation(SA.RecDel id, e)) |> ml_annot pos
 
 (* AST UTILS *)
 
