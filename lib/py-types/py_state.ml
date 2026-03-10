@@ -203,7 +203,7 @@ let seq pos st e1 e2 =
     (bindV pos e1 s0
        v s (smon_run pos e2 s))
 
-let lambda pos st x lam_st locals e =
+let lambda pos is_expr st x lam_st locals e =
   let s0  = mk_ident_s ()
   and s = mk_ident_v () in
   let v = mk_ident_v () in
@@ -217,7 +217,10 @@ let lambda pos st x lam_st locals e =
                         (locals,app pos e
                            (pos, RecUpdate ((pos, Var s0), x, (pos, Var x)))));
               v; s;
-              body = emon_ret pos V (pos, Const none) s;
+              body =
+                if is_expr
+                then emon_ret pos R (pos, Var v) s
+                else emon_ret pos V (pos, Const none) s;
             }))
   in
   let s0 = mk_ident_s () in
@@ -309,7 +312,7 @@ let rec of_expr st (p,e:Ast.expr) : expr = match e with
     in
     let x = of_spec spec in
     let e = of_expr lam_st body in
-    lambda p st x lam_st locals e
+    lambda p true st x lam_st locals e
   | Apply (e,param) ->
     (* λs0. bind f, s1 = [e] s0 in
             bind x, s2 = [p] s1 in
@@ -351,7 +354,7 @@ let rec of_instr st (p,i:Ast.instr) = match i with
     in
     let x = of_spec spec in
     let e = of_instr lam_st body in
-    var_set p st (Source id) (lambda p st x lam_st locals e)
+    var_set p st (Source id) (lambda p false st x lam_st locals e)
   | Return eo ->
     of_opt p st eo of_expr
     |> return p st
