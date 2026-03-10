@@ -123,11 +123,8 @@ module MSAstPrinter = struct
         l
     | Ite (test,ty,t1,t2) ->
       fprintf fmt
-        "@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n"
-        pp_t test pp_gty ty pp_t t1;
-      fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
-                               | _ -> "@[<hov 2>else@ %a@]@ ")
-        pp_t t2
+        "@[<v>@[<hov 2>if %a is %a@]@ @[<hov 2>then@ %a@]@ @[else %a@]@]"
+        pp_t test pp_gty ty pp_t t1 pp_t t2
     | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
     | Operation (op, t) -> begin match op with
         | RecUpd field -> pp_operation_recupd fmt t field
@@ -228,11 +225,8 @@ module MLAstPrinter = struct
         l
     | Ite (test,ty,t1,t2) ->
       fprintf fmt
-        "@[<hov 2>if %a is %a@]@\n@[<hov 2>then@ %a@]@\n"
-        pp_t test pp_gty ty pp_t t1;
-      fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
-                               | _ -> "@[<hov 2>else@ %a@]@ ")
-        pp_t t2
+        "@[<v>@[<hov 2>if %a is %a@]@ @[<hov 2>then@ %a@]@ @[else %a@]@]"
+        pp_t test pp_gty ty pp_t t1 pp_t t2
     | PatMatch (t,ptl) ->
       fprintf fmt "@[match @[%a@]@ with@ | %a@]"
         pp_t t (pp_list ~sep:""
@@ -322,11 +316,8 @@ module PAstPrinter = struct
         l
     | Ite (test,_,t1,t2) ->
       fprintf fmt
-        "@[<hov 2>if %a@]@\n@[<hov 2>then@ %a@]@\n"
-        pp_t test pp_t t1;
-      fprintf fmt (match t2 with (_, Ite _) -> "@[else %a@]@ "
-                               | _ -> "@[<hov 2>else@ %a@]@ ")
-        pp_t t2
+        "@[<v>@[<hov 2>if %a@]@ @[<hov 2>then@ %a@]@ @[else %a@]@]"
+        pp_t test pp_t t1 pp_t t2
     | App (t1,t2) -> fprintf fmt "(@[%a@])@ (@[%a@])" pp_t t1 pp_t t2
     | Let ((_,v),t1,t2) ->
       fprintf fmt "@[@[<hov 2>let %s =@ @[%a@]@ in@]@\n%a@]" v pp_t t1 pp_t t2
