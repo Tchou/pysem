@@ -511,14 +511,14 @@ let rec pp_expr' fmt e =
   | Res (r, e) -> fprintf fmt "@[<hov 2>%a(%a)@]" pp_res_kind r pp_expr e
   | Proj (r, e) -> fprintf fmt "@[<hov 2>(%a).%a@]" pp_expr e pp_res_kind r
   | IfV {cond;v;s;body} ->
-    fprintf fmt "@[@[<hov 2>bind %a, %a =@ %a in@]@ %a@]"
+    fprintf fmt "@[@[<hov 2>bind %a, %a =@ %a@] in@ %a@]"
       pp_ident v pp_ident s pp_expr cond pp_expr body
   | IfR {cond; v; s; body} ->
-    fprintf fmt "@[@[<hov 2>bindv %a, %a =@ %a in@]@ %a@]"
+    fprintf fmt "@[@[<hov 2>bindv %a, %a =@ %a@] in@ %a@]"
       pp_ident v pp_ident s pp_expr cond pp_expr body
   | Ite (e1, e2, e3) ->
     fprintf fmt
-      "@[@[<hov 2>if %a@]@\n@[<hov 2>then %a@]@\n@[<hov 2>else %a@]@]@\n"
+      "@[<v>@[<hov 2>if %a@]@ @[<hov 2>then %a@]@ @[<hov 2>else %a@]@]"
       pp_expr e1 pp_expr e2 pp_expr e3
   | Tuple el ->
     fprintf fmt "@[(@[%a@])@]" (Printing.pp_list ~sep:",@ " pp_expr) el
