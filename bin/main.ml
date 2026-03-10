@@ -66,7 +66,8 @@ let treat_file file =
 
   let e = Py_state.prepare_toplevel e in
   let er = List.map (fun (v, e) -> (v, Py_state.reduce e)) e in
-  pr "reduced pystate ast" "%a" (pp_list ~sep:"@\n" Py_state.pp_expr) (List.map snd er);
+  pr "reduced pystate ast" "%a"
+    (pp_list ~sep:"@\n" Py_state.pp_expr) (List.map snd er);
 
   let ml_er = List.map (fun (v,e) -> v, Py_state.to_ml e) er in
   pr "ml reduced pst ast" "%a"
@@ -85,18 +86,21 @@ let treat_file file =
   let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) v_t in
 
   (* * )
+
      let ml = Prog.to_ml p in
      dbg_pr "mlsem ast" "%a"
      (pp_list ~sep:"@\n" pp_ml_top) ml;
 
      let ms_exprs = List.map (fun (v,t) -> v, ML.Transform.transform t) ml in
 
-     let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) ms_exprs in
+     let tt, mce, names = List.fold_left treat_def
+         (0.,MC.Env.empty, []) ms_exprs in
 
-     ( * *)
+  ( * *)
 
   pr "reconstruction environement"
-    "%a@\n@{<yellow;italic>checked in %.2fms@}"
+    "@{<yellow;italic>checked in %.2fms@}@\n%a"
+    (ms_of_us tt)
     (let nl = ref true in
      pp_print_list
        ~pp_sep:(fun fmt _ -> if !nl then fprintf fmt "@\n"; nl := true)
@@ -112,7 +116,8 @@ let treat_file file =
                Printing.pp_ml_tys (v, s)
            else nl := false ))
     (List.rev names)
-    (ms_of_us tt) (* *)
+
+  (* *)
 
 (* CLI *)
 

@@ -10,8 +10,8 @@ type expr' =
   | Var of ident
   | Res of res_kind * expr
   | Proj of res_kind * expr
-  | IfNotRes of {cond:expr; v:ident; s:ident; body:expr}
-  | Val of {cond:expr; v:ident; s:ident; body:expr}
+  | IfV of {cond:expr; v:ident; s:ident; body:expr}
+  | IfR of {cond:expr; v:ident; s:ident; body:expr}
   | Ite of expr * expr * expr
   | Tuple of expr list
   | Pi of int * expr
@@ -27,21 +27,23 @@ let mlvar = function
     Simple v -> v
   | Source(Ast.{name; _ }) -> name
 
-let subst e s = (* unsound in general but ok since it's only called for administrative lambdas
-                   that have unique argument names *)
+let subst e s = (* unsound in general but ok since it's only called for
+                   administrative lambdas that have unique argument names *)
   let rec loop (pos, e) =
     (pos, loop_expr e)
   and loop_expr e =
     match e with
     | Var id ->
-      begin match List.find (fun (v, _) -> MlVar.compare (mlvar v) (mlvar id) = 0) s with
-          (_, e') -> snd e'
+      begin match List.find
+                    (fun (v, _) -> MlVar.compare (mlvar v) (mlvar id) = 0) s
+        with
+        | (_, e') -> snd e'
         | exception Not_found -> e
       end
     | Res (k, e) -> Res (k, loop e)
     | Proj (k, e) -> Proj(k, loop e)
-    | IfNotRes r -> IfNotRes { r with cond = loop r.cond; body = loop r.body }
-    | Val r -> Val { r with cond = loop r.cond; body = loop r.body }
+    | IfV r -> IfV { r with cond = loop r.cond; body = loop r.body }
+    | IfR r -> IfR { r with cond = loop r.cond; body = loop r.body }
     | Ite (e1, e2, e3) -> Ite(loop e1, loop e2, loop e3)
     | Tuple l -> Tuple (List.map loop l)
     | Pi (i, e) -> Pi(i, loop e)
@@ -58,8 +60,8 @@ let is_simple e =
   and loop_expr = function
       Var _ | EmptyRec | Const _  |Lambda _ -> true
     | Res (_, e) | Proj(_, e) | Pi (_ , e) | Field (e, _) -> loop e
-    | IfNotRes { cond; body; _ } -> loop cond && loop body
-    | Val { cond; body; _ } -> loop cond && loop body
+    | IfV { cond; body; _ } -> loop cond && loop body
+    | IfR { cond; body; _ } -> loop cond && loop body
     | Ite(e1, e2, e3) -> loop e1 && loop e2 && loop e3
     | RecUpdate(e1, _, e2) -> loop e1 && loop e2
     | Tuple l -> List.for_all loop l
@@ -83,19 +85,20 @@ let reduce e =
     | Proj (k,(p, e)) -> (match loop_expr e with
         | Res (k', (_,e')) when k = k' -> e'
         | e -> Proj (k,(p, e)))
-    | IfNotRes r -> (
+    | IfV r -> (
         let cond = loop r.cond in
         let body = loop r.body in
         match snd cond with
         | Tuple [_,Res (R, _);_] as r -> r
         | Tuple [_,Res (V,e) ;s] -> snd (subst body [r.v, e; r.s, s])
-        | _ -> IfNotRes{r with cond; body }
+        | _ -> IfV{r with cond; body }
       )
-    | Val r -> Val r (* TODO *)
+    | IfR r -> IfR r (* TODO *)
     | Ite(e1, e2, e3) -> Ite(loop e1, loop e2, loop e3)
     | Tuple l -> Tuple (List.map loop l)
     | Pi (i, e) -> (match loop e with
-          _, Tuple l when List.length l > i && List.for_all is_simple l -> snd (List.nth l i)
+        | _, Tuple l when List.length l > i && List.for_all is_simple l ->
+          snd (List.nth l i)
         | e' -> Pi(i, e')
       )
     | RecUpdate (e1, id, e2) -> RecUpdate(loop e1, id, loop e2)
@@ -123,11 +126,29 @@ let mk_ident_v =
 let mk_ident_s =
   let _, sn = Utils.gen_cpt () in
   fun () -> mk_ident ("s" ^ sn ())
+
 let pair pos e1 e2 =
   pos, Tuple[e1; e2]
 
 let res pos k e =
   pos, Res(k, e)
+
+let emon_ret pos k e s =
+  pos, Tuple [ (pos, Res (k, e)) ; (pos, Var s)]
+and emon_upd pos k e s id v =
+  pos, Tuple [ (pos, Res (k, e)) ;
+               (pos, RecUpdate ((pos, Var s), id, (pos, Var v)))]
+let smon_ret pos (s,sty) e =
+  pos, Lambda (s, State sty, e)
+let smon_run pos e s =
+  pos, App (e, (pos, Var s))
+
+let bindV pos e s0 v s body =
+  let cond = smon_run pos e s0 in
+  pos, IfV { cond; v; s; body }
+and bindR pos e s0 v s body =
+  let cond = smon_run pos e s0 in
+  pos, IfR { cond; v; s; body }
 
 let app pos e1 e2 =
   pos, App(e1, e2)
@@ -136,96 +157,72 @@ let none = Ast.None_
 (* Combinators *)
 let const pos st c =
   let s = mk_ident_s () in
-  pos, Lambda
-    (s, State st, pair pos
-       (res pos V (pos, Const c))
-       (pos, Var s) )
+  smon_ret pos (s,st)
+    (emon_ret pos V (pos, Const c) s)
 
 let var_get pos st id =
   let s = mk_ident_s () in
-  pos, Lambda
-    (s, State st, pair pos
-       (res pos V (pos, Field ((pos, Var s), id)))
-       (pos, Var s))
+  emon_ret pos
+    V (pos, Field ((pos, Var s), id))
+    s
+  |> smon_ret pos (s,st)
 
 let var_set pos st id e =
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s () in
   let v = mk_ident_v () in
-  pos, Lambda
-    (s0, State st ,
-     (pos, IfNotRes
-        { cond=app pos e (pos, Var s0);
-          v; s=s1;
-          body=pair pos
-              (res pos V (pos, Const none))
-              (pos, RecUpdate ((pos, Var s1),id, (pos, Var v)))
-        }))
+  smon_ret pos (s0,st)
+    (bindV pos e s0
+       v s1 (emon_upd pos V (pos, Const none) s1 id v))
 
 let return pos st e =
   let s0 = mk_ident_s ()
   and s = mk_ident_s () in
   let v = mk_ident_v () in
-  pos, Lambda
-    (s0, State st,
-     (pos,
-      IfNotRes
-        { cond = app pos e (pos, Var s0);
-          v; s;
-          body=
-            pair pos
-              (res pos R (pos, Var v))
-              (pos, Var s)
-        }))
+  smon_ret pos (s0,st)
+    (bindV pos e s0 v s
+       (emon_ret pos R (pos, Var v) s))
 
 let ite pos st cond e1 e2 =
   let s0 = mk_ident_s ()
   and s = mk_ident_s () in
   let v = mk_ident_v () in
   let ps = pos, Var s in
-  pos, Lambda
-    (s0, State st,
-     (pos, IfNotRes
-        { cond = app pos cond (pos, Var s0);
-          v; s;
-          body =
-            pos, Ite
+  smon_ret pos (s0,st)
+    (bindV pos cond s0
+       v s (pos, Ite
               ((pos, Var v),
                app pos e1 ps,
-               app pos e2 ps)
-        }))
+               app pos e2 ps)))
 
 let seq pos st e1 e2 =
   let s0 = mk_ident_s ()
   and s = mk_ident_s () in
   let v = mk_ident_v () in
-  pos, Lambda
-    (s0, State st,
-     (pos, IfNotRes
-        { cond = app pos e1 (pos, Var s0);
-          v; s;
-          body = app pos e2 (pos, Var s);
-        }))
+  smon_ret pos (s0,st)
+    (bindV pos e1 s0
+       v s (smon_run pos e2 s))
 
 let lambda pos st x lam_st locals e =
   let s0  = mk_ident_s ()
   and s = mk_ident_v () in
   let v = mk_ident_v () in
   let f =
-    Lambda
+    pos, Lambda
       (x, Normal,
-       (pos, Lambda
-          (s0, State lam_st,
-           (pos, IfNotRes
-              { cond = pos,
-                       (DelStateFields(locals,app pos e
-                                         (pos, RecUpdate ((pos, Var s0), x, (pos, Var x)))));
-                v; s;
-                body = pair pos (res pos V (pos, Const none)) (pos, Var s);
-              }))))
+       smon_ret pos (s0,lam_st)
+         (pos, IfV
+            { cond = pos,
+                     (DelStateFields
+                        (locals,app pos e
+                           (pos, RecUpdate ((pos, Var s0), x, (pos, Var x)))));
+              v; s;
+              body = emon_ret pos V (pos, Const none) s;
+            }))
   in
   let s0 = mk_ident_s () in
-  pos, Lambda(s0, State st, pair pos (res pos V (pos,f)) (pos, Var s0))
+  smon_ret pos (s0,st)
+    (emon_ret pos V f s0)
 
 let apply pos st e1 e2 =
   let s0 = mk_ident_s ()
@@ -235,28 +232,11 @@ let apply pos st e1 e2 =
   let f = mk_ident_v ()
   and arg = mk_ident_v ()
   and v = mk_ident_v () in
-  pos, Lambda
-    (s0, State st,
-     (pos, IfNotRes
-        { cond = app pos e1 (pos, Var s0);
-          v = f; s = s1;
-          body =
-            pos, IfNotRes
-              { cond = app pos e2 (pos, Var s1);
-                v = arg;
-                s = s2;
-                body =
-                  pos, Val
-                    { cond = app pos
-                          (app pos (pos, Var f) (pos, Var arg))
-                          (pos, Var s2);
-                      v; s = s3;
-                      body = pair pos
-                          (res pos V (pos, Var v))
-                          (pos, Var s3)
-                    }
-              }
-        }))
+  smon_ret pos (s0,st)
+    (bindV pos e1 s0
+       f s1 (bindV pos e2 s1
+               arg s2 (bindR pos (app pos (pos, Var f) (pos, Var arg)) s2
+                         v s3 (emon_ret pos V (pos, Var v) s3))))
 
 let tuple2 pos st e1 e2 =
   let s0 = mk_ident_s ()
@@ -264,17 +244,11 @@ let tuple2 pos st e1 e2 =
   and s2 = mk_ident_s () in
   let v1 = mk_ident_v ()
   and v2 = mk_ident_v () in
-  pos, Lambda (s0, State st, (pos, IfNotRes {
-      cond = app pos e1 (pos, Var s0);
-      v = v1; s = s1;
-      body = pos, IfNotRes {
-          cond = app pos e2 (pos, Var s1);
-          v = v2;
-          s = s2;
-          body = pair pos
-              (res pos V (pair pos (pos, Var v1) (pos, Var v2)))
-              (pos, Var s2)
-        }}))
+  smon_ret pos (s0,st)
+    (bindV pos e1 s0
+       v1 s1 (bindV pos e2 s1
+                v2 s2 (emon_ret pos V
+                         (pos, Tuple [pos,Var v1; pos,Var v2]) s2)))
 
 (* Translation pysem -> pystate *)
 
@@ -295,10 +269,12 @@ let ty_var =
 let row_id = ref 0
 let make_state_record sid =
   (* ; `si row variable but this is too expensive ! *)
-  let field_row = MT.RVar.(mk KInfer (Some (Format.sprintf "s%d" !row_id))|> fty) in
+  let field_row = MT.RVar.(
+      mk KInfer (Some (Format.sprintf "s%d" !row_id)) |> fty) in
   let absent = MT.(FTy.of_oty (Ty.empty,true)) in
   let _tail = MT.RVar.(mk KInfer (Some (Format.sprintf "s%d" !row_id))|> fty) in
-  let ids = Ast.(IdentSet.union sid.nl_used (IdentSet.union sid.nl_unused sid.locals)) in
+  let ids = Ast.(IdentSet.union sid.nl_used
+                   (IdentSet.union sid.nl_unused sid.locals)) in
   incr row_id;
   MT.Record.mk' field_row
     (List.filter_map (fun id ->
@@ -329,7 +305,7 @@ let rec of_expr st (p,e:Ast.expr) : expr = match e with
   | Lambda (spec,sid,body) ->
     let lam_st = make_state_record sid in
     let locals = sid.locals |> Ast.IdentSet.to_list
-                 |> List.map (fun id -> Source id)
+      |> List.map (fun id -> Source id)
     in
     let x = of_spec spec in
     let e = of_expr lam_st body in
@@ -367,10 +343,11 @@ let rec of_instr st (p,i:Ast.instr) = match i with
     end
   | FunDef (id, spec, sid, body)  ->
     Format.printf "Function %a has scope: used:%a,unused:%a\n%!"
-      Ast.Ident.pp_full id Ast.IdentSet.pp sid.Ast.nl_used Ast.IdentSet.pp sid.Ast.nl_unused;
+      Ast.Ident.pp_full id Ast.IdentSet.pp sid.Ast.nl_used
+      Ast.IdentSet.pp sid.Ast.nl_unused;
     let lam_st = make_state_record sid in
     let locals = sid.locals |> Ast.IdentSet.to_list
-                 |> List.map (fun id -> Source id)
+      |> List.map (fun id -> Source id)
     in
     let x = of_spec spec in
     let e = of_instr lam_st body in
@@ -440,8 +417,8 @@ let rec to_ml (p,e) =
   | Var id -> mlvar id |> var_of_vart p
   | Res (r, r_e) -> mk_tag p (res_tag r) (to_ml r_e)
   | Proj (r, p_e) -> mk_proj_tag p (res_tag r) (to_ml p_e)
-  | IfNotRes {cond;v;s;body} -> mk_match p v_tag_gt v_tag cond v s body
-  | Val {cond;v;s;body} -> mk_match p r_tag_gt r_tag cond v s body
+  | IfV {cond;v;s;body} -> mk_match p v_tag_gt v_tag cond v s body
+  | IfR {cond;v;s;body} -> mk_match p r_tag_gt r_tag cond v s body
   | Ite (test, e1, e2) ->
     mk_ite p (to_ml test) MT.(GTy.mk Ty.tt) (to_ml e1) (to_ml e2)
   | Tuple el -> mk_tuple p List.(map to_ml el)
@@ -463,10 +440,8 @@ let rec to_ml (p,e) =
 
 and mk_match p tag_gt tag cond v s body =
   let open Utils in
-  let c = mk_ident_ml () in
-  let r = mk_ident_ml () in
-  let c_ml = mlvar c in
-  let r_ml = mlvar r in
+  let c_ml = mk_ident_ml () |> mlvar in
+  let r_ml = mk_ident_ml () |> mlvar in
   let c_var = var_of_vart p c_ml in
   let r_var = var_of_vart p r_ml in
   mk_let p []
@@ -532,10 +507,10 @@ let rec pp_expr' fmt e =
   | Var id -> pp_ident fmt id
   | Res (r, e) -> fprintf fmt "@[<hov 2>%a(%a)@]" pp_res_kind r pp_expr e
   | Proj (r, e) -> fprintf fmt "@[<hov 2>(%a).%a@]" pp_expr e pp_res_kind r
-  | IfNotRes {cond;v;s;body} ->
+  | IfV {cond;v;s;body} ->
     fprintf fmt "@[@[<hov 2>bind %a, %a =@ %a in@]@ %a@]"
       pp_ident v pp_ident s pp_expr cond pp_expr body
-  | Val {cond; v; s; body} ->
+  | IfR {cond; v; s; body} ->
     fprintf fmt "@[@[<hov 2>bindv %a, %a =@ %a in@]@ %a@]"
       pp_ident v pp_ident s pp_expr cond pp_expr body
   | Ite (e1, e2, e3) ->
@@ -550,13 +525,14 @@ let rec pp_expr' fmt e =
     fprintf fmt "@[<hov 2>{ %a with@ %a = %a }@]"
       pp_expr e1 pp_ident id pp_expr e2
   | Field (e, id) -> fprintf fmt "@[%a@,.%a@]" pp_expr e pp_ident id
-  | DelStateFields(l, e) -> fprintf fmt "@[%a@,\\{%a}@]"
-                              pp_expr e (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ",@ ") pp_ident) l
-  | Lambda (id, State ty, e) ->  fprintf fmt "@[<hov 2>ƛ %a:%a.@ %a@]"
-                                   pp_ident id
-                                   MT.Ty.pp ty
-                                   pp_expr e
-  | Lambda (id, Normal, e) -> fprintf fmt "@[<hov 2>λ %a.@ %a@]"
-                                pp_ident id pp_expr e
+  | DelStateFields(l, e) ->
+    fprintf fmt "@[%a@,\\{%a}@]"
+      pp_expr e Printing.(pp_list ~sep:",@ " pp_ident) l
+  | Lambda (id, State ty, e) ->
+    fprintf fmt "@[<hov 2>ƛ %a:%a.@ %a@]"
+      pp_ident id MT.Ty.pp ty pp_expr e
+  | Lambda (id, Normal, e) ->
+    fprintf fmt "@[<hov 2>λ %a.@ %a@]"
+      pp_ident id pp_expr e
   | App (e1, e2) -> fprintf fmt "@[<hov 2>(%a)@ %a@]" pp_expr e1 pp_expr e2
 and pp_expr fmt (_,e) = pp_expr' fmt e
