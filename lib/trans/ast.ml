@@ -313,7 +313,11 @@ let rec pp_instr' fmt instr' : unit =
       pp_ident i pp_spec s pp_instr b
   | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i
   | If (e,i,io) -> fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"
-                     pp_expr e pp_instr i (pp_print_option pp_instr) io
+                     pp_expr e pp_instr i
+                     (pp_print_option
+                        ~none:(fun fmt () -> Block [] |> pp_instr' fmt)
+                        pp_instr)
+                     io
   | Iexpr e -> pp_expr fmt e
   | Return eo -> fprintf fmt "@[<hov 2>return@ %a@]"
                    (pp_print_option pp_expr) eo

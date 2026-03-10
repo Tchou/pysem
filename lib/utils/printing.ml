@@ -76,7 +76,37 @@ module MSAstPrinter = struct
     | PiTag tag -> fprintf fmt "@[@[%a@]@,#%a@]" pp_t t pp_tag tag
     | _ -> fprintf fmt "@[@[%a@].@[%a@]@]" pp_t t pp_projection p
 
-  let rec pp_e (fmt:formatter) (e:MSAst.e) :unit =
+  let rec pp_operation_recupd fmt t f0 =
+    let open Format in
+    let rec get_recupd acc ti =
+      match ti with
+      | _, Operation (RecUpd fn, tn) -> begin match tn with
+          | _, Constructor (Tuple 2, [tm; vn])->
+            get_recupd ((fn, Some vn)::acc) tm
+          | _ -> tn, (fn,None)::acc
+        end
+      | _ -> ti, acc
+    in
+    match t with
+    | _, Constructor (Tuple 2, [t1; t2]) ->
+      let r, xvl = get_recupd [f0, Some t2] t1 in
+      fprintf fmt "@[<hov 2>{ %a with@ %a }@]"
+        pp_t r
+        (pp_list (fun fmt (field, oval) ->
+             fprintf fmt "%s%a" field
+               (pp_print_option (fun fmt v ->
+                    fprintf fmt " =@ %a" pp_t v)) oval)) xvl
+    | _ -> fprintf fmt "@[<hov 2>{ %a with@ %s }@]" pp_t t f0
+  and pp_operation_recdel fmt t field =
+    let rec get_recdel acc ti = match ti with
+      | _, Operation (RecDel fn, tn) -> get_recdel (fn::acc) tn
+      | _ -> ti, acc
+    in
+    let r, x_l = get_recdel [field] t in
+    fprintf fmt "@[<hov 2>{ %a without %a }@]" pp_t r
+      (pp_list pp_print_string) x_l
+
+  and pp_e (fmt:formatter) (e:MSAst.e) :unit =
     match e with
     | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
@@ -100,14 +130,8 @@ module MSAstPrinter = struct
         pp_t t2
     | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
     | Operation (op, t) -> begin match op with
-        | RecUpd field -> begin match t with
-            | (_, Constructor (Tuple 2, [t1; t2])) ->
-              fprintf fmt "@[<hov 2>{ %a with@ %s =@ %a }@]"
-                pp_t t1 field pp_t t2
-            | _ -> fprintf fmt "@[<hov 2>{ %a with %s }@]" pp_t t field
-          end
-        | RecDel field ->
-          fprintf fmt "@[<hov 2>{ %a without %s }@]" pp_t t field
+        | RecUpd field -> pp_operation_recupd fmt t field
+        | RecDel field -> pp_operation_recdel fmt t field
         | OCustom _ ->
           fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
             pp_t t pp_operation op
@@ -134,7 +158,36 @@ module MLAstPrinter = struct
   let pp_projection = MSAstPrinter.pp_projection
   let pp_operation = SA.pp_operation
 
-  let rec pp_pattern_constructor fmt pc : unit = match pc with
+  let rec pp_operation_recupd fmt t f0 =
+    let open Format in
+    let rec get_recupd acc ti = match ti with
+      | _, Operation (RecUpd fn, tn) -> begin match tn with
+          | _, Constructor (Tuple 2, [tm; vn])->
+            get_recupd ((fn, Some vn)::acc) tm
+          | _ -> tn, (fn,None)::acc
+        end
+      | _ -> ti, acc
+    in
+    match t with
+    | _, Constructor (Tuple 2, [t1; t2]) ->
+      let r, xvl = get_recupd [f0, Some t2] t1 in
+      fprintf fmt "@[<hov 2>{ %a with@ %a }@]"
+        pp_t r
+        (pp_list (fun fmt (field, oval) ->
+             fprintf fmt "%s%a" field
+               (pp_print_option (fun fmt v ->
+                    fprintf fmt " =@ %a" pp_t v)) oval)) xvl
+    | _ -> fprintf fmt "@[<hov 2>{ %a with@ %s }@]" pp_t t f0
+  and pp_operation_recdel fmt t field =
+    let rec get_recdel acc ti = match ti with
+      | _, Operation (RecDel fn, tn) -> get_recdel (fn::acc) tn
+      | _ -> ti, acc
+    in
+    let r, x_l = get_recdel [field] t in
+    fprintf fmt "@[<hov 2>{ %a without %a }@]" pp_t r
+      (pp_list pp_print_string) x_l
+
+  and pp_pattern_constructor fmt pc : unit = match pc with
     | PCTuple i -> fprintf fmt "PTuple(%d)" i
     | PCCons -> fprintf fmt "PCCons"
     | PCRec (sl,b) ->
@@ -187,14 +240,8 @@ module MLAstPrinter = struct
                       pp_pattern p pp_t t)) ptl
     | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
     | Operation (op, t) -> begin match op with
-        | RecUpd field -> begin match t with
-            | (_, Constructor (Tuple 2, [t1; t2])) ->
-              fprintf fmt "@[<hov 2>{ %a with@ %s =@ %a }@]"
-                pp_t t1 field pp_t t2
-            | _ -> fprintf fmt "@[<hov 2>{ %a with %s }@]" pp_t t field
-          end
-        | RecDel field ->
-          fprintf fmt "@[<hov 2>{ %a without %s }@]" pp_t t field
+        | RecUpd field -> pp_operation_recupd fmt t field
+        | RecDel field -> pp_operation_recdel fmt t field
         | OCustom _ ->
           fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
             pp_t t pp_operation op
