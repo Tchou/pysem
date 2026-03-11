@@ -395,10 +395,27 @@ and v_tag_t = MT.(Tag.mk v_tag Ty.any )
 let r_tag_gt = MlGTy.mk r_tag_t
 and v_tag_gt = MlGTy.mk v_tag_t
 
-let res_tag =
-  function R -> r_tag | V -> v_tag
+let res_tag = function R -> r_tag | V -> v_tag
 
-let lcpt = Utils.gen_cpt () |> snd
+let cpt = Utils.gen_cpt () |> snd
+
+let mk_match p tag_gt tag cond v s body =
+  let open Utils in
+  let c_ml = mk_ident_ml () |> mlvar in
+  let r_ml = mk_ident_ml () |> mlvar in
+  let c_var = var_of_vart p c_ml in
+  let r_var = var_of_vart p r_ml in
+  mk_let p []
+    c_ml cond
+    (mk_let p []
+       r_ml (mk_proj_tuple p 2 0 c_var)
+       (mk_ite p r_var tag_gt
+          (mk_let p []
+             (mlvar v) (mk_proj_tag p tag r_var)
+             (mk_let p []
+                (mlvar s) (mk_proj_tuple p 2 1 c_var)
+                body))
+          (c_var)))
 
 let mk_delete_fields p e l =
   let open Utils in
@@ -420,8 +437,10 @@ let rec to_ml (p,e) =
   | Var id -> mlvar id |> var_of_vart p
   | Res (r, r_e) -> mk_tag p (res_tag r) (to_ml r_e)
   | Proj (r, p_e) -> mk_proj_tag p (res_tag r) (to_ml p_e)
-  | IfV {cond;v;s;body} -> mk_match p v_tag_gt v_tag cond v s body
-  | IfR {cond;v;s;body} -> mk_match p r_tag_gt r_tag cond v s body
+  | IfV {cond;v;s;body} ->
+    mk_match p v_tag_gt v_tag (to_ml cond) v s (to_ml body)
+  | IfR {cond;v;s;body} ->
+    mk_match p r_tag_gt r_tag (to_ml cond) v s (to_ml body)
   | Ite (test, e1, e2) ->
     mk_ite p (to_ml test) MT.(GTy.mk Ty.tt) (to_ml e1) (to_ml e2)
   | Tuple el -> mk_tuple p List.(map to_ml el)
@@ -430,7 +449,7 @@ let rec to_ml (p,e) =
   | RecUpdate (r, x, e) -> mk_record_update p (ident_name x) (to_ml e) (to_ml r)
   | Field (e, id) -> mk_projection p (MSAst.PiField (ident_name id)) (to_ml e)
   | Lambda (id,k,e) ->
-    let tyvar = MT.TVar.(mk KInfer (Some ("α" ^ lcpt ())) |> typ) in
+    let tyvar = MT.TVar.(mk KInfer (Some ("α" ^ cpt ())) |> typ) in
     let ty = match k with
         Normal -> tyvar
       | State t -> t (*MT.Ty.cap t tyvar*)
@@ -440,24 +459,6 @@ let rec to_ml (p,e) =
       (mlvar id) (to_ml e)
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
   | DelStateFields (l, e) -> mk_delete_fields p (to_ml e) l
-
-and mk_match p tag_gt tag cond v s body =
-  let open Utils in
-  let c_ml = mk_ident_ml () |> mlvar in
-  let r_ml = mk_ident_ml () |> mlvar in
-  let c_var = var_of_vart p c_ml in
-  let r_var = var_of_vart p r_ml in
-  mk_let p []
-    c_ml (to_ml cond)
-    (mk_let p []
-       r_ml (mk_proj_tuple p 2 0 c_var)
-       (mk_ite p r_var tag_gt
-          (mk_let p []
-             (mlvar v) (mk_proj_tag p tag r_var)
-             (mk_let p []
-                (mlvar s) (mk_proj_tuple p 2 1 c_var)
-                (to_ml body)))
-          (c_var)))
 
 let fold_ml _global_ids ml_l =
   let open Utils in
@@ -503,7 +504,21 @@ let pp_ident fmt = function
   | Simple mlv -> Format.fprintf fmt "@[%s@]" (Printing.mlvar_show mlv)
   | Source id -> Ast.Ident.pp fmt id
 
-let rec pp_expr' fmt e =
+let rec pp_expr'_recupd fmt r0 f0 v0 =
+  let open Format in
+  let rec get_recupd acc ti = match ti with
+    | _, RecUpdate (tj, fi, vi) ->
+      get_recupd ((fi,vi)::acc) tj
+    | _ -> acc, ti in
+  let pp_base fmt r = match r with
+    | _, EmptyRec -> ()
+    | _ -> fprintf fmt "%a with@ " pp_expr r
+  and pp_var fmt (fi,vi) = fprintf fmt "%a =@ %a" pp_ident fi pp_expr vi in
+  let fv_l, ti = get_recupd [f0,v0] r0 in
+  fprintf fmt "@[<hov 2>{ %a%a }@]"
+    pp_base ti (Printing.pp_list pp_var) fv_l
+
+and pp_expr' fmt e =
   let open Format in
   match e with
   | Const c -> Ast.pp_const fmt c
@@ -524,9 +539,7 @@ let rec pp_expr' fmt e =
     fprintf fmt "@[(@[%a@])@]" (Printing.pp_list ~sep:",@ " pp_expr) el
   | Pi (i, e) -> fprintf fmt "@[π%d(%a)@]" i pp_expr e
   | EmptyRec -> fprintf fmt "{}"
-  | RecUpdate (e1, id, e2) ->
-    fprintf fmt "@[<hov 2>{ %a with@ %a = %a }@]"
-      pp_expr e1 pp_ident id pp_expr e2
+  | RecUpdate (e1, id, e2) -> pp_expr'_recupd fmt e1 id e2
   | Field (e, id) -> fprintf fmt "@[%a@,.%a@]" pp_expr e pp_ident id
   | DelStateFields(l, e) ->
     fprintf fmt "@[%a@,\\{%a}@]"
