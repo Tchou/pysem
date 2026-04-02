@@ -8,14 +8,15 @@ type ident =
 
 module Ident = struct
   type t = ident
-  let show ({name;_}:ident) = Printing.mlvar_show name
-  let pp fmt id = Format.fprintf fmt "%s" (show id)
-  let pp_full fmt id = Format.fprintf fmt "%s(%s)" (MlVar.get_unique_name id.name)
+  let name id = Printing.mlvar_show id.name
+  let name_full id = Printing.mlvar_show_full id.name
+  let pp fmt id = Format.fprintf fmt "%s" (name id)
+  let pp_full fmt id = Format.fprintf fmt "%s(%s)" (name_full id)
       (Parsing.show_scope id.scope)
-  let external_name ({name; _}: ident) =
-    match MlVar.get_name name with
+  let external_name id =
+    match MlVar.get_name id.name with
     | Some s -> s
-    | None -> failwith "Ident.external_name: anonymous variable"
+    | None -> "%anon%"
 
   let of_identifier (env:Env.t) id : ident =
     let open Env in
@@ -95,7 +96,7 @@ type instr' =
   | Break | Continue
 and instr = instr' annot
 
-type prog = instr list
+type prog = instr list * IdentSet.t
 
 let dannot : 'a -> 'a annot = fun x -> Utils.dummy_pos, x
 let env_annot env loc t = env.Env.to_loc loc, t
@@ -269,15 +270,15 @@ and pp_spec fmt s =
   let po, mx, va, ko, ka =
     s.posonly<>[], s.mixed<>[], s.vararg<>None, s.kwdonly<>[], s.kwdarg<>None in
   let pos_mix = (pr_if po ", /") ^ (pr_if (po && (mx||va||ko||ka)) ", ") in
-  let var = match s.vararg with None -> "" | Some id -> Ident.show id in
+  let var = match s.vararg with None -> "" | Some id -> Ident.name id in
   let mix_kwd = (pr_if (mx && (va || ko)) ", ") ^ (pr_if (va || ko) "*") ^ var
                 ^ (pr_if ko ", ") in
   let kwo_kwa = pr_if (ka && (ko || va || mx)) ", " in
   let kwarg =
-    match s.kwdarg with None -> "" | Some id -> "**" ^ Ident.(show id) in
+    match s.kwdarg with None -> "" | Some id -> "**" ^ Ident.(name id) in
   let pp_list_i_eo =
     Printing.pp_list ~sep:",@ " (fun fmt (i,(e:expr option)) ->
-        fprintf fmt "%s%s%a" Ident.(show i) (if e = None then "" else "=")
+        fprintf fmt "%s%s%a" Ident.(name i) (if e = None then "" else "=")
           (pp_print_option pp_expr) e) in
   fprintf fmt "@[<hov 1>(%a%s@,%a%s@,%a%s@,%s)@]"
     pp_list_i_eo s.posonly
@@ -329,4 +330,4 @@ and pp_instr_list fmt il =
             (Printing.pp_list ~sep:"@\n" pp_instr)
             il)
 
-let pp_prog = pp_instr_list
+let pp_prog fmt (p,_) = pp_instr_list fmt p

@@ -1,7 +1,16 @@
-def f (x,/):
-    if x:
-      y = 42
-    return (x,y)
+# def f (x,/):
+    # if x:
+      # y = 42
+    # return (x,y)
+
+# x = 2
+
+def f(z,/):
+    x = 2
+    def g(y,/):
+        nonlocal x
+        return x
+    return (g,5)
 
 # y = f(10)
 

@@ -22,6 +22,7 @@ val pp_nel : string -> 'a list -> string
  *)
 
 val mlvar_show : MlVar.t -> string
+val mlvar_show_full : MlVar.t -> string
 
 module MSAstPrinter : sig
   val pp_variable : Format.formatter -> MlVar.t -> unit

@@ -25,6 +25,7 @@ let pp_nel str = function [] -> "" | _ -> str
 
 let mlvar_show = MlVar.(if !Utils.debug && not !Utils.export
                         then get_unique_name else show)
+and mlvar_show_full = MlVar.get_unique_name
 
 module MSAstPrinter = struct
   open MSAst
@@ -112,12 +113,12 @@ module MSAstPrinter = struct
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
     | Constructor (c,tl) -> pp_Constructor_arg fmt (c,tl) pp_t
     | Lambda (gty,v,t) ->
-      fprintf fmt "@[<hov 2>fun %a@ : @[%a@] ->@ %a@]"
+      fprintf fmt "@[<hov 2>fun %a@ @{<bold;purple>: @[%a@]@} ->@ %a@]"
         pp_variable v pp_gty gty pp_t t
     | LambdaRec l ->
       pp_list
         ~sep:"@\nand "
-        (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ : @[%a@] ->@ %a@]"
+        (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ @{<bold;purple>: @[%a@]@} ->@ %a@]"
             pp_variable v pp_gty gty pp_t t)
         fmt
         l
@@ -135,12 +136,14 @@ module MSAstPrinter = struct
       end
     | Projection (p,t) -> pp_projection_arg fmt (p,t) pp_t
     | Let (tyl,v,t1,t2) ->
-      fprintf fmt "@[@[<hov 2>let %a%s@[%a@] =@ @[%a@]@ in@]@\n%a@]"
+      fprintf fmt "@[@[<hov 2>let %a@{<bold;purple>%s@[%a@]@} =@ @[%a@]@ in@]@\n%a@]"
         pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t1 pp_t t2
     | TypeCast (t,ty,_) ->
-      fprintf fmt "@[<hov 2>cast [%a]@ to @[%a@]@]" pp_t t pp_gty ty
+      fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ :> @[%a@]@}@]"
+        pp_t t pp_gty ty
     | TypeCoerce (t,gty,_) ->
-      fprintf fmt "@[<hov 2>coerce [%a]@ to @[%a@]@]" pp_t t pp_gty gty
+      fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ <: @[%a@]@}@]"
+        pp_t t pp_gty gty
     | Alt (t1,t2) -> fprintf fmt "@[<hov 2>Alt(%a,@ %a)@]" pp_t t1 pp_t t2
   and pp_t fmt (_,e) = pp_e fmt e
 end
@@ -219,7 +222,7 @@ module MLAstPrinter = struct
     | LambdaRec l ->
       pp_list
         ~sep:"@\nand "
-        (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ : @[%a@] ->@ %a@]"
+        (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ @{<bold;purple>: @[%a@]@} ->@ %a@]"
             pp_variable v pp_gty gty pp_t t)
         fmt
         l
@@ -245,12 +248,14 @@ module MLAstPrinter = struct
       fprintf fmt "@[<hov 2>val mut %a =@ %a@]"
         pp_variable v pp_t t
     | Let (tyl,v,t1,t2) ->
-      fprintf fmt "@[@[<hov 2>let %a%s@[%a@] =@ @[%a@]@ in@]@\n%a@]"
+      fprintf fmt "@[@[<hov 2>let %a@{<bold;purple>%s@[%a@]@} =@ @[%a@]@ in@]@\n%a@]"
         pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t1 pp_t t2
     | TypeCast (t,ty,_) ->
-      fprintf fmt "@[<hov 2>cast [%a]@ to @[%a@]@]" pp_t t pp_gty ty
+      fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ :> @[%a@]@}@]"
+        pp_t t pp_gty ty
     | TypeCoerce (t,gty,_) ->
-      fprintf fmt "@[<hov 2>coerce [%a]@ to @[%a@]@]" pp_t t pp_gty gty
+      fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ <: @[%a@]@}@]"
+        pp_t t pp_gty gty
     | VarAssign (v,t) -> fprintf fmt "@[<hov 2>%a :=@ %a@]"
                            pp_variable v pp_t t
     | Loop t -> fprintf fmt "@[<hov 2>loop:@ %a@]" pp_t t

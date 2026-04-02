@@ -115,6 +115,12 @@ let mk_break pos = MLAst.Break |> ml_annot pos
 let mk_rec_del pos id e =
   MLAst.(Operation(SA.RecDel id, e)) |> ml_annot pos
 
+let mk_cast pos e ty check =
+  MLAst.(TypeCast (e, ty, check)) |> ml_annot pos
+
+let mk_coerce pos e ty check =
+  MLAst.(TypeCoerce (e, ty, check)) |> ml_annot pos
+
 (* AST UTILS *)
 
 let dummy_pos = MC.Position.dummy

@@ -59,7 +59,7 @@ let rand_list_nth l f =
 type id_kind = Ppos | Pmix | Pva | Pkwd | Pvk | Fun | Oth
 
 let kind_of id =
-  let s = Ident.show id in
+  let s = Ident.name id in
   match String.get s 0 with
   | 'p' -> Ppos
   | 'm' -> Pmix

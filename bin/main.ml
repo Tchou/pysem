@@ -34,7 +34,7 @@ let treat_def (tt, mce, lst) (v, ast) =
   Format.printf "TYPING:%s\n%!" v_str;
   let ts = ml_type mce ast in
   let _, gy = MTS.get ts in
-  let ts = MTS.mk_poly gy in
+  let ts = MTS.mk_poly gy in (* generalize? *)
   let ts = MTS.bot_instance ts in
 
   let time1 = Unix.gettimeofday () in
@@ -57,11 +57,27 @@ let treat_file file =
 
   Env.(set_mut_top false; set_mut_local false);
   (*MS.Config.infer_overload := false;*)
+  (* MS.Config.value_restriction := false; *)
 
-  let p, global_ids = Prog.of_module (Env.init globals bil to_loc) m in
+  let p = Prog.of_module (Env.init globals bil to_loc) m in
   dbg_pr "pysem ast" "%a" Ast.pp_prog p;
 
-  let e = Py_state.of_prog p global_ids in
+  (* Then modify Py_state.(of_prog and make_state_record etc.) *)
+
+  (* let vars = List.(
+      fold_left
+        (fun acc (bi:Parsing.block_info) ->
+           (Parsing.IdentMap.to_list bi.identifiers |> List.split |> fst)
+           @ acc)
+        (Parsing.IdentMap.to_list globals |> List.split |> fst)
+        bil
+      |> map (fun pci ->
+          let id = PCI.to_string pci in
+          id, MT.TVar.(Some id |> mk KInfer |> typ, inner_let))
+     ) in *)
+  let module_state = Env.vars_rec true |> MT.Record.mk_closed |> MlGTy.mk in
+
+  let e = Py_state.of_prog p (Env.vars_rec true |> MT.Record.mk_closed) in
   dbg_pr "pystate ast" "%a" (pp_list ~sep:"@\n" Py_state.pp_expr) e;
 
   let e = Py_state.prepare_toplevel e in
@@ -69,7 +85,18 @@ let treat_file file =
   pr "reduced pystate ast" "%a"
     (pp_list ~sep:"@\n" Py_state.pp_expr) (List.map snd er);
 
-  let ml_er = List.map (fun (v,e) -> v, Py_state.to_ml e) er in
+  let ml_er = List.map (fun (v,e) ->
+      let p,mle as ml = Py_state.to_ml e in
+      v, (p, if true then MLAst.TypeCoerce (ml, module_state, MSAst.Check) else mle)
+    ) er in
+  let ml_er = match ml_er with
+    | [] -> []
+    | (s0,(p,_))::l -> (s0,(p,MLAst.Value module_state))::l
+  in
+  (* let ml_er = match List.rev ml_er with
+    | [] -> []
+    | (_,e)::l -> [MlVar.create (Some "final_state"), Utils.join_let_rev l e] in *)
+
   pr "ml reduced pst ast" "%a"
     (pp_list ~sep:"@\n" Printing.MLAstPrinter.pp_t) (List.map snd ml_er);
 
