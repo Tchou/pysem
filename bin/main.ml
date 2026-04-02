@@ -56,8 +56,8 @@ let treat_file file =
   (* (pp_list ~sep:"@\n" Parsing.pp_block_info) bil; *)
 
   Env.(set_mut_top false; set_mut_local false);
-  (*MS.Config.infer_overload := false;*)
-  (* MS.Config.value_restriction := false; *)
+  MS.Config.infer_overload := false;
+  MS.Config.value_restriction := false;
 
   let p = Prog.of_module (Env.init globals bil to_loc) m in
   dbg_pr "pysem ast" "%a" Ast.pp_prog p;
@@ -75,9 +75,12 @@ let treat_file file =
           let id = PCI.to_string pci in
           id, MT.TVar.(Some id |> mk KInfer |> typ, inner_let))
      ) in *)
-  let module_state = Env.vars_rec true |> MT.Record.mk_closed |> MlGTy.mk in
+  let module_state = Env.vars_rec true
+    |> List.map (fun (mlvar, (_ty, _b)) ->
+        (mlvar, (MT.Enum.(define "Undef" |> typ) , false)))
+    |> MT.Record.mk_closed |> MlGTy.mk in
 
-  let e = Py_state.of_prog p (Env.vars_rec true |> MT.Record.mk_closed) in
+  let e = Py_state.of_prog p (Env.vars_rec false |> MT.Record.mk_closed) in
   dbg_pr "pystate ast" "%a" (pp_list ~sep:"@\n" Py_state.pp_expr) e;
 
   let e = Py_state.prepare_toplevel e in
@@ -87,7 +90,8 @@ let treat_file file =
 
   let ml_er = List.map (fun (v,e) ->
       let p,mle as ml = Py_state.to_ml e in
-      v, (p, if true then MLAst.TypeCoerce (ml, module_state, MSAst.Check) else mle)
+      v, (p, if false then MLAst.TypeCoerce (ml, module_state, MSAst.Check)
+          else mle)
     ) er in
   let ml_er = match ml_er with
     | [] -> []

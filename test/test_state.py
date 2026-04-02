@@ -5,14 +5,17 @@
 
 # x = 2
 
-def f(z,/):
-    x = 2
-    def g(y,/):
-        nonlocal x
-        return x
-    return (g,5)
+# def f(z,/):
+#     x = 2
+#     def g(y,/):
+#         nonlocal x
+#         return x
+#     return (g,5)
 
-# y = f(10)
+def f(z,/):
+    return z
+
+y = f(10)
 
 # def g(x,/):
 #   global u
