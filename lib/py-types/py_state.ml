@@ -164,10 +164,11 @@ let get_cast = true
 and set_cast = true
 let cast_if cond id pos expr =
   match cond, id with
-  | true, Source (Ast.{name;_}) ->
-          Cast ((pos,expr),
-                let _,_,ty = Env.get_var_infos name in
-                MlGTy.mk ty)
+  | true, Source (Ast.{name;scope}) ->
+    let _scope_name,_,ty = Env.get_var_infos name in
+    (match scope with
+    | Parsing.Nonlocal -> Cast ((pos,expr), MlGTy.mk ty)
+    | _ -> expr)
   | _ -> expr
 
 (* Combinators *)

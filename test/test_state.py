@@ -12,10 +12,16 @@
 #         return x
 #     return (g,5)
 
-def f(z,/):
-    return z
+def f(x,/):
+    fy = x
+    # def g(gx,/):
+        # def h(hx,/): return hx
+        # return fy
+    return x
 
 y = f(10)
+
+# z = f("hey")
 
 # def g(x,/):
 #   global u

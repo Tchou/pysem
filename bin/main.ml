@@ -50,8 +50,8 @@ let treat_def (tt, mce, lst) (v, ast) =
 let treat_file file =
   let open Format in
   let m, globals, bil, to_loc = Parsing.parse ~file in
-  (* dbg_pr "pyre-parsed expression" "%a" *)
-  (* Sexplib0.Sexp.pp_hum (PC.Module.sexp_of_t m); *)
+  (* dbg_pr "pyre-parsed expression" "%a"
+    Sexplib0.Sexp.pp_hum (PC.Module.sexp_of_t m); *)
   (* pr "block_infos" "%a" *)
   (* (pp_list ~sep:"@\n" Parsing.pp_block_info) bil; *)
 

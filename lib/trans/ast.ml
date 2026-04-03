@@ -330,4 +330,4 @@ and pp_instr_list fmt il =
             (Printing.pp_list ~sep:"@\n" pp_instr)
             il)
 
-let pp_prog fmt (p,_) = pp_instr_list fmt p
+let pp_prog fmt (p,_:prog) = pp_instr_list fmt p
