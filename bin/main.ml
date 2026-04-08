@@ -60,7 +60,7 @@ let treat_file file =
   MS.Config.value_restriction := false;
 
   let p = Prog.of_module (Env.init globals bil to_loc) m in
-  dbg_pr "pysem ast" "%a" Ast.pp_prog p;
+  dbg_pr "pysem ast" "%a" Ast.pp_prog p(*;
 
   (* Then modify Py_state.(of_prog and make_state_record etc.) *)
 
@@ -148,7 +148,7 @@ let treat_file file =
            else nl := false ))
     (List.rev names)
 
-  (* *)
+  ( * *)
 
 (* CLI *)
 

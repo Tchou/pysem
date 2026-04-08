@@ -44,9 +44,10 @@ module IdentSet =
 struct
   include Set.Make(Ident)
   let pp fmt s =
-    Format.(pp_print_seq
-              ~pp_sep:(fun fmt () -> pp_print_string fmt ", ")
-              Ident.pp_full fmt (to_seq s))
+    let open Format in
+    if is_empty s && !Utils.debug
+    then fprintf fmt "ø"
+    else Printing.pp_list ~sep:",@ " Ident.pp_full fmt (to_list s)
 end
 
 type binop =
@@ -243,11 +244,15 @@ let pp_identset fmt id =
   let open Format in
   if !Utils.debug
   then begin
-    let old_m = pp_get_margin fmt () in
-    pp_set_margin fmt pp_infinity;
-    fprintf fmt "@[#idents: %a@]@\n" IdentSet.pp id;
-    pp_set_margin fmt old_m
-  end else pp_print_nothing fmt ()
+    (* let old_m = pp_get_margin fmt () in *)
+    (* pp_set_margin fmt pp_infinity; *)
+    fprintf fmt "@[%a@]" IdentSet.pp id;
+    (* pp_set_margin fmt old_m *)
+  end
+let pp_scope fmt (unused,used) =
+  if true then () else
+  Format.fprintf fmt "unused: @[%a@], used: @[%a@]@\n"
+    pp_identset unused pp_identset used
 
 let rec pp_expr' fmt =
   let open Format in
@@ -257,8 +262,8 @@ let rec pp_expr' fmt =
     fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
   | Cst c -> pp_const fmt c
   | Lambda (x,si, e) ->
-    fprintf fmt "@[unused: @[%a@],used: @[%a@]@[<hov 2>fun %a -> %a@]@]"
-      pp_identset si.nl_unused pp_identset si.nl_used pp_spec x pp_expr e
+    fprintf fmt "@[%a@[<hov 2>fun %a -> %a@]@]"
+      pp_scope (si.nl_unused, si.nl_used) pp_spec x pp_expr e
   | Apply (e,p) -> fprintf fmt "@[%a%a@]" pp_expr e pp_params p
   | Tuple el ->
     fprintf fmt "@[<hov 1>(%a)@]" (Printing.pp_list ~sep:",@ " pp_expr) el
@@ -304,30 +309,27 @@ let rec pp_instr' fmt instr' : unit =
     if il = []
     then fprintf fmt "@[pass # Empty block@]"
     else fprintf fmt
-        (if !Utils.debug then "@[# Block [@\n%a# ] Block@]" else "%a")
+        (if !Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
         pp_instr_list il
-  | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]"
-                      (pp_ident) x pp_expr e
+  | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]" (pp_ident) x pp_expr e
   | FunDef (i,s,si, b) ->
-    fprintf fmt "@[unused: @[%a@],used: @[%a@]@[<hov 2>def %a%a:@\n%a@]@]"
-      pp_identset si.nl_unused pp_identset si.nl_used
-      pp_ident i pp_spec s pp_instr b
+    fprintf fmt "@[%a@[<hov 2>def %a%a:@\n%a@]@]"
+      pp_scope (si.nl_unused,si.nl_used) pp_ident i pp_spec s pp_instr b
   | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i
-  | If (e,i,io) -> fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"
-                     pp_expr e pp_instr i
-                     (pp_print_option
-                        ~none:(fun fmt () -> Block [] |> pp_instr' fmt)
-                        pp_instr)
-                     io
+  | If (e,i,io) ->
+    fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"
+      pp_expr e pp_instr i
+      (pp_print_option ~none:(fun fmt () -> Block [] |> pp_instr' fmt) pp_instr)
+      io
   | Iexpr e -> pp_expr fmt e
-  | Return eo -> fprintf fmt "@[<hov 2>return@ %a@]"
-                   (pp_print_option pp_expr) eo
+  | Return eo ->
+    fprintf fmt "@[<hov 2>return@ %a@]" (pp_print_option pp_expr) eo
   | Break -> fprintf fmt "break"
   | Continue -> fprintf fmt "continue"
 and pp_instr fmt (_,instr') = pp_instr' fmt instr'
 and pp_instr_list fmt il =
-  Format.(fprintf fmt "%a@\n"
+  Format.(fprintf fmt "%a"
             (Printing.pp_list ~sep:"@\n" pp_instr)
             il)
 
-let pp_prog fmt (p,_:prog) = pp_instr_list fmt p
+let pp_prog fmt (p,_:prog) = Format.fprintf fmt "%a@." pp_instr_list p
