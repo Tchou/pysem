@@ -1,10 +1,16 @@
 open Aliases
 
+(* Config variables *)
+let get_cast = true
+and set_cast = true
+and fun_pair = true (* def f(x):... to λ(x,s). and not λs.λx. *)
+
 type res_kind = R | V
-type lambda_kind = Normal of Sstt.Ty.t | State of Sstt.Ty.t
-let is_admin = function Normal _ -> false | State _ -> true
 type ident = Simple of MlVar.t
            | Source of Ast.ident
+type lambda_kind = Normal of Sstt.Ty.t | State of Sstt.Ty.t
+                 | Both of Sstt.(ident * Ty.t * ident * Ty.t)
+let is_admin = function Normal _ -> false | _ -> true
 type expr' =
   | Const of Ast.const
   | Var of ident
@@ -160,8 +166,6 @@ let app pos e1 e2 =
   pos, App(e1, e2)
 let none = Ast.None_
 
-let get_cast = true
-and set_cast = true
 let cast_if cond id pos expr =
   match cond, id with
   | true, Source (Ast.{name;scope}) ->
@@ -221,28 +225,29 @@ let seq pos st e1 e2 =
        v s (smon_run pos e2 s))
 
 let lambda pos is_expr st x _lam_st _locals e =
-  let s0  = mk_ident_s ()
-  and s = mk_ident_v () in
+  let s0 = mk_ident_s ()
+  and s1 = mk_ident_s ()
+  and s2 = mk_ident_s ()
+  and s = mk_ident_s () in
   let v = mk_ident_v () in
+  let xty = Env.(Vartbl.find variables (mlvar x) |> fun (_,_,t) -> t) in
+  let f_body =
+    bindV pos
+      (smon_ret pos (s1,st)
+         (emon_upd pos V (pos, Const none) s1 x x)) s0
+      (mk_ident_v ()) s2
+      (bindV pos e s2 v s
+         (if is_expr
+          then emon_ret pos R (pos, Var v) s
+          else emon_ret pos V (pos, Const none) s)) in
   let f =
-    pos, Lambda
-      (x, Normal Env.(Vartbl.find variables (mlvar x)
-                      |> fun (_,_,t) -> t),
-       smon_ret pos (s0,st)
-         (pos, IfV
-            { cond =
-                (* pos, (DelStateFields
-                        (locals, *)
-                         app pos e
-                           (pos, RecUpdate ((pos, Var s0), x, (pos, Var x)))
-                        (* )) *)
-            ;
-              v; s;
-              body =
-                if is_expr
-                then emon_ret pos R (pos, Var v) s
-                else emon_ret pos V (pos, Const none) s;
-            }))
+    if fun_pair
+    then pos, Lambda (mk_ident "p", Both (x,xty,s0,st),f_body)
+    else
+      pos, Lambda
+        (x, Normal xty,
+         smon_ret pos (s0,st)
+           f_body)
   in
   let s0 = mk_ident_s () in
   smon_ret pos (s0,st)
@@ -254,13 +259,20 @@ let apply pos st e1 e2 =
   and s2 = mk_ident_s ()
   and s3 = mk_ident_s () in
   let f = mk_ident_v ()
-  and arg = mk_ident_v ()
+  and x = mk_ident_v ()
   and v = mk_ident_v () in
+  let bind_r =
+    let end_ret = emon_ret pos V (pos, Var v) s3 in
+    if fun_pair
+    then pos, IfR
+           { cond = app pos (pos, Var f) (pair pos (pos, Var x) (pos, Var s2));
+             v; s = s3; body = end_ret}
+    else bindR pos (app pos (pos, Var f) (pos, Var x)) s2
+        v s3 end_ret in
   smon_ret pos (s0,st)
     (bindV pos e1 s0
        f s1 (bindV pos e2 s1
-               arg s2 (bindR pos (app pos (pos, Var f) (pos, Var arg)) s2
-                         v s3 (emon_ret pos V (pos, Var v) s3))))
+               x s2 bind_r))
 
 let tuple2 pos st e1 e2 =
   let s0 = mk_ident_s ()
@@ -357,9 +369,11 @@ let rec of_expr st (p,e:Ast.expr) : expr = match e with
             (x1, ..., xn), sn *)
     failwith "TODO all tuples"
 
-and of_spec {posonly;_} = match posonly with
+and of_spec {posonly;mixed;_} = match posonly with
   | [ (x,None) ] -> Source x
-  | _ -> failwith "TODO not just 1 posonly"
+  | _ ->  match mixed with
+    | [ (x,None) ] -> Source x
+    | _ -> failwith "TODO not just 1 posonly"
 
 and of_param st {pos;_} = match pos with
   | [] -> Var (mk_ident "dummy") |> Ast.dannot
@@ -478,13 +492,23 @@ let rec to_ml (p,e) =
   | Field (e, id) -> mk_projection p (MSAst.PiField (ident_name id)) (to_ml e)
   | Lambda (id,k,e) ->
     (* let tyvar = MT.TVar.(mk KInfer (Some ("α" ^ cpt ())) |> typ) in *)
-    let ty = match k with
-        Normal t -> t
-      | State t -> t (*MT.Ty.cap t tyvar*)
+    let ty,bth = match k with
+      | Normal t -> t, None
+      | State t -> t, None (* MT.Ty.cap t tyvar *)
+      | Both (x,tx,s,ts) -> MT.Tuple.mk [tx;ts], Some (x,tx,s,ts)
     in
-    let gty = MT.( ty |> GTy.mk) in
+    let gty = MT.(ty |> GTy.mk) in
+    let ml_id = mlvar id
+    and ml_e = to_ml e in
+    let id_var = var_of_vart p ml_id in
     mk_lambda p [] gty
-      (mlvar id) (to_ml e)
+      ml_id
+      (match bth with
+       | None -> ml_e
+       | Some (x,tx,s,ts) ->
+         mk_let p [tx] (mlvar x) (mk_proj_tuple p 2 0 id_var)
+           (mk_let p [ts] (mlvar s) (mk_proj_tuple p 2 1 id_var)
+              ml_e))
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
   | DelStateFields (l, e) -> mk_delete_fields p (to_ml e) l
   | Cast (e, gty) -> mk_coerce p (to_ml e) gty MSAst.Check
@@ -531,7 +555,7 @@ let show_res_kind = function R -> "R" | V -> "V"
 let pp_res_kind fmt r = Format.fprintf fmt "%s" (show_res_kind r)
 
 let pp_ident fmt = function
-  | Simple mlv -> Format.fprintf fmt "@[%s@]" (Printing.mlvar_show mlv)
+  | Simple mlv -> Printing.MLAstPrinter.pp_variable fmt mlv
   | Source id -> Ast.Ident.pp fmt id
 
 let rec pp_expr'_recupd fmt r0 f0 v0 =
@@ -575,11 +599,15 @@ and pp_expr' fmt e =
     fprintf fmt "@[%a@,\\{%a}@]"
       pp_expr e Printing.(pp_list ~sep:",@ " pp_ident) l
   | Lambda (id, State ty, e) ->
-    fprintf fmt "@[<hov 2>ƛ %a@{<bold;purple>:%a@}.@ %a@]"
+    fprintf fmt "@[<hov 2>ƛ %a @{<bold;purple>: %a@}.@ %a@]"
       pp_ident id MT.Ty.pp ty pp_expr e
   | Lambda (id, Normal ty, e) ->
-    fprintf fmt "@[<hov 2>λ %a@{<bold;purple>:%a@}.@ %a@]"
+    fprintf fmt "@[<hov 2>λ %a @{<bold;purple>: %a@}.@ %a@]"
       pp_ident id MT.Ty.pp ty pp_expr e
+  | Lambda (id, Both (x,t1,s,t2), e) ->
+    fprintf fmt "@[<hov 2>λƛ (%a, %a) as %a @{<bold;purple>: %a * %a@}.@ %a@]"
+      pp_ident x pp_ident s
+      pp_ident id MT.Ty.pp t1 MT.Ty.pp t2 pp_expr e
   | App (e1, e2) -> fprintf fmt "@[<hov 2>(%a)@ %a@]" pp_expr e1 pp_expr e2
   | Cast (e, gty) ->
     fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ :> @[%a@]@}@]"
