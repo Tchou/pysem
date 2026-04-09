@@ -14,9 +14,12 @@
 
 def f(x,/):
     fy = x
-    # def g(gx,/):
-        # def h(hx,/): return hx
-        # return fy
+    def g(gx,/):
+        gy = 2
+        def h(hx,/):
+          hy = 1
+          return hx
+        return fy
     return x
 
 y = f(10)

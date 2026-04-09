@@ -43,11 +43,14 @@ end
 module IdentSet =
 struct
   include Set.Make(Ident)
+  let mem_ml mlv = exists (fun {name;_} -> MlVar.equal name mlv)
+  let find_ml mlv = find_first (fun {name;_} -> MlVar.equal name mlv)
+  let find_ml_opt mlv = find_first_opt (fun {name;_} -> MlVar.equal name mlv)
   let pp fmt s =
     let open Format in
     if is_empty s && !Utils.debug
     then fprintf fmt "ø"
-    else Printing.pp_list ~sep:",@ " Ident.pp_full fmt (to_list s)
+    else Printing.pp_list ~sep:",@ " Ident.pp fmt (to_list s)
 end
 
 type binop =
@@ -242,17 +245,16 @@ let pp_const fmt = function
   | String s -> Format.fprintf fmt "@[\"%s\"@]" s
 let pp_identset fmt id =
   let open Format in
-  if !Utils.debug
-  then begin
-    (* let old_m = pp_get_margin fmt () in *)
-    (* pp_set_margin fmt pp_infinity; *)
-    fprintf fmt "@[%a@]" IdentSet.pp id;
-    (* pp_set_margin fmt old_m *)
-  end
-let pp_scope fmt (unused,used) =
-  if true then () else
-  Format.fprintf fmt "unused: @[%a@], used: @[%a@]@\n"
-    pp_identset unused pp_identset used
+  (* let old_m = pp_get_margin fmt () in *)
+  (* pp_set_margin fmt pp_infinity; *)
+  fprintf fmt "@[%a@]" IdentSet.pp id
+  (* ;pp_set_margin fmt old_m *)
+let pp_scope fmt (si:scoped_identifiers) =
+  if !Utils.debug then
+    Format.fprintf fmt
+      "@{<yellow>\"\"\"@\n@[<hov 2>n_l: %a (<- un…used ->) %a@]@\n\
+       loc: @[%a@]@\n\"\"\"@}@\n"
+      pp_identset si.nl_unused pp_identset si.nl_used pp_identset si.locals
 
 let rec pp_expr' fmt =
   let open Format in
@@ -263,7 +265,7 @@ let rec pp_expr' fmt =
   | Cst c -> pp_const fmt c
   | Lambda (x,si, e) ->
     fprintf fmt "@[%a@[<hov 2>fun %a -> %a@]@]"
-      pp_scope (si.nl_unused, si.nl_used) pp_spec x pp_expr e
+      pp_scope si pp_spec x pp_expr e
   | Apply (e,p) -> fprintf fmt "@[%a%a@]" pp_expr e pp_params p
   | Tuple el ->
     fprintf fmt "@[<hov 1>(%a)@]" (Printing.pp_list ~sep:",@ " pp_expr) el
@@ -307,29 +309,43 @@ let rec pp_instr' fmt instr' : unit =
   match instr' with
   | Block il ->
     if il = []
-    then fprintf fmt "@[pass # Empty block@]"
+    then fprintf fmt "@[@{<bold>pass@} @{<green;italic># Empty block@}@]"
     else fprintf fmt
-        (if !Utils.debug then "@[# Block [@\n%a@\n# ] Block@]" else "%a")
+        (if !Utils.debug
+         then "@[@{<green;italic># Block [@}@\n%a@\n\
+               @{<green;italic># ] Block@}@]" else "%a")
         pp_instr_list il
-  | Assign (x,e) -> fprintf fmt "@[<hov 2>%a = %a@]" (pp_ident) x pp_expr e
-  | FunDef (i,s,si, b) ->
-    fprintf fmt "@[%a@[<hov 2>def %a%a:@\n%a@]@]"
-      pp_scope (si.nl_unused,si.nl_used) pp_ident i pp_spec s pp_instr b
-  | While (e,i) -> fprintf fmt "@[<hov 2>while %a:@\n%a@]" pp_expr e pp_instr i
+  | Assign (x,e) -> fprintf fmt "@[<hov 2>@{<yellow;bold>%a@} = %a@]"
+                      (pp_ident) x pp_expr e
+  | FunDef (i,s,si,b) ->
+    fprintf fmt
+      "@[<hov 2>@{<green;bold>def@} @{<yellow;bold>%a@}%a@{<bold>:@}@\n%a%a@]"
+      pp_ident i pp_spec s pp_scope si pp_instr b
+  | While (e,i) ->
+    fprintf fmt "@[<hov 2>@{<green;bold>while@} %a@{<bold>:@}@\n%a@]"
+      pp_expr e pp_instr i
   | If (e,i,io) ->
-    fprintf fmt "@[if %a:@\n  %a@\nelse:@\n  %a@]"
+    fprintf fmt
+      "@[@{<green;bold>if@} %a@{<bold>:@}@\n  %a@\n\
+       @{<green;bold>else:@}@\n  %a@]"
       pp_expr e pp_instr i
       (pp_print_option ~none:(fun fmt () -> Block [] |> pp_instr' fmt) pp_instr)
       io
   | Iexpr e -> pp_expr fmt e
   | Return eo ->
-    fprintf fmt "@[<hov 2>return@ %a@]" (pp_print_option pp_expr) eo
-  | Break -> fprintf fmt "break"
-  | Continue -> fprintf fmt "continue"
+    fprintf fmt "@[<hov 2>@{<green;bold>return@}@ %a@]"
+      (pp_print_option pp_expr) eo
+  | Break -> fprintf fmt "@{<green;bold>break@}"
+  | Continue -> fprintf fmt "@{<green;bold>continue@}"
 and pp_instr fmt (_,instr') = pp_instr' fmt instr'
 and pp_instr_list fmt il =
   Format.(fprintf fmt "%a"
             (Printing.pp_list ~sep:"@\n" pp_instr)
             il)
 
-let pp_prog fmt (p,_:prog) = Format.fprintf fmt "%a@." pp_instr_list p
+let pp_prog fmt (p,si:prog) =
+  Format.fprintf fmt "%a%a@."
+    (fun fmt set -> if !Utils.debug then
+        Format.fprintf fmt "@{<yellow>\"\"\"@\n@[%a@]@\n\"\"\"@}@\n@\n"
+          pp_identset set) si
+    pp_instr_list p

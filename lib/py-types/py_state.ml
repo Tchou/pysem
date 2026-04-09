@@ -322,6 +322,14 @@ let make_state_record sid =
                  else field_row
                 ))
         (Ast.IdentSet.to_list ids))
+let make_scoped_state (sid:Ast.scoped_identifiers) =
+  Env.(Vartbl.fold
+         (fun mlvar (_,_,ty) l ->
+            let ty = if Ast.IdentSet.mem_ml mlvar sid.locals
+              then  MT.Ty.any else ty in
+            (MlVar.show mlvar, (ty,false))::l)
+         variables [])
+  |> MT.Record.mk_closed
 
 let make_unique_state_type () =
   Env.(Vartbl.fold
@@ -396,7 +404,8 @@ let rec of_instr st (p,i:Ast.instr) = match i with
     in
     let x = of_spec spec in
     let e = of_instr st body in
-    var_set p st (Source id) (lambda p false st x lam_st locals e)
+    var_set p st (Source id)
+      (lambda p false (make_scoped_state sid) x lam_st locals e)
   | Return eo ->
     of_opt p st eo of_expr
     |> return p st
@@ -412,7 +421,6 @@ let rec of_instr st (p,i:Ast.instr) = match i with
   | Break | Continue -> failwith "TODO while control flow"
 
 let of_prog (p,_:Ast.prog) tyrec =
-  (* let tyrec = make_state_record ids in *)
   List.map (of_instr tyrec) p
 
 let ty_undef = MT.Enum.(define "%py_uninitialized" |> typ)
@@ -566,7 +574,7 @@ let rec pp_expr'_recupd fmt r0 f0 v0 =
     | _ -> acc, ti in
   let pp_base fmt r = match r with
     | _, EmptyRec -> ()
-    | _ -> fprintf fmt "%a with@ " pp_expr r
+    | _ -> fprintf fmt "%a @{<bold>with@}@ " pp_expr r
   and pp_var fmt (fi,vi) = fprintf fmt "%a =@ %a" pp_ident fi pp_expr vi in
   let fv_l, ti = get_recupd [f0,v0] r0 in
   fprintf fmt "@[<hov 2>{ %a%a }@]"
@@ -580,18 +588,22 @@ and pp_expr' fmt e =
   | Res (r, e) -> fprintf fmt "@[<hov 2>%a(%a)@]" pp_res_kind r pp_expr e
   | Proj (r, e) -> fprintf fmt "@[<hov 2>(%a).%a@]" pp_expr e pp_res_kind r
   | IfV {cond;v;s;body} ->
-    fprintf fmt "@[@[<hov 2>bind %a, %a =@ %a@] in@ %a@]"
+    fprintf fmt "@[@[<hov 2>@{<bold>bindv@} %a, %a =@ %a@] \
+                 @{<bold>in@}@ %a@]"
       pp_ident v pp_ident s pp_expr cond pp_expr body
   | IfR {cond; v; s; body} ->
-    fprintf fmt "@[@[<hov 2>bindv %a, %a =@ %a@] in@ %a@]"
+    fprintf fmt "@[@[<hov 2>@{<bold>bindr@} %a, %a =@ %a@] \
+                 @{<bold>in@}@ %a@]"
       pp_ident v pp_ident s pp_expr cond pp_expr body
   | Ite (e1, e2, e3) ->
     fprintf fmt
-      "@[<v>@[<hov 2>if %a@]@ @[<hov 2>then %a@]@ @[<hov 2>else %a@]@]"
+      "@[<v>@[<hov 2>@{<bold>if@} %a@]@ \
+       @[<hov 2>@{<bold>then@} %a@]@ \
+       @[<hov 2>@{<bold>else@} %a@]@]"
       pp_expr e1 pp_expr e2 pp_expr e3
   | Tuple el ->
     fprintf fmt "@[(@[%a@])@]" (Printing.pp_list ~sep:",@ " pp_expr) el
-  | Pi (i, e) -> fprintf fmt "@[π%d(%a)@]" i pp_expr e
+  | Pi (i, e) -> fprintf fmt "@[@{<bold>π%d@}(%a)@]" i pp_expr e
   | EmptyRec -> fprintf fmt "{}"
   | RecUpdate (e1, id, e2) -> pp_expr'_recupd fmt e1 id e2
   | Field (e, id) -> fprintf fmt "@[%a@,.%a@]" pp_expr e pp_ident id
@@ -599,13 +611,14 @@ and pp_expr' fmt e =
     fprintf fmt "@[%a@,\\{%a}@]"
       pp_expr e Printing.(pp_list ~sep:",@ " pp_ident) l
   | Lambda (id, State ty, e) ->
-    fprintf fmt "@[<hov 2>ƛ %a @{<bold;purple>: %a@}.@ %a@]"
+    fprintf fmt "@[<hov 2>ƛ %a @{<bold;purple>: %a@}@{<bold>.@}@ %a@]"
       pp_ident id MT.Ty.pp ty pp_expr e
   | Lambda (id, Normal ty, e) ->
-    fprintf fmt "@[<hov 2>λ %a @{<bold;purple>: %a@}.@ %a@]"
+    fprintf fmt "@[<hov 2>λ %a @{<bold;purple>: %a@}@{<bold>.@}@ %a@]"
       pp_ident id MT.Ty.pp ty pp_expr e
   | Lambda (id, Both (x,t1,s,t2), e) ->
-    fprintf fmt "@[<hov 2>λƛ (%a, %a) as %a @{<bold;purple>: %a * %a@}.@ %a@]"
+    fprintf fmt "@[<hov 2>λƛ (%a, %a) @{<bold>as@} %a \
+                 @{<bold;purple>: %a * %a@}@{<bold>.@}@ %a@]"
       pp_ident x pp_ident s
       pp_ident id MT.Ty.pp t1 MT.Ty.pp t2 pp_expr e
   | App (e1, e2) -> fprintf fmt "@[<hov 2>(%a)@ %a@]" pp_expr e1 pp_expr e2

@@ -31,7 +31,7 @@ let ms_of_us t = t *. 1000.
 let treat_def (tt, mce, lst) (v, ast) =
   let time0 = Unix.gettimeofday () in
   let v_str = MlVar.show v in
-  Format.printf "TYPING:%s\n%!" v_str;
+  if !Utils.debug then Format.printf "TYPING:%s\n%!" v_str;
   let ts = ml_type mce ast in
   let _, gy = MTS.get ts in
   let ts = MTS.mk_poly gy in (* generalize? *)
@@ -40,7 +40,7 @@ let treat_def (tt, mce, lst) (v, ast) =
   let time1 = Unix.gettimeofday () in
 
   let elapsed = time1 -. time0 in
-  pr ("typing "^ v_str)
+  dbg_pr ("typing "^ v_str)
     "@{<italic;yellow>%.2fms@}@\n@{<bold;blue>ast@}: @[%a@]@\n\
      @{<bold;blue>tys@}: @[%a@]"
     (ms_of_us elapsed)
@@ -60,7 +60,7 @@ let treat_file file =
   MS.Config.value_restriction := false;
 
   let p = Prog.of_module (Env.init globals bil to_loc) m in
-  dbg_pr "pysem ast" "%a" Ast.pp_prog p(*;
+  pr "pysem ast" "%a" Ast.pp_prog p;
 
   (* Then modify Py_state.(of_prog and make_state_record etc.) *)
 
@@ -105,7 +105,7 @@ let treat_file file =
     (pp_list ~sep:"@\n" Printing.MLAstPrinter.pp_t) (List.map snd ml_er);
 
   let v_t = List.map (fun (v,t) -> v, ML.Transform.transform t) ml_er in
-  pr "mlsys reduced pst ast" "%a"
+  dbg_pr "mlsys reduced pst ast" "%a"
     (pp_list ~sep:"@\n"
        (fun fmt (v,t) ->
           Format.fprintf fmt "@[%a: @[%a@]@]@."
@@ -148,7 +148,7 @@ let treat_file file =
            else nl := false ))
     (List.rev names)
 
-  ( * *)
+  (* *)
 
 (* CLI *)
 
@@ -195,7 +195,8 @@ let main () =
     else treat_file file |> fst
 
 let () =
-  if Unix.isatty Unix.stdout then Colors.add_ansi_marking Format.std_formatter;
+  if Unix.isatty Unix.stdout
+  then (Colors.add_ansi_marking Format.std_formatter; Format.set_margin 200);
   try main () with
   | Parsing.Syntax (file, e) ->
     Format.eprintf "%s: %d:%d-%d:%d : %s@\n"
