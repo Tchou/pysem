@@ -217,7 +217,7 @@ module MLAstPrinter = struct
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
     | Constructor (c,tl) -> MSAstPrinter.pp_Constructor_arg fmt (c,tl) pp_t
     | Lambda (_,gty,v,t) ->
-      fprintf fmt "@[<hov 2>fun %a@ : @[%a@] ->@ %a@]"
+      fprintf fmt "@[<hov 2>fun %a@ @{<bold;purple>: @[%a@]@} ->@ %a@]"
         pp_variable v pp_gty gty pp_t t
     | LambdaRec l ->
       pp_list

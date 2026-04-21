@@ -11,6 +11,8 @@ module Ident = struct
   let name id = Printing.mlvar_show id.name
   let name_full id = Printing.mlvar_show_full id.name
   let pp fmt id = Format.fprintf fmt "%s" (name id)
+  let pp_mid fmt id = Format.fprintf fmt "%s(%s)" (name id)
+      (Parsing.show_scope id.scope)
   let pp_full fmt id = Format.fprintf fmt "%s(%s)" (name_full id)
       (Parsing.show_scope id.scope)
   let external_name id =
@@ -50,7 +52,7 @@ struct
     let open Format in
     if is_empty s && !Utils.debug
     then fprintf fmt "ø"
-    else Printing.pp_list ~sep:",@ " Ident.pp fmt (to_list s)
+    else Printing.pp_list ~sep:",@ " Ident.pp_mid fmt (to_list s)
 end
 
 type binop =

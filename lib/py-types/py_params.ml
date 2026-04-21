@@ -379,11 +379,11 @@ let print prec assoc fmt d =
 let py_params_builder : Sstt.Printer.extension_builder =
   Sstt.Printer.builder ~to_t ~map ~print
 
-let params =
+let _params =
   Sstt.Printer.{ aliases = []
                ; extensions = [ (MT.Tag.tag tag, py_params_builder) ] }
 
-let () = MT.PEnv.add_printer_param params
+(* let () = MT.PEnv.add_printer_param params *)
 (* The code below depends on printer param being initialized *)
 
 let pp_mapping fmt m =

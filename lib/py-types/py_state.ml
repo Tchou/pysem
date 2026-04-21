@@ -1,8 +1,9 @@
 open Aliases
 
 (* Config variables *)
-let get_cast = true
-and set_cast = true
+let get_cast sc = Parsing.(sc = Nonlocal) (* cast variable get access if… *)
+and set_cast sc = Parsing.(sc = Nonlocal) (* cast variable set access if… *)
+and end_state_cast = true (* cast the returned state in lambdas & fundef *)
 and fun_pair = true (* def f(x):... to λ(x,s). and not λs.λx. *)
 
 type res_kind = R | V
@@ -136,6 +137,16 @@ let mk_ident_s =
   let _, sn = Utils.gen_cpt () in
   fun () -> mk_ident ("s" ^ sn ())
 
+
+let cast_if cond id pos expr =
+  match id with
+  | Source (Ast.{name;scope}) ->
+    let _scope_name,_,ty = Env.get_var_infos name in
+    if cond scope
+    then Cast ((pos,expr), MlGTy.mk ty)
+    else expr
+  | _ -> expr
+
 let pair pos e1 e2 =
   pos, Tuple[e1; e2]
 
@@ -165,15 +176,6 @@ and bindR pos e s0 v s body =
 let app pos e1 e2 =
   pos, App(e1, e2)
 let none = Ast.None_
-
-let cast_if cond id pos expr =
-  match cond, id with
-  | true, Source (Ast.{name;scope}) ->
-    let _scope_name,_,ty = Env.get_var_infos name in
-    (match scope with
-    | Parsing.Nonlocal -> Cast ((pos,expr), MlGTy.mk ty)
-    | _ -> expr)
-  | _ -> expr
 
 (* Combinators *)
 let const pos st c =
@@ -240,6 +242,12 @@ let lambda pos is_expr st x _lam_st _locals e =
          (if is_expr
           then emon_ret pos R (pos, Var v) s
           else emon_ret pos V (pos, Const none) s)) in
+  let f_body = if end_state_cast
+    then pos, Cast (f_body,
+                    MT.(Tuple.mk [ TVar.(Some "res" |> mk KInfer |> typ);
+                                   st ])
+                    |> MlGTy.mk)
+    else f_body in
   let f =
     if fun_pair
     then pos, Lambda (mk_ident "p", Both (x,xty,s0,st),f_body)
@@ -247,8 +255,7 @@ let lambda pos is_expr st x _lam_st _locals e =
       pos, Lambda
         (x, Normal xty,
          smon_ret pos (s0,st)
-           f_body)
-  in
+           f_body) in
   let s0 = mk_ident_s () in
   smon_ret pos (s0,st)
     (emon_ret pos V f s0)
@@ -322,11 +329,18 @@ let make_state_record sid =
                  else field_row
                 ))
         (Ast.IdentSet.to_list ids))
+
 let make_scoped_state (sid:Ast.scoped_identifiers) =
   Env.(Vartbl.fold
          (fun mlvar (_,_,ty) l ->
-            let ty = if Ast.IdentSet.mem_ml mlvar sid.locals
-              then  MT.Ty.any else ty in
+            let ty =
+              let open Ast.IdentSet in
+              let accessible = union sid.locals sid.nl_unused
+                |> union sid.nl_used in
+              if (mem_ml mlvar (union sid.locals sid.nl_used)
+                               || not (mem_ml mlvar accessible))
+              then MT.Ty.any
+              else ty in
             (MlVar.show mlvar, (ty,false))::l)
          variables [])
   |> MT.Record.mk_closed
