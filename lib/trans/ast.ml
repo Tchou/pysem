@@ -266,7 +266,7 @@ let rec pp_expr' fmt =
     fprintf fmt "@[(%a %a %a)@]" pp_expr e1 pp_binop b pp_expr e2
   | Cst c -> pp_const fmt c
   | Lambda (x,si, e) ->
-    fprintf fmt "@[%a@[<hov 2>fun %a -> %a@]@]"
+    fprintf fmt "@[%a@[<hov 2>@{<bold;green>lambda@} %a : %a@]@]"
       pp_scope si pp_spec x pp_expr e
   | Apply (e,p) -> fprintf fmt "@[%a%a@]" pp_expr e pp_params p
   | Tuple el ->
