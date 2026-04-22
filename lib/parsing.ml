@@ -68,21 +68,18 @@ exception Error of Error.t * PyCo.Location.t list (* internal errors, re-raised 
 let raise_ ?(locations=[]) e = raise (Error (e, locations))
 
 
-
 type scope =
-    Local | Parameter | Nonlocal | Global | Unknown
-
+    Local of bool | Nonlocal of bool | Global | Unknown
 
 let show_scope = function
-    Local -> "local"
-  | Nonlocal -> "nonlocal"
+  | Local b -> if b then "parameter" else "local"
+  | Nonlocal b -> if b then "nonlocal-parameter" else "nonlocal"
   | Global -> "global"
-  | Parameter -> "parameter"
   | Unknown -> "unknown (nonlocal or global)"
 
 let pretty_scope = function
-  | Local | Parameter -> "Ⓛ"
-  | Nonlocal -> "Ⓝ"
+  | Local _ -> "Ⓛ"
+  | Nonlocal _ -> "Ⓝ"
   | Global -> "Ⓖ"
   | _ -> assert false
 
@@ -92,7 +89,7 @@ let default_context = { del = false; load = false; store = false }
 let context =
   PyCo.ExpressionContext.(
     function
-      Del -> { default_context with del = true }
+    | Del -> { default_context with del = true }
     | Load -> { default_context with load = true }
     | Store -> { default_context with store = true}
   )
@@ -108,8 +105,9 @@ let ident ?location ?(scope=Unknown) ?(ctx=PyCo.ExpressionContext.make_load_of_t
 
 let merge_scope locs1 locs2 var s1 s2 =
   match s1, s2 with
-    Unknown, s | s, Unknown -> s
-  | Parameter, Local | Local, Parameter -> Local
+  | Unknown, s | s, Unknown -> s
+  | Local b1, Local b2 -> Local (b1 || b2)
+  | Nonlocal b1, Nonlocal b2 -> Nonlocal (b1 || b2)
   | _ when s1 = s2 -> s1
   | _ ->
     let locations = locs1@ locs2 in
@@ -223,12 +221,12 @@ let compute_block_variables env location kind name args body =
   let vars = List.fold_left (fun acc (_,v, _) -> merge_vars acc v) IdentMap.empty body in
   let idents = List.concat_map get3 body in
 
-  let vars = enter_arguments Parameter args vars in
+  let vars = enter_arguments (Local true) args vars in
   let nvars = vars |> IdentMap.map (fun info ->
       let scope =
         match info.scope with
         | Unknown when info.context.del || info.context.store ->
-          if kind = Module then Global else Local
+          if kind = Module then Global else (Local false)
         | s -> s
       in
       { info with scope }
@@ -652,7 +650,7 @@ let statement tbl =
           | _ -> assert false
         in
         let info = IdentMap.find id vars in
-        id_expr, IdentMap.add id {info with scope=Local} vars, bids
+        id_expr, IdentMap.add id {info with scope=Local false} vars, bids
     and* annotation
     and*? value in
     make_annassign_of_t ~location ~target ~annotation ?value ~simple ()
@@ -708,7 +706,7 @@ let statement tbl =
     in mk ~location ?names:(Some names) (), vars, []
   in
   let global = mk_scope make_global_of_t Global in
-  let nonlocal = mk_scope make_nonlocal_of_t Nonlocal in
+  let nonlocal = mk_scope make_nonlocal_of_t (Nonlocal false) in
   let expr ~location ~value =
     let* value in make_expr_of_t ~location ~value ()
   in
@@ -770,34 +768,32 @@ let pp_defines fmt (s, loc, k) =
   Format.fprintf fmt "%s (%a) %a" s pp_loc loc pp_block_kind k
 let pp_block_info fmt bi =
   let open Format in
-  fprintf fmt "@[%a %s (%s:%a)@]@\n" pp_block_kind bi.kind
-    bi.name
-    bi.filename
-    pp_loc bi.location;
-  fprintf fmt "@[vars:@[<v>";
-  pp_vars fmt (IdentMap.bindings bi.identifiers);
-  fprintf fmt "@]@]@\n";
-  fprintf fmt "@[defines:@[<v>";
-  pp_print_list ~pp_sep:pp_print_space pp_defines fmt bi.defines;
-  fprintf fmt "@]@]@\n--"
+  fprintf fmt "@[%a %s (%s:%a)@]@\n"
+    pp_block_kind bi.kind bi.name bi.filename pp_loc bi.location;
+  fprintf fmt "@[vars:@[<v>%a@]@]@\n"
+    pp_vars (IdentMap.bindings bi.identifiers);
+  fprintf fmt "@[defines:@[<v>%a@]@]@\n--"
+    (pp_print_list ~pp_sep:pp_print_space pp_defines) bi.defines
 
 let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
   let vars, bids = BidTable.find tbl.blocks bid in
   let r_vars = IdentMap.filter_map (fun var infos ->
       match infos.scope with
-      | Nonlocal when not (IdentSet.mem var enclosing) ->
+      | Nonlocal _ when not (IdentMap.mem var enclosing) ->
         raise_ ~locations:infos.locations (UnboundNonlocal var)
-      | (Global|Nonlocal) when not infos.context.load &&
-                               not infos.context.store &&
-                               not infos.context.del -> None
+      | (Global|Nonlocal _) when not infos.context.load &&
+                                 not infos.context.store &&
+                                 not infos.context.del -> None
       (* variable where referenced in nonlocal or global but never used *)
 
       | Unknown ->
-        if scope = Nonlocal && IdentSet.mem var enclosing then
-          Some { infos with scope = Nonlocal }
-        else
-          let () = tbl.globals <- IdentMap.add var infos tbl.globals in
-          Some { infos with scope = Global }
+        (match scope with
+         | Nonlocal _ when IdentMap.mem var enclosing ->
+           Some { infos with
+                  scope = Nonlocal (IdentMap.find var enclosing) }
+         | _ ->
+           let () = tbl.globals <- IdentMap.add var infos tbl.globals in
+           Some { infos with scope = Global })
       | Global ->
         let () = tbl.globals <- IdentMap.add var infos tbl.globals in
         Some infos
@@ -807,10 +803,10 @@ let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
   BidTable.replace tbl.blocks bid (r_vars, bids);
   let nscope, nenclosing = match bid.kind with
       Module -> Global, enclosing
-    | Fun|AsyncFun|Lambda ->
-      Nonlocal,
+    | Fun | AsyncFun | Lambda ->
+      Nonlocal false,
       IdentMap.fold (fun var infos acc ->
-          if infos.scope = Local then IdentSet.add var acc else acc)
+          match infos.scope with Local b -> IdentMap.add var b acc | _ -> acc)
         r_vars enclosing
     | Class -> scope, enclosing
   in
@@ -834,7 +830,7 @@ let module_gen (tbl:env) ~body ~type_ignores =
 let module_ (tbl:env) ~body ~type_ignores =
   let m, v, i = module_gen tbl ~body ~type_ignores in
   assert (IdentMap.cardinal v = 1 && List.compare_length_with i 1 = 0); (* The module name *)
-  m,resolve_unknown_scope IdentSet.empty Global tbl (List.hd i)
+  m,resolve_unknown_scope IdentMap.empty Global tbl (List.hd i)
 
 (* after we are done, any remaining variable that has scope Local is changed
    to Global (it is "local" to the module) and any free variable that remains should raise an error.

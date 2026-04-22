@@ -1,8 +1,10 @@
 open Aliases
 
 (* Config variables *)
-let get_cast sc = Parsing.(sc = Nonlocal) (* cast variable get access if… *)
-and set_cast sc = Parsing.(sc = Nonlocal) (* cast variable set access if… *)
+let get_cast sc = (* cast variable get access if… *)
+  Parsing.(match sc with Nonlocal _ -> true | _ -> false)
+and set_cast sc = (* cast variable set access if… *)
+  Parsing.(match sc with Nonlocal _ -> true | _ -> false)
 and end_state_cast = true (* cast the returned state in lambdas & fundef *)
 and fun_pair = true (* def f(x):... to λ(x,s). and not λs.λx. *)
 
@@ -321,8 +323,9 @@ let make_state_record sid =
   incr row_id;
   MT.Record.mk' field_row
     (List.filter_map (fun id ->
-         if id.Ast.scope = Parsing.Parameter then None
-         else
+         match id.Ast.scope with
+         | Parsing.(Local true) -> None
+         | _ ->
            let v = id.Ast.name in
            Some (MlVar.show v,
                  if Ast.IdentSet.mem id sid.locals then absent

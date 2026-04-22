@@ -62,9 +62,9 @@ let upd env bi =
     IdentMap.fold
       ( fun py_ident py_info vmap ->
           let var = match py_info.scope with
-            | Local | Parameter ->
+            | Local _ ->
               Utils.mk_var_t ~kind:!local_kind (PCI.to_string py_ident)
-            | Nonlocal | Global -> IdentMap.find py_ident env.vars |> fst
+            | Nonlocal _ | Global -> IdentMap.find py_ident env.vars |> fst
             | Unknown -> assert false in
           vartbl_add var current.name;
           IdentMap.add py_ident (var, py_info) vmap )

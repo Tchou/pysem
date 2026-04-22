@@ -121,8 +121,8 @@ let scoped_identifiers env bid =
     (fun ident (name, s) ({nl_used; nl_unused;locals} as acc) ->
        let id = { name; scope = s.scope } in
        match s.scope,infos.kind with
-         ((Local | Parameter),_)
-       | (Global,Module ) -> {acc with locals = IdentSet.(add id locals)}
+       | (Local _, _) | (Global, Module ) ->
+         {acc with locals = IdentSet.(add id locals)}
        | _ ->
          if IdentMap.mem ident infos.identifiers then
            {acc with nl_used = IdentSet.(add id nl_used)}

@@ -7,8 +7,8 @@ exception Syntax of string * PyreAst.Parser.Error.t
 module IdentMap : Map.S with type key = PyreAst.Concrete.Identifier.t
 (** Maps indexed by variable names *)
 
-type scope = Local | Parameter | Nonlocal | Global | Unknown
-(** The scope of an identifier *)
+type scope = Local of bool | Nonlocal of bool | Global | Unknown
+(** The scope of an identifier. Local and Nonlocal also indicates if it's a parameter. *)
 
 type context = { del : bool; load : bool; store : bool; }
 (** The expression context of an identifier  *)
