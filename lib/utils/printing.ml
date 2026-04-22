@@ -60,9 +60,18 @@ module MSAstPrinter = struct
         (if b then "; .." else "")
     | Tuple i ->
       if List.length tl <> i then failwith "Wrong tuple constructor!"
-      else fprintf fmt "@[<hov 2>( %a )@]" (pp_list ~sep:",@ " pp_t) tl
+      else
+        let col = Colors.next_color () in
+        fprintf fmt "@[<hov 2>@{<bold;%s>(@} %a @{<bold;%s>)@}@]"
+          col (pp_print_list
+                 ~pp_sep:(fun fmt () -> fprintf fmt "@{<bold;%s>,@}@ " col)
+                 pp_t)
+          tl col
     | Tag t -> fprintf fmt "@[%a#[%a]@]" pp_tag t (pp_list ~sep:",@ " pp_t) tl
-    | _ -> fprintf fmt "@[<hov 2>%a(%a)@]" pp_constructor c (pp_list pp_t) tl
+    | _ ->
+      let col = Colors.next_color () in
+      fprintf fmt "@[<hov 2>%a@{<bold;%s>(@}%a@{<bold;%s>)@}@]"
+        pp_constructor c col (pp_list pp_t) tl col
 
   let pp_projection_arg fmt (p,t) pp_t =
     let open MSAst in
@@ -118,7 +127,8 @@ module MSAstPrinter = struct
     | LambdaRec l ->
       pp_list
         ~sep:"@\nand "
-        (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ @{<bold;purple>: @[%a@]@} ->@ %a@]"
+        (fun fmt (gty,v,t) ->
+           fprintf fmt "@[<hov 2>rfun %a@ @{<bold;purple>: @[%a@]@} ->@ %a@]"
             pp_variable v pp_gty gty pp_t t)
         fmt
         l
@@ -126,7 +136,10 @@ module MSAstPrinter = struct
       fprintf fmt
         "@[<v>@[<hov 2>if %a is %a@]@ @[<hov 2>then@ %a@]@ @[else %a@]@]"
         pp_t test pp_gty ty pp_t t1 pp_t t2
-    | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
+    | App (t1,t2) ->
+      let col = Colors.next_color () in
+      fprintf fmt "@[<hov 2>@{<bold;%s>(@}@[%a@]@ @[%a@]@{<bold;%s>)@}@]"
+        col pp_t t1 pp_t t2 col
     | Operation (op, t) -> begin match op with
         | RecUpd field -> pp_operation_recupd fmt t field
         | RecDel field -> pp_operation_recdel fmt t field
@@ -235,7 +248,10 @@ module MLAstPrinter = struct
         pp_t t (pp_list ~sep:""
                   (fun fmt (p,t) -> fprintf fmt "| @[@[%a@] ->@ @[%a@]@]"
                       pp_pattern p pp_t t)) ptl
-    | App (t1,t2) -> fprintf fmt "@[<hov 2>(@[%a@]@ @[%a@])@]" pp_t t1 pp_t t2
+    | App (t1,t2) ->
+      let col = Colors.next_color () in
+      fprintf fmt "@[<hov 2>@{<bold;%s>(@}@[%a@]@ @[%a@]@{<bold;%s>)@}@]@]"
+        col pp_t t1 pp_t t2 col
     | Operation (op, t) -> begin match op with
         | RecUpd field -> pp_operation_recupd fmt t field
         | RecDel field -> pp_operation_recdel fmt t field

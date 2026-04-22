@@ -128,3 +128,11 @@ let add_ansi_marking fmt =
     { old_fs with
       mark_open_stag = start_mark_ansi_stag;
       mark_close_stag = stop_mark_ansi_stag }
+
+let next_color =
+  let col_arr =
+    [| "white"; "red"; "green"; "yellow"; "blue"; "cyan"; "black" |] in
+  let next =
+    let cpt = ref 0 in
+    fun () -> cpt := ((!cpt + 1) mod Array.length col_arr); !cpt in
+  fun () -> Array.get col_arr (next ())
