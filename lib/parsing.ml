@@ -234,7 +234,11 @@ let compute_block_variables env location kind name args body =
   in
   let bid = BlockId.{ kind; name; location } in
   BidTable.add env.blocks bid (nvars, idents);
-  List.map get1 body, ident ~location ~scope:Unknown ~ctx:store_ctx name, [bid]
+  let idmap = match kind with
+    | Lambda -> IdentMap.empty
+    | _ -> ident ~location ~scope:Unknown ~ctx:store_ctx name
+  in
+  List.map get1 body, idmap, [bid]
 
 
 (* Tweaked version of Pyre's own AST builder,
