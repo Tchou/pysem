@@ -196,7 +196,11 @@ let main () =
 
 let () =
   if Unix.isatty Unix.stdout
-  then (Colors.add_ansi_marking Format.std_formatter; Format.set_margin 200);
+  then begin
+    Colors.add_ansi_marking Format.std_formatter;
+    match Terminal_size.get_columns () with
+    | None -> () | Some i -> Format.set_margin i
+  end;
   try main () with
   | Parsing.Syntax (file, e) ->
     Format.eprintf "%s: %d:%d-%d:%d : %s@\n"
