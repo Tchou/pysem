@@ -11,14 +11,12 @@ let rec of_statement env (stmt:PC.Statement.t) : instr =
   | FunctionDef r ->
     let bid = Parsing.BlockId.mk_fun (PCI.to_string r.name) r.location in
     let fenv = Env.upd env bid in
-    let spec = Expr.spec_of_arguments fenv r.args in
-    let body = mk_block (List.map (of_statement fenv) r.body)
-               |> annot r.location in
     let sid = Ast.scoped_identifiers fenv bid in
     FunDef ( Ident.of_identifier env r.name
-           , spec
+           , Expr.spec_of_arguments fenv r.args
            , sid
-           , body )
+           , mk_block (List.map (of_statement fenv) r.body)
+             |> annot r.location )
     |> annot r.location
   (* | AsyncFunctionDef | ClassDef *)
   | Return r -> Return (Option.map (Expr.of_expression env) r.value)
