@@ -57,9 +57,13 @@ let init globals bil to_loc =
 
 let upd env bi =
   let open Parsing in
+  let lift_scope = function Local b -> Nonlocal b | s -> s in
   let current = BidTable.find env.infos bi in
   let vars =
-    IdentMap.fold
+    env.vars
+    |> IdentMap.map (fun (mlv, info) ->
+        (mlv, { info with scope = lift_scope info.scope }))
+    |> IdentMap.fold
       ( fun py_ident py_info vmap ->
           let var = match py_info.scope with
             | Local _ ->
@@ -68,5 +72,6 @@ let upd env bi =
             | Unknown -> assert false in
           vartbl_add var current.name;
           IdentMap.add py_ident (var, py_info) vmap )
-      current.identifiers env.vars in
+      current.identifiers
+  in
   { env with current; vars }

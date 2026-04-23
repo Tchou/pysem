@@ -12,17 +12,27 @@
 #         return x
 #     return (g,5)
 
-def f(x,/):
-    fy = x
-    def g(gx,/):
-        gy = 2
-        def h(hx,/):
-          hy = 1
-          return hx
-        return fy
-    return x
+# def f(x,/):
+#     fy = x
+#     def g(gx,/):
+#         gy = 2
+#         def h(hx,/):
+#           hy = 1
+#           return hx
+#         return fy
+#     return x
 
-y = f(10)
+def id(x):
+    global u
+    def f(fx):
+        fy = "totot"
+        return
+    u = 42
+    return (x,u)
+
+y = id(10)
+z = id("hey")
+u="toto"
 
 # z = f("hey")
 

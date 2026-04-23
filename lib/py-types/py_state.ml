@@ -335,15 +335,19 @@ let make_state_record sid =
 
 let make_scoped_state (sid:Ast.scoped_identifiers) =
   Env.(Vartbl.fold
-         (fun mlvar (_,_,ty) l ->
+         (fun mlvar (scope_name,_,ty) l ->
             let ty =
               let open Ast.IdentSet in
-              let accessible = union sid.locals sid.nl_unused
-                |> union sid.nl_used in
-              if (mem_ml mlvar (union sid.locals sid.nl_used)
-                               || not (mem_ml mlvar accessible))
-              then MT.Ty.any
-              else ty in
+              (* let accessible = union sid.locals sid.nl_unused *)
+              (*   |> union sid.nl_used in *)
+              (* if (mem_ml mlvar (union sid.locals sid.nl_used) *)
+              (*                  || not (mem_ml mlvar accessible)) *)
+              (* then MT.Ty.any *)
+              (* else ty *)
+              if scope_name = "global" || (mem_ml mlvar sid.nl_used)
+              then ty
+              else MT.Ty.any
+            in
             (MlVar.show mlvar, (ty,false))::l)
          variables [])
   |> MT.Record.mk_closed
