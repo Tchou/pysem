@@ -329,7 +329,7 @@ let rec pp_instr' fmt instr' : unit =
   | If (e,i,io) ->
     fprintf fmt
       "@[@{<green;bold>if@} %a@{<bold>:@}@\n  %a@\n\
-       @{<green;bold>else:@}@\n  %a@]"
+       @{<bold>@{<green>else@}:@}@\n  %a@]"
       pp_expr e pp_instr i
       (pp_print_option ~none:(fun fmt () -> Block [] |> pp_instr' fmt) pp_instr)
       io
@@ -348,6 +348,6 @@ and pp_instr_list fmt il =
 let pp_prog fmt (p,si:prog) =
   Format.fprintf fmt "%a%a@."
     (fun fmt set -> if !Utils.debug then
-        Format.fprintf fmt "@{<yellow>\"\"\"@\n@[%a@]@\n\"\"\"@}@\n@\n"
+        Format.fprintf fmt "@{<yellow>\"\"\"@\nglobal: @[%a@]@\n\"\"\"@}@\n@\n"
           pp_identset set) si
     pp_instr_list p
