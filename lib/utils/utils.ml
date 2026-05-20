@@ -51,6 +51,8 @@ let ty_of_int i =
   let z = Z.of_int i in
   MT.Ty.interval (Some z) (Some z)
 
+let undef = MT.Enum.(define "Undef" |> typ)
+
 (* MAKE Lang.Ast *)
 
 let ml_annot p (ast:MLAst.e) =

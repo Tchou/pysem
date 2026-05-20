@@ -11,6 +11,8 @@ type t =
 let top_kind = ref MlMVar.Immut
 let local_kind = ref MlMVar.Mut
 
+let module_scope = "global"
+
 module Vartbl = Hashtbl.Make (struct
     type t = MlVar.t
     let equal = MlVar.equal
@@ -49,7 +51,7 @@ let init globals bil to_loc =
   ; vars = IdentMap.fold
         (fun ident info vmap ->
            let var = Utils.mk_var_t ~kind:!top_kind (PCI.to_string ident) in
-           vartbl_add var "global"; (* or module name *)
+           vartbl_add var module_scope; (* or module name *)
            IdentMap.add ident (var, info) vmap)
         globals
         IdentMap.empty

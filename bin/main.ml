@@ -77,7 +77,7 @@ let treat_file file =
      ) in *)
   let module_state = Env.vars_rec true
     |> List.map (fun (mlvar, (_ty, _b)) ->
-        (mlvar, (MT.Enum.(define "Undef" |> typ) , false)))
+        (mlvar, (Utils.undef, false)))
     |> MT.Record.mk_closed |> MlGTy.mk in
 
   let e = Py_state.of_prog p (Env.vars_rec false |> MT.Record.mk_closed) in
@@ -95,11 +95,14 @@ let treat_file file =
     ) er in
   let ml_er = match ml_er with
     | [] -> []
-    | (s0,(p,_))::l -> (s0,(p,MLAst.Value module_state))::l
-  in
-  (* let ml_er = match List.rev ml_er with
-    | [] -> []
-    | (_,e)::l -> [MlVar.create (Some "final_state"), Utils.join_let_rev l e] in *)
+    | (s0,(p,_))::l -> (s0,(p,MLAst.Value module_state))::l in
+  let ml_er =
+    if Py_state.pack_toplevel
+    then match List.rev ml_er with
+      | [] -> []
+      | (_,e)::l -> [ MlVar.create (Some "final_state")
+                    , Utils.join_let_rev l e]
+    else ml_er in
 
   pr "ml reduced pst ast" "%a"
     (pp_list ~sep:"@\n" Printing.MLAstPrinter.pp_t) (List.map snd ml_er);

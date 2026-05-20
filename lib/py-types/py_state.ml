@@ -2,11 +2,26 @@ open Aliases
 
 (* Config variables *)
 let get_cast sc = (* cast variable get access if… *)
-  Parsing.(match sc with Nonlocal _ -> true | _ -> false)
+  Parsing.(match sc with Nonlocal _ -> false | _ -> false)
 and set_cast sc = (* cast variable set access if… *)
-  Parsing.(match sc with Nonlocal _ -> true | _ -> false)
+  Parsing.(match sc with Nonlocal _ -> false | _ -> false)
+and scope_ty mlvar (scope_name,_,_ty) (sid:Ast.scoped_identifiers) =
+  (* returns the Sstt.Ty.t of the mlvar in the state declaration when entering a
+     scope. It can be a new free variable, a shared tv already associated (_ty)
+     or any. *)
+  let open Ast.IdentSet in
+  let tv =
+    (* _ty *)
+    Printing.mlvar_show mlvar |> Utils.mk_tv
+  in
+  if scope_name = Env.module_scope
+  then tv
+  else if mem_ml mlvar sid.nl_used
+  then MT.Ty.conj [tv; MT.Ty.neg Utils.undef]
+  else MT.Ty.any
 and end_state_cast = true (* cast the returned state in lambdas & fundef *)
 and fun_pair = true (* def f(x):... to λ(x,s). and not λs.λx. *)
+and pack_toplevel = true (* used by Main: 1 let toplevel or a sequence? *)
 
 type res_kind = R | V
 type ident = Simple of MlVar.t
@@ -335,20 +350,8 @@ let make_state_record sid =
 
 let make_scoped_state (sid:Ast.scoped_identifiers) =
   Env.(Vartbl.fold
-         (fun mlvar (scope_name,_,ty) l ->
-            let ty =
-              let open Ast.IdentSet in
-              (* let accessible = union sid.locals sid.nl_unused *)
-              (*   |> union sid.nl_used in *)
-              (* if (mem_ml mlvar (union sid.locals sid.nl_used) *)
-              (*                  || not (mem_ml mlvar accessible)) *)
-              (* then MT.Ty.any *)
-              (* else ty *)
-              if scope_name = "global" || (mem_ml mlvar sid.nl_used)
-              then ty
-              else MT.Ty.any
-            in
-            (MlVar.show mlvar, (ty,false))::l)
+         (fun mlvar var_infos l ->
+            (MlVar.show mlvar, (scope_ty mlvar var_infos sid,false))::l)
          variables [])
   |> MT.Record.mk_closed
 
