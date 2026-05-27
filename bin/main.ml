@@ -59,7 +59,7 @@ let treat_file file =
   MS.Config.infer_overload := false;
   MS.Config.value_restriction := false;
 
-  let p = Prog.of_module (Env.init globals bil to_loc) m in
+  let (_,g as p) = Prog.of_module (Env.init globals bil to_loc) m in
   pr "pysem ast" "%a" Ast.pp_prog p;
 
   (* Then modify Py_state.(of_prog and make_state_record etc.) *)
@@ -75,12 +75,14 @@ let treat_file file =
           let id = PCI.to_string pci in
           id, MT.TVar.(Some id |> mk KInfer |> typ, inner_let))
      ) in *)
-  let module_state = Env.vars_rec true
+  let module_state = Py_state.cfg.init_state g
+    (* Env.vars_rec true
     |> List.map (fun (mlvar, (_ty, _b)) ->
         (mlvar, (Utils.undef, false)))
-    |> MT.Record.mk_closed |> MlGTy.mk in
+       |> MT.Record.mk_closed |> MlGTy.mk *) in
+  let module_state_t = MlGTy.mk module_state in
 
-  let e = Py_state.of_prog p (Env.vars_rec false |> MT.Record.mk_closed) in
+  let e = Py_state.of_prog p in
   dbg_pr "pystate ast" "%a" (pp_list ~sep:"@\n" Py_state.pp_expr) e;
 
   let e = Py_state.prepare_toplevel e in
@@ -90,14 +92,15 @@ let treat_file file =
 
   let ml_er = List.map (fun (v,e) ->
       let p,mle as ml = Py_state.to_ml e in
-      v, (p, if false then MLAst.TypeCoerce (ml, module_state, MSAst.Check)
+      v, (p, if Py_state.cfg.cast_toplevel
+          then MLAst.TypeCoerce (ml, module_state_t, MSAst.Check)
           else mle)
     ) er in
   let ml_er = match ml_er with
     | [] -> []
-    | (s0,(p,_))::l -> (s0,(p,MLAst.Value module_state))::l in
+    | (s0,(p,_))::l -> (s0,(p,MLAst.Value module_state_t))::l in
   let ml_er =
-    if Py_state.pack_toplevel
+    if Py_state.cfg.pack_toplevel
     then match List.rev ml_er with
       | [] -> []
       | (_,e)::l -> [ MlVar.create (Some "final_state")
@@ -106,6 +109,12 @@ let treat_file file =
 
   pr "ml reduced pst ast" "%a"
     (pp_list ~sep:"@\n" Printing.MLAstPrinter.pp_t) (List.map snd ml_er);
+
+  let ml_er =
+    (Py_state.PSBuiltins.all ()
+     |> List.map (fun (mlv,ty) ->
+         mlv, MlGTy.mk ty |> Utils.mk_value MC.Position.dummy))
+    @ ml_er in
 
   let v_t = List.map (fun (v,t) -> v, ML.Transform.transform t) ml_er in
   dbg_pr "mlsys reduced pst ast" "%a"
@@ -117,7 +126,7 @@ let treat_file file =
 
   (* let v_t = List.map (fun t -> MlVar.create None, t) mlsys in *)
   (* MS.Config.infer_overload := false; *)
-  let tt, mce, names = List.fold_left treat_def (0.,MC.Env.empty, []) v_t in
+  let tt, mce, names = List.fold_left treat_def (0., MC.Env.empty, []) v_t in
 
   (* * )
 

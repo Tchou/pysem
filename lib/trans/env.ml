@@ -19,17 +19,20 @@ module Vartbl = Hashtbl.Make (struct
     let hash = Hashtbl.hash
   end)
 
-let variables = Vartbl.create 16
+let variables : Sstt.(string * Var.t * Ty.t) Vartbl.t = Vartbl.create 16
 let vartbl_add mlvar scope_name =
   let tv = MT.TVar.(Some (MlVar.show mlvar) |> mk KInfer) in
   Vartbl.add variables mlvar
     (scope_name, tv, MT.TVar.typ tv)
 and get_var_infos = Vartbl.find variables
+and get_vars_infos () = Vartbl.fold
+    (fun mlv infos acc -> (mlv,infos)::acc) variables []
 and vars_rec b =
   Vartbl.fold
     (fun mlvar (_, _, typ) acc ->
        (MlVar.show mlvar, (typ, b))::acc)
-    variables []
+    variables
+    []
 
 let set_mut_top b = top_kind := MlMVar.(if b then Mut else Immut)
 let set_mut_local b = local_kind := MlMVar.(if b then Mut else Immut)

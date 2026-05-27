@@ -182,6 +182,24 @@ module Binop = struct
 
     | In | NotIn -> failwith "Not implemented (Binop)."
 
+  let str_ty (int_op, bool_op, int_cmp, pol_cmp) = function
+    | Add -> "+", int_op
+    | Sub -> "-", int_op
+    | Mult -> "*", int_op
+    | Div -> "/", int_op
+    | Mod -> "mod", int_op
+    | Pow -> "^^", int_op
+    | And -> "&&", bool_op
+    | Or -> "||", bool_op
+    | Eq -> "(=)", pol_cmp ()
+    | Neq -> "<>", pol_cmp ()
+    | Lt -> "<", int_cmp
+    | Gt -> ">", int_cmp
+    | Le -> "≤", int_cmp
+    | Ge -> "≥", int_cmp
+    | Is -> "is", pol_cmp ()
+    | Isn -> "isn", pol_cmp ()
+
   let to_ml pos op =
     let open Utils in
     let int_op  = MT.(Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.int ))
@@ -189,24 +207,7 @@ module Binop = struct
     and bool_op = MT.(Arrow.mk Ty.bool (Arrow.mk Ty.bool Ty.bool))
     and pol_cmp _ = let tv = mk_tv "bop_tv" in
       MT.(Arrow.mk tv    (Arrow.mk tv      Ty.bool)) in
-    let strkey, ty = match op with
-      | Add -> "+", int_op
-      | Sub -> "-", int_op
-      | Mult -> "*", int_op
-      | Div -> "/", int_op
-      | Mod -> "mod", int_op
-      | Pow -> "^^", int_op
-      | And -> "&&", bool_op
-      | Or -> "||", bool_op
-      | Eq -> "(=)", pol_cmp ()
-      | Neq -> "<>", pol_cmp ()
-      | Lt -> "<", int_cmp
-      | Gt -> ">", int_cmp
-      | Le -> "≤", int_cmp
-      | Ge -> "≥", int_cmp
-      | Is -> "is", pol_cmp ()
-      | Isn -> "isnot", pol_cmp ()
-    in
+    let strkey, ty = str_ty (int_op, bool_op, int_cmp, pol_cmp) op in
     let op_name = mk_id "%s" strkey in
     (match Builtins.find_opt op_name with
        Some v -> v
