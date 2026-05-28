@@ -22,24 +22,39 @@
 #         return fy
 #     return x
 
+# def id(x):
+  # global u
+  # if 2==0:
+    # z = 1
+  # def inner(aa): return aa
+  # inner(0)
+  # z=2
+#    # def f(fx):
+#        # fy = "totot"
+#        # return
+#    u = 42
+  # return (x)
+# u = 0
+## y = 0
+# y = id(10)
+## z = id("hey")
+## u="toto"
+
+
+# def f(n):
+#     u = n+1
+#     z = f("toto")
+#     return u / z
+
+# g = f
+
+# def f(b):
+#     b = b and b
+#     return 1-1
+
+# g(42)
+
+# id = lambda x:1
 def id(x):
-    global u
-    def f(fx):
-        fy = "totot"
-        return
-    u = 42
-    return (x,u)
-
-y = id(10)
-z = id("hey")
-u="toto"
-
-# z = f("hey")
-
-# def g(x,/):
-#   global u
-#   return (u,x)
-
-# u = 43 #comment for error
-
-# z = g(42)
+  # y = 1
+  return x

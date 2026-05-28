@@ -23,8 +23,9 @@ let pp_list ?(sep:(unit,Format.formatter,unit) format=";@ ") =
   Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt sep)
 let pp_nel str = function [] -> "" | _ -> str
 
-let mlvar_show = MlVar.(if !Utils.debug && not !Utils.export
-                        then get_unique_name else show)
+let mlvar_show mlv = MlVar.(if !Utils.debug && not !Utils.export
+                            then get_unique_name mlv
+                            else show mlv)
 and mlvar_show_full = MlVar.get_unique_name
 
 module MSAstPrinter = struct

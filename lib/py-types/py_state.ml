@@ -41,41 +41,42 @@ type ps_config =
   ; cast_toplevel : bool (* used by Main: cast each toplevel statement? *)
   }
 
-let test_cfg : ps_config =
-  let get_cast sc = Parsing.(match sc with Nonlocal _ -> true | _ -> false)
-  and set_cast sc = Parsing.(match sc with Nonlocal _ -> true | _ -> false)
-  and mk_state (sid:Ast.scoped_identifiers) =
-    Env.(Vartbl.fold
-           (fun mlvar (scope_name,_,_) l ->
-              let ty =
-                let open Ast.IdentSet in
-                let tv =
-                  (* _ty *)
-                  Printing.mlvar_show mlvar |> Utils.mk_tv
-                in
-                if scope_name = Env.module_scope
-                then tv
-                else if mem_ml mlvar sid.nl_used
-                then MT.Ty.conj [tv; MT.Ty.neg Utils.undef]
-                else MT.Ty.any in
-              (MlVar.show mlvar, (ty, false))::l)
-           variables [])
-    |> MT.Record.mk_closed
-  and init_state _ = Env.vars_rec false |> MT.Record.mk_closed
-  and end_state_cast (pos,_ as e) st loc =
-    pos, Cast
-      ( (pos, DelStateFields (loc,e))
-      , MT.(Tuple.mk [ TVar.(Some "res" |> mk KInfer |> typ)
-                     ; st ])
-        |> MlGTy.mk)
-  in
-  { get_cast; set_cast; mk_state
-  ; end_state_cast
-  ; fun_pair = true
-  ; init_state
-  ; pack_toplevel = true
-  ; cast_toplevel = false
-  }
+(* let test_cfg : ps_config = *)
+(*   let get_cast sc = Parsing.(match sc with Nonlocal _ -> true | _ -> false) *)
+(*   and set_cast sc = Parsing.(match sc with Nonlocal _ -> true | _ -> false) *)
+(*   and mk_state (sid:Ast.scoped_identifiers) = *)
+(*     Env.(Vartbl.fold *)
+(*            (fun mlvar (scope_name,_,_) l -> *)
+(*               let ty = *)
+(*                 let open Ast.IdentSet in *)
+(*                 let tv = *)
+(*                   (\* _ty *\) *)
+(*                   Printing.mlvar_show mlvar |> Utils.mk_tv *)
+(*                 in *)
+(*                 if scope_name = Env.module_scope *)
+(*                 then tv *)
+(*                 else if mem_ml mlvar sid.nl_used *)
+(*                 then MT.Ty.conj [tv; MT.Ty.neg Utils.undef] *)
+(*                 else MT.Ty.any in *)
+(*               (MlVar.show mlvar, (ty, false))::l) *)
+(*            variables []) *)
+(*     |> MT.Record.mk_closed *)
+(*   and init_state _ = Env.vars_rec false |> MT.Record.mk_closed *)
+(*   and end_state_cast (pos,_ as e) st loc = *)
+(*     pos, Cast *)
+(*       ( ( pos, Tuple [ (pos, Pi (0,e)) ; *)
+(*            (pos, DelStateFields (loc, (pos, Pi (1,e)))) ] ) *)
+(*       , MT.(Tuple.mk [ TVar.(Some "res" |> mk KInfer |> typ) *)
+(*                      ; st ]) *)
+(*         |> MlGTy.mk) *)
+(*   in *)
+(*   { get_cast; set_cast; mk_state *)
+(*   ; end_state_cast *)
+(*   ; fun_pair = false *)
+(*   ; init_state *)
+(*   ; pack_toplevel = true *)
+(*   ; cast_toplevel = false *)
+(*   } *)
 
 let simple_cfg : ps_config =
   let get_cast = fun _ -> false
@@ -86,8 +87,9 @@ let simple_cfg : ps_config =
       let name = Ast.Ident.name ident in
       let tv = Utils.mk_tv name in
       let ty = if b
-        then tv
-            (* Utils.undef *)
+        then
+          (* tv *)
+            Utils.undef
         else tv in
       (name, (ty, false))::l
     in
@@ -100,16 +102,15 @@ let simple_cfg : ps_config =
       (fun id acc -> (MlVar.show id.name, (Utils.undef, false))::acc)
       ids []
     |> MT.Record.mk_closed
-  and end_state_cast (pos,_ as e) _st loc =
-    (* pos, Cast ( *)
-        (pos, DelStateFields (loc,e))
-      (* , MT.(Tuple.mk [ TVar.(Some "res" |> mk KInfer |> typ) *)
-                     (* ; st ]) *)
-        (* |> MlGTy.mk) *)
+  and end_state_cast (pos,_ as e) st _loc =
+    pos, Cast ( e
+      , MT.(Tuple.mk [ TVar.(Some "res" |> mk KInfer |> typ)
+                     ; st ])
+        |> MlGTy.mk)
   in
   { get_cast; set_cast; mk_state
   ; end_state_cast
-  ; fun_pair = true
+  ; fun_pair = false
   ; init_state
   ; pack_toplevel = false
   ; cast_toplevel = false
@@ -217,7 +218,15 @@ let reduce e =
         | Tuple [_,Res (V,e) ;s] -> snd (subst body [r.v, e; r.s, s])
         | _ -> IfV{r with cond; body }
       )
-    | IfR r -> IfR r (* TODO *)
+    | IfR r -> (
+        let cond = loop r.cond in
+        let body = loop r.body in
+        match snd cond with
+        | Tuple [_,Res (V, _);_] as r -> r
+        | Tuple [_,Res (R,e) ;s] -> snd (subst body [r.v, e; r.s, s])
+        | _ -> IfR{r with cond; body }
+      )
+          (* IfR r *)
     | Ite(e1, e2, e3) -> Ite(loop e1, loop e2, loop e3)
     | Tuple l -> Tuple (List.map loop l)
     | Pi (i, e) -> (match loop e with
@@ -233,7 +242,14 @@ let reduce e =
            e' -> snd e'
          | exception Not_found -> Field (e,id))
       else Field(e,id)
-    | DelStateFields(l, e) -> DelStateFields(l, loop e) (* TODO simplify *)
+    | DelStateFields(l, e) ->
+      let e = loop e in
+      (match e with
+       | _, RecUpdate ((p,e1), id, _) when List.mem id l ->
+         (match List.filter (fun i -> i <> id) l with
+          | [] -> e1
+          | l -> DelStateFields(l, loop (p,e1)))
+        | _ -> DelStateFields(l, loop e))
     | Lambda (id, k, e) ->  Lambda(id, k, loop e)
     | App(e1, e2) ->
       let e1 = loop e1 in
@@ -284,6 +300,7 @@ let smon_ret pos s (sty,idl) e =
 let smon_run pos e s =
   pos, App (e, (pos, Var s))
 
+(** bindv v, s = e s0 in body *)
 let bindV pos e s0 v s body =
   let cond = smon_run pos e s0 in
   pos, IfV { cond; v; s; body }
@@ -348,31 +365,49 @@ let lambda pos is_expr (sty,_ as st) x (_,locals as lam_st) e =
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s ()
   and s2 = mk_ident_s ()
+  and s3 = mk_ident_s ()
+  and s4 = mk_ident_s ()
   and s = mk_ident_s () in
-  let v = mk_ident_v () in
+  let v = mk_ident_v ()
+  and r = mk_ident_v ()
+  in
   let xty = (* state-passing style or static tv? *)
     Utils.mk_tv MlVar.(mlvar x |> show)
-    (* Env.(Vartbl.find variables (mlvar x) |> fun (_,_,t) -> t) *)
-  in
+    (* Env.(Vartbl.find variables (mlvar x) |> fun (_,_,t) -> t) *) in
+  let end_result =
+    cfg.end_state_cast
+      (pair pos (pos, Var r)
+         ( pos, DelStateFields (locals, (pos, Var s)) ))
+      sty locals in
   let f_body =
+    (* bindv v', s2 = (λs1:lam_st. V(None), {s1 w/ x=x}) s0 in
+       bindr r , s4 = (λs3:lam_st.
+         bindv v,  s  = e s3 in
+         R(v), s  |or|  R(None), s) s2
+       in
+       (r,{ s4 w\ x } <: ty)
+    *)
     bindV pos
       (smon_ret pos s1 lam_st
          (emon_upd_v pos V (pos, Const none) s1 x x)) s0
       (mk_ident_v ()) s2
-      (bindV pos e s2 v s
-         (if is_expr (* treat Python's lambdas as if there were a return *)
-          then emon_ret pos R (pos, Var v) s
-          else emon_ret pos V (pos, Const none) s)) in
-  let f_body = cfg.end_state_cast f_body sty locals in
+      (bindR pos
+         (smon_ret pos s3 lam_st
+            (bindV pos e s2 v s
+               (if is_expr (* as id Python's lambdas had a return *)
+                then emon_ret pos R (pos, Var v) s
+                else emon_ret pos R (pos, Const none) s)
+               (* can be R: if there's a R above it will bypass this one. *)))
+            s2
+            r s4 end_result
+      )
+  in
   let f =
     if cfg.fun_pair
     then let tp = MT.Tuple.mk [xty;sty] in
       pos, Lambda (mk_ident "p", Both (tp,x,xty,s0,lam_st),f_body)
     else
-      pos, Lambda
-        (x, Normal xty,
-         smon_ret pos s0 st
-           f_body) in
+      pos, Lambda (x, Normal xty, smon_ret pos s0 st f_body) in
   let s0 = mk_ident_s () in
   smon_ret pos s0 st
     (emon_ret pos V f s0)
@@ -628,17 +663,9 @@ let mk_match p tag_gt tag cond v s body =
           (c_var)))
 
 let mk_delete_fields p e l =
-  let open Utils in
-  let x = mk_ident_ml () |> mlvar in
-  let xt = x |> var_of_vart p in
-  let v1 = mk_proj_tuple p 2 0 xt in
-  let v2 = mk_proj_tuple p 2 1 xt in
-  let dv2 = List.fold_left (fun e f ->
-      mk_rec_del p (ident_name f) e
-    ) v2 l
-  in
-  mk_let p [] x e
-    (mk_tuple p [v1; dv2])
+  List.fold_left (fun e f ->
+      Utils.mk_rec_del p (ident_name f) e
+    ) e l
 
 let rec to_ml (p,e) =
   let open Utils in
@@ -769,12 +796,12 @@ and pp_expr' fmt e =
       pp_expr e1 pp_expr e2 pp_expr e3
   | Tuple el ->
     fprintf fmt "@[(@[%a@])@]" (Printing.pp_list ~sep:",@ " pp_expr) el
-  | Pi (i, e) -> fprintf fmt "@[@{<bold>π%d@}(%a)@]" i pp_expr e
+  | Pi (i, e) -> fprintf fmt "@[<hov 2>@{<bold>π%d@}(%a)@]" i pp_expr e
   | EmptyRec -> fprintf fmt "{}"
   | RecUpdate (e1, id, e2) -> pp_expr'_recupd fmt e1 id e2
   | Field (e, id) -> fprintf fmt "@[%a@,.%a@]" pp_expr e pp_ident id
   | DelStateFields(l, e) ->
-    fprintf fmt "@[%a@,\\{%a}@]"
+    fprintf fmt "@[<hov 2>{ %a@ without %a }@]"
       pp_expr e Printing.(pp_list ~sep:",@ " pp_ident) l
   | Lambda (id, State (ty,_), e) ->
     fprintf fmt "@[<hov 2>ƛ %a @{<bold;purple>: %a@}@{<bold>.@}@ %a@]"
@@ -782,11 +809,11 @@ and pp_expr' fmt e =
   | Lambda (id, Normal ty, e) ->
     fprintf fmt "@[<hov 2>λ %a @{<bold;purple>: %a@}@{<bold>.@}@ %a@]"
       pp_ident id MT.Ty.pp ty pp_expr e
-  | Lambda (id, Both (tp,x,_,s,_), e) ->
+  | Lambda (id, Both (tp,x,t1,s,(t2,_)), e) ->
     fprintf fmt "@[<hov 2>λƛ (%a, %a) @{<bold>as@} %a \
-                 @{<bold;purple>: %a@}@{<bold>.@}@ %a@]"
+                 @{<bold;purple>: %a = %a, %a@}@{<bold>.@}@ %a@]"
       pp_ident x pp_ident s pp_ident id
-      MT.Ty.pp tp pp_expr e
+      MT.Ty.pp tp MT.Ty.pp t1 MT.Ty.pp t2 pp_expr e
   | App (e1, e2) -> fprintf fmt "@[<hov 2>(%a)@ %a@]" pp_expr e1 pp_expr e2
   | Cast (e, gty) ->
     fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ :> @[%a@]@}@]"

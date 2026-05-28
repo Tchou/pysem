@@ -4,7 +4,7 @@ open Aliases
 
 let debug = ref false (** Show debug informations. *)
 
-and export = ref false (** Print code with legals characters. *)
+and export = ref true (** Print code with legals characters. *)
 
 (* let shadowing = ref false (\** Allow shadowing in toplevel. *\) *)
 
