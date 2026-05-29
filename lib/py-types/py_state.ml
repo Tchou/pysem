@@ -27,13 +27,22 @@ type expr' =
   | Cast of expr * MlGTy.t
 and expr = MC.Position.t * expr'
 
+let r_tag = MT.Tag.define "R"
+and v_tag = MT.Tag.define "V"
+let r_tag_t ty = MT.(Tag.mk r_tag ty )
+and v_tag_t ty = MT.(Tag.mk v_tag ty )
+let r_tag_gt = r_tag_t MT.Ty.any |> MlGTy.mk
+and v_tag_gt = v_tag_t MT.Ty.any |> MlGTy.mk
+
+let res_tag = function R -> r_tag | V -> v_tag
+
 (* Config variables *)
 type ps_config =
   { get_cast : Parsing.scope -> bool (* cast variable get access if… *)
   ; set_cast : Parsing.scope -> bool (* cast variable set access if… *)
   ; mk_state : Ast.scoped_identifiers -> MT.Ty.t
   (* returns the Sstt.Ty.t of the state when entering a scope. *)
-  ; end_state_cast : expr -> MT.Ty.t -> ident list -> expr
+  ; end_state_cast : expr -> MT.Ty.(t*t) -> ident list -> expr
   (* cast the returned state in lambdas & fundef *)
   ; fun_pair : bool (* def f(x):... to λ(x,s). and not λs.λx. *)
   ; init_state : Ast.IdentSet.t -> MT.Ty.t
@@ -102,31 +111,28 @@ let simple_cfg : ps_config =
       (fun id acc -> (MlVar.show id.name, (Utils.undef, false))::acc)
       ids []
     |> MT.Record.mk_closed
-  and end_state_cast (pos,_ as e) st _loc =
-    pos, Cast ( e
-      , MT.(Tuple.mk [ TVar.(Some "res" |> mk KInfer |> typ)
-                     ; st ])
-        |> MlGTy.mk)
+  and end_state_cast (pos,_ as e) (xt,st) _loc =
+    pos, Cast (
+      e
+             , MT.(Tuple.mk [
+                    Tag.mk
+                      r_tag
+                      xt
+                      (* Ty.any *)
+                      (* Utils.(mk_tv "res") *)
+                      (* TVar.(Some "res" |> mk KInfer |> typ) *)
+                  ; st ])
+                |> MlGTy.mk)
   in
   { get_cast; set_cast; mk_state
   ; end_state_cast
-  ; fun_pair = false
+  ; fun_pair = true
   ; init_state
   ; pack_toplevel = false
   ; cast_toplevel = false
   }
 
 let cfg = simple_cfg
-
-
-let r_tag = MT.Tag.define "R"
-and v_tag = MT.Tag.define "V"
-let r_tag_t ty = MT.(Tag.mk r_tag ty )
-and v_tag_t ty = MT.(Tag.mk v_tag ty )
-let r_tag_gt = r_tag_t MT.Ty.any |> MlGTy.mk
-and v_tag_gt = v_tag_t MT.Ty.any |> MlGTy.mk
-
-let res_tag = function R -> r_tag | V -> v_tag
 
 
 module PSBuiltins = struct
@@ -246,10 +252,8 @@ let reduce e =
       let e = loop e in
       (match e with
        | _, RecUpdate ((p,e1), id, _) when List.mem id l ->
-         (match List.filter (fun i -> i <> id) l with
-          | [] -> e1
-          | l -> DelStateFields(l, loop (p,e1)))
-        | _ -> DelStateFields(l, loop e))
+         DelStateFields(l, loop (p,e1))
+       | _ -> DelStateFields(l, e))
     | Lambda (id, k, e) ->  Lambda(id, k, loop e)
     | App(e1, e2) ->
       let e1 = loop e1 in
@@ -376,9 +380,9 @@ let lambda pos is_expr (sty,_ as st) x (_,locals as lam_st) e =
     (* Env.(Vartbl.find variables (mlvar x) |> fun (_,_,t) -> t) *) in
   let end_result =
     cfg.end_state_cast
-      (pair pos (pos, Var r)
-         ( pos, DelStateFields (locals, (pos, Var s)) ))
-      sty locals in
+      (pair pos (res pos R (pos, Var r))
+         ( pos, DelStateFields (locals, (pos, Var s4)) ))
+      (xty,sty) locals in
   let f_body =
     (* bindv v', s2 = (λs1:lam_st. V(None), {s1 w/ x=x}) s0 in
        bindr r , s4 = (λs3:lam_st.
@@ -809,11 +813,11 @@ and pp_expr' fmt e =
   | Lambda (id, Normal ty, e) ->
     fprintf fmt "@[<hov 2>λ %a @{<bold;purple>: %a@}@{<bold>.@}@ %a@]"
       pp_ident id MT.Ty.pp ty pp_expr e
-  | Lambda (id, Both (tp,x,t1,s,(t2,_)), e) ->
+  | Lambda (id, Both (tp,x,_,s,_), e) ->
     fprintf fmt "@[<hov 2>λƛ (%a, %a) @{<bold>as@} %a \
-                 @{<bold;purple>: %a = %a, %a@}@{<bold>.@}@ %a@]"
+                 @{<bold;purple>: %a @}@{<bold>.@}@ %a@]"
       pp_ident x pp_ident s pp_ident id
-      MT.Ty.pp tp MT.Ty.pp t1 MT.Ty.pp t2 pp_expr e
+      MT.Ty.pp tp pp_expr e
   | App (e1, e2) -> fprintf fmt "@[<hov 2>(%a)@ %a@]" pp_expr e1 pp_expr e2
   | Cast (e, gty) ->
     fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ :> @[%a@]@}@]"
