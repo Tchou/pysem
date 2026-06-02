@@ -179,7 +179,7 @@ let subst e s = (* unsound in general but ok since it's only called for
 let is_simple e =
   let rec loop (_, e) = loop_expr e
   and loop_expr = function
-    | Var _ | EmptyRec | Const _  |Lambda _ -> true
+    | Var _ | EmptyRec | Const _ | Lambda _ -> true
     | Res (_, e) | Proj(_, e) | Pi (_ , e) | Field (e, _)
     | DelStateFields (_, e) | Cast (e, _) -> loop e
     | IfV { cond; body; _ } -> loop cond && loop body
@@ -244,7 +244,7 @@ let reduce e =
        | _, RecUpdate ((p,e1), id, _) when List.mem id l ->
          DelStateFields(l, loop (p,e1))
        | _ -> DelStateFields(l, e))
-    | Lambda (id, k, e) ->  Lambda(id, k, loop e)
+    | Lambda (id, k, e) -> Lambda (id, k, loop e)
     | App(e1, e2) ->
       let e1 = loop e1 in
       let e2 = loop e2 in
@@ -573,7 +573,7 @@ let rec of_expr st (p,e:Ast.expr) : expr = match e with
 
 and of_spec {posonly;mixed;_} = match posonly with
   | [ (x,None) ] -> Source x
-  | _ ->  match mixed with
+  | _ -> match mixed with
     | [ (x,None) ] -> Source x
     | _ -> failwith "TODO not just 1 posonly"
 
@@ -588,7 +588,7 @@ let rec of_instr st (p,i:Ast.instr) = match i with
       | [] -> const p st none
       | e1::l -> List.fold_left (fun sq ((p,_) as e) -> seq p st sq e ) e1 l
     end
-  | FunDef (id, spec, sid, body)  ->
+  | FunDef (id, spec, sid, body) ->
     (* Format.printf "Function %a has scope: used:%a,unused:%a\n%!"
       Ast.Ident.pp_full id Ast.IdentSet.pp sid.Ast.nl_used
       Ast.IdentSet.pp sid.Ast.nl_unused; *)
@@ -626,7 +626,7 @@ let ty_undef = MT.Enum.(define "%py_uninitialized" |> typ)
 let initial_env ids =
   Utils.mk_rec_disj false
     [(List.map (fun id ->
-         let v =  id.Ast.name in
+         let v = id.Ast.name in
          (MlVar.show v, (ty_undef, false)))
          (Ast.IdentSet.to_list ids))]
 
