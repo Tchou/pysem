@@ -796,8 +796,9 @@ let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
            Some { infos with
                   scope = Nonlocal (IdentMap.find var enclosing) }
          | _ ->
+           let infos = { infos with scope = Global } in
            let () = tbl.globals <- IdentMap.add var infos tbl.globals in
-           Some { infos with scope = Global })
+           Some infos)
       | Global ->
         let () = tbl.globals <- IdentMap.add var infos tbl.globals in
         Some infos
