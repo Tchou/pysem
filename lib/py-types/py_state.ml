@@ -700,9 +700,9 @@ let rec to_ml (p,e) =
       ml_id
       (match bth with
        | None -> ml_e
-       | Some (x,tx,s,ts) ->
+       | Some (x,tx,s,_ts) ->
          mk_let p [tx] (mlvar x) (mk_proj_tuple p 2 0 id_var)
-           (mk_let p [ts] (mlvar s)
+           (mk_let p [(*_ts*)] (mlvar s)
               (init_loc (mk_proj_tuple p 2 1 id_var) idl)
               ml_e))
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)

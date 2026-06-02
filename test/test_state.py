@@ -55,6 +55,10 @@
 # g(42)
 
 # id = lambda x:1
-def id(x):
+# def id(x):
   # y = 1
-  return x
+  # return x
+
+y=0
+def id(x):
+  return x + y
