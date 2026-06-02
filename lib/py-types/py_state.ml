@@ -701,9 +701,17 @@ let rec to_ml (p,e) =
       (match bth with
        | None -> ml_e
        | Some (x,tx,s,_ts) ->
-         mk_let p [tx] (mlvar x) (mk_proj_tuple p 2 0 id_var)
-           (mk_let p [(*_ts*)] (mlvar s)
-              (init_loc (mk_proj_tuple p 2 1 id_var) idl)
+         mk_let p [] (mlvar x)
+           (mk_coerce p
+              (mk_proj_tuple p 2 0 id_var)
+              (MlGTy.mk tx)
+              MSAst.Check)
+           (mk_let p [] (mlvar s)
+              (mk_coerce p
+                 (init_loc (mk_proj_tuple p 2 1 id_var) idl)
+                 (MlGTy.mk _ts)
+                 MSAst.Check
+              )
               ml_e))
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
   | DelStateFields (l, e) -> mk_delete_fields p (to_ml e) l
