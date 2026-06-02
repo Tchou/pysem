@@ -116,7 +116,7 @@ let env_annot env loc t = env.Env.to_loc loc, t
 *)
 let scoped_identifiers env bid =
   let open Parsing in
-  let infos =  BidTable.find env.Env.infos bid in
+  let infos = BidTable.find env.Env.infos bid in
   IdentMap.fold
     (fun ident (name, s) ({nl_used; nl_unused;locals} as acc) ->
        let id = { name; scope = s.scope } in

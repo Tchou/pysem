@@ -11,7 +11,7 @@ type scope = Local of bool | Nonlocal of bool | Global | Unknown
 (** The scope of an identifier. Local and Nonlocal also indicates if it's a parameter. *)
 
 type context = { del : bool; load : bool; store : bool; }
-(** The expression context of an identifier  *)
+(** The expression context of an identifier *)
 
 type info = {
   scope : scope;

@@ -82,7 +82,7 @@ def f(g):
 ```
 `f` is deduced to have type:
 ```
-f: [X, Y](g: ((u=1,  v=2) -> Y) & ((1,  2,  z=4) -> X)) -> (X, Y)
+f: [X, Y](g: ((u=1, v=2) -> Y) & ((1, 2, z=4) -> X)) -> (X, Y)
 ```
 The type of `f` is an exact signature, it is encoded as:
 ```

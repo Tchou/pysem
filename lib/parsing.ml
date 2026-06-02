@@ -14,9 +14,9 @@ let _builtins = [ (* Available via [dirs(__builtins__)] *)
   "DeprecationWarning"; "EOFError"; "Ellipsis"; "EncodingWarning"; "EnvironmentError"; "Exception";
   "ExceptionGroup"; "False"; "FileExistsError"; "FileNotFoundError"; "FloatingPointError";
   "FutureWarning"; "GeneratorExit"; "IOError"; "ImportError"; "ImportWarning"; "IndentationError";
-  "IndexError";  "InterruptedError"; "IsADirectoryError"; "KeyError"; "KeyboardInterrupt"; "LookupError";
+  "IndexError"; "InterruptedError"; "IsADirectoryError"; "KeyError"; "KeyboardInterrupt"; "LookupError";
   "MemoryError"; "ModuleNotFoundError"; "NameError"; "None"; "NotADirectoryError"; "NotImplemented";
-  "NotImplementedError";  "OSError"; "OverflowError"; "PendingDeprecationWarning"; "PermissionError";
+  "NotImplementedError"; "OSError"; "OverflowError"; "PendingDeprecationWarning"; "PermissionError";
   "ProcessLookupError"; "PythonFinalizationError"; "RecursionError"; "ReferenceError"; "ResourceWarning";
   "RuntimeError"; "RuntimeWarning"; "StopAsyncIteration"; "StopIteration"; "SyntaxError"; "SyntaxWarning";
   "SystemError"; "SystemExit"; "TabError"; "TimeoutError"; "True"; "TypeError"; "UnboundLocalError";
@@ -61,7 +61,7 @@ struct
     | AltPatternNames -> mk_error "Alternative pattern binds different names"
     | DuplicateArgument id ->
       mk_error (sprintf "Duplicate argument '%s'" (id_str id))
-    | UnboundNonlocal id  ->
+    | UnboundNonlocal id ->
       mk_error (sprintf "Unbound nonlocal '%s'" (id_str id))
 end
 exception Error of Error.t * PyCo.Location.t list (* internal errors, re-raised see parse at the end of the file *)
@@ -94,7 +94,7 @@ let context =
     | Store -> { default_context with store = true}
   )
 
-type info =  {
+type info = {
   scope : scope;
   context : context;
   locations : PyCo.Location.t list
@@ -113,9 +113,9 @@ let merge_scope locs1 locs2 var s1 s2 =
     let locations = locs1@ locs2 in
     raise_ ~locations (IncompatibleScope (var, show_scope s1, show_scope s2))
 
-let merge_context c1 c2  = { del = c1.del || c2.del;
-                             load = c1.load || c2.load;
-                             store = c1.store || c2.store}
+let merge_context c1 c2 = { del = c1.del || c2.del;
+                            load = c1.load || c2.load;
+                            store = c1.store || c2.store}
 let merge_info var i1 i2 =
   { context = merge_context i1.context i2.context;
     scope = merge_scope i1.locations i2.locations var i1.scope i2.scope;
@@ -269,7 +269,7 @@ let _init = (), IdentMap.empty, []
 
 let (and*?) (a, b, c) o =
   match o with
-    None ->   (a, None), b, c
+    None -> (a, None), b, c
   | Some (d,e,f) -> (a, Some d), merge_vars b e, c @ f
 
 (* Thread the list monad *)
@@ -365,7 +365,7 @@ let argument ~location ~identifier ~annotation ~type_comment =
   let* _init and*? annotation in
   PyCo.Argument.make_t ~location ~identifier ?annotation ?type_comment ()
 
-let arguments ~posonlyargs ~args ~vararg ~kwonlyargs ~kw_defaults ~kwarg ~defaults  =
+let arguments ~posonlyargs ~args ~vararg ~kwonlyargs ~kw_defaults ~kwarg ~defaults =
   let* _init and*@ posonlyargs
   and*@ args and*? vararg
   and*@ kwonlyargs and*?@ kw_defaults
@@ -561,8 +561,8 @@ let pattern =
     make_matchclass_of_t ~location ~cls ~patterns ~kwd_attrs ~kwd_patterns ()
   in
   let match_mapping ~location ~keys ~patterns ~rest =
-    (* keys are  guaranteed to be constants so there should be no identifier with a del or store context inside *)
-    let* rest = bind_opt ~location rest and*@ keys and*@ patterns  in
+    (* keys are guaranteed to be constants so there should be no identifier with a del or store context inside *)
+    let* rest = bind_opt ~location rest and*@ keys and*@ patterns in
     make_matchmapping_of_t ~location ~keys ~patterns ?rest ()
   in
   let match_star ~location ~name =
@@ -576,7 +576,7 @@ let pattern =
     make_matchas_of_t ~location ?pattern ?name ()
   in
   let match_or ~location ~patterns =
-    let () =  (* detect patterns with bad domain *)
+    let () = (* detect patterns with bad domain *)
       match patterns with
         [] -> ()
       | (_,v,_) :: l ->
@@ -715,7 +715,7 @@ let statement tbl =
     let* value in make_expr_of_t ~location ~value ()
   in
   PyTF.Statement.make ~function_def ~async_function_def ~class_def ~return ~delete ~assign ~type_alias
-    ~aug_assign ~ann_assign ~for_ ~async_for ~while_ ~if_ ~with_ ~async_with ~match_ ~raise_ ~try_  ~try_star
+    ~aug_assign ~ann_assign ~for_ ~async_for ~while_ ~if_ ~with_ ~async_with ~match_ ~raise_ ~try_ ~try_star
     ~assert_ ~import ~import_from ~global ~nonlocal ~expr
     ~pass:(fun ~location -> make_pass_of_t ~location (), IdentMap.empty, [])
     ~break:(fun ~location -> make_break_of_t ~location (), IdentMap.empty, [])
@@ -802,7 +802,7 @@ let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
       | Global ->
         let () = tbl.globals <- IdentMap.add var infos tbl.globals in
         Some infos
-      | _ ->  Some infos
+      | _ -> Some infos
     ) vars
   in
   BidTable.replace tbl.blocks bid (r_vars, bids);
