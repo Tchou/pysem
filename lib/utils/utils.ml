@@ -117,10 +117,10 @@ let mk_break pos = MLAst.Break |> ml_annot pos
 let mk_rec_del pos id e =
   MLAst.(Operation(SA.RecDel id, e)) |> ml_annot pos
 
-let mk_cast pos e ty check =
+let mk_cast pos ?(check=MSAst.Check) e ty =
   MLAst.(TypeCast (e, ty, check)) |> ml_annot pos
 
-let mk_coerce pos e ty check =
+let mk_coerce pos ?(check=MSAst.Check) e ty =
   MLAst.(TypeCoerce (e, ty, check)) |> ml_annot pos
 
 (* AST UTILS *)
