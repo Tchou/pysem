@@ -32,7 +32,12 @@ let treat_def (tt, mce, lst) (v, ast) =
   let time0 = Unix.gettimeofday () in
   let v_str = MlVar.show v in
   if !Utils.debug then Format.printf "TYPING:%s\n%!" v_str;
-  let ts = ml_type mce ast in
+  let ts = try ml_type mce ast with MSC.Untypeable err as msc_e ->
+    if !Utils.debug
+    then Format.printf "@{<bold>@{<red>Typing error@}:@}@\n%a@\n"
+        Printing.MSAstPrinter.(err_pp err.eid) ast;
+    raise msc_e
+  in
   let _, gy = MTS.get ts in
   let ts = MTS.mk_poly gy in (* generalize? *)
   let ts = MTS.bot_instance ts in

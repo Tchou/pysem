@@ -31,6 +31,7 @@ module MSAstPrinter : sig
   open MSAst
   val pp_e : Format.formatter -> e -> unit
   val pp_t : Format.formatter -> t -> unit
+  val err_pp : MC.Eid.t -> Format.formatter -> t -> unit
 end
 (** Mlsem_system.Ast.t printer **)
 

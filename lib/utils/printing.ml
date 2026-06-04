@@ -87,7 +87,7 @@ module MSAstPrinter = struct
     | PiTag tag -> fprintf fmt "@[@[%a@]@,#%a@]" pp_t t pp_tag tag
     | _ -> fprintf fmt "@[@[%a@].@[%a@]@]" pp_t t pp_projection p
 
-  let rec pp_operation_recupd fmt t f0 =
+  let rec pp_operation_recupd pp_t fmt t f0 =
     let open Format in
     let rec get_recupd acc ti =
       match ti with
@@ -108,7 +108,7 @@ module MSAstPrinter = struct
                (pp_print_option (fun fmt v ->
                     fprintf fmt " =@ %a" pp_t v)) oval)) xvl
     | _ -> fprintf fmt "@[<hov 2>{ %a with@ %s }@]" pp_t t f0
-  and pp_operation_recdel fmt t field =
+  and pp_operation_recdel pp_t fmt t field =
     let rec get_recdel acc ti = match ti with
       | _, Operation (RecDel fn, tn) -> get_recdel (fn::acc) tn
       | _ -> ti, acc
@@ -117,7 +117,7 @@ module MSAstPrinter = struct
     fprintf fmt "@[<hov 2>{ %a without %a }@]" pp_t r
       (pp_list pp_print_string) x_l
 
-  and pp_e (fmt:formatter) (e:MSAst.e) :unit =
+  and pp_e' pp_t (fmt:formatter) (e:MSAst.e) :unit =
     match e with
     | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
@@ -142,8 +142,8 @@ module MSAstPrinter = struct
       fprintf fmt "@[<hov 2>@{<bold;%s>(@}@[%a@]@ @[%a@]@{<bold;%s>)@}@]"
         col pp_t t1 pp_t t2 col
     | Operation (op, t) -> begin match op with
-        | RecUpd field -> pp_operation_recupd fmt t field
-        | RecDel field -> pp_operation_recdel fmt t field
+        | RecUpd field -> pp_operation_recupd pp_t fmt t field
+        | RecDel field -> pp_operation_recdel pp_t fmt t field
         | OCustom _ ->
           fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
             pp_t t pp_operation op
@@ -159,7 +159,14 @@ module MSAstPrinter = struct
       fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ <: @[%a@]@}@]"
         pp_t t pp_gty gty
     | Alt (t1,t2) -> fprintf fmt "@[<hov 2>Alt(%a,@ %a)@]" pp_t t1 pp_t t2
-  and pp_t fmt (_,e) = pp_e fmt e
+  let rec pp_e fmt e = pp_e' pp_t fmt e
+  and pp_t fmt (_,e) = pp_e' pp_t fmt e
+
+  let rec err_pp p_err fmt (p,e) =
+    if p_err = p
+    then Format.fprintf fmt "@[@{<bold;bg_red> >>> @}%a@{<bold;bg_red> <<< @}@]"
+        (pp_e' pp_t) e
+    else pp_e' (err_pp p_err) fmt e
 end
 
 module MLAstPrinter = struct
