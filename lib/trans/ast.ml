@@ -182,15 +182,21 @@ module Binop = struct
 
     | In | NotIn -> failwith "Not implemented (Binop)."
 
-  let str_ty (int_op, bool_op, int_cmp, pol_cmp) = function
+  let str_ty (int_op, _bool_op, int_cmp, pol_cmp) = function
     | Add -> "+", int_op
     | Sub -> "-", int_op
     | Mult -> "*", int_op
     | Div -> "/", int_op
     | Mod -> "mod", int_op
     | Pow -> "^^", int_op
-    | And -> "&&", bool_op
-    | Or -> "||", bool_op
+    | And -> "&&", (* _bool_op *)
+             MT.(Ty.conj [ Arrow.mk Ty.tt (Arrow.mk Ty.tt Ty.tt)
+                         ; Arrow.mk Ty.bool (Arrow.mk Ty.ff Ty.ff)
+                         ; Arrow.mk Ty.ff (Arrow.mk Ty.bool Ty.ff)] )
+    | Or -> "||", (* _bool_op *)
+             MT.(Ty.conj [ Arrow.mk Ty.ff (Arrow.mk Ty.ff Ty.ff)
+                         ; Arrow.mk Ty.bool (Arrow.mk Ty.tt Ty.tt)
+                         ; Arrow.mk Ty.tt (Arrow.mk Ty.bool Ty.tt)] )
     | Eq -> "(=)", pol_cmp ()
     | Neq -> "<>", pol_cmp ()
     | Lt -> "<", int_cmp
