@@ -88,17 +88,17 @@ type ps_config =
 (*   } *)
 
 let simple_cfg : ps_config =
-  let get_cast = fun _ -> false
+  let get_cast = Parsing.(function Local _ -> false | _ -> true)
   and set_cast = fun _ -> false
   and mk_state (sid:Ast.scoped_identifiers) =
     let open Ast in
     let f b ident l =
       let name = Ast.Ident.name ident in
-      let tv = Utils.mk_tv name in
+      let _,_,tv = Env.get_var_infos ident.name in
       let ty = if b
         then
-          (* tv *)
-            Utils.undef
+          tv
+            (* Utils.undef *)
         else tv in
       (name, (ty, false))::l
     in
@@ -237,7 +237,7 @@ let reduce e =
         (match find_field e id with
            e' -> snd e'
          | exception Not_found -> Field (e,id))
-      else Field(e,id)
+        else Field(e,id)
     | DelStateFields(l, e) ->
       let e = loop e in
       (match e with
@@ -268,7 +268,7 @@ let cast_if cond id pos expr =
   | Source (Ast.{name;scope}) ->
     let _scope_name,_,ty = Env.get_var_infos name in
     if cond scope
-    then Cast ((pos,expr), MlGTy.mk ty)
+    then Cast ((pos,expr), MT.Ty.diff ty Utils.undef |> MlGTy.mk)
     else expr
   | _ -> expr
 
@@ -461,7 +461,7 @@ let binop pos st e1 (bop:Ast.binop) e2 =
       in
       let pol_cmp _ =
         let tv = Utils.mk_tv "θ" in
-        MT.( Arrow.mk tv      (Arrow.mk tv      (end_ty Ty.int))) in
+        MT.( Arrow.mk tv      (Arrow.mk tv      (end_ty Ty.bool))) in
       Ast.Binop.str_ty
         MT.( Arrow.mk Ty.int  (Arrow.mk Ty.int  (end_ty Ty.int))
            , Arrow.mk Ty.bool (Arrow.mk Ty.bool (end_ty Ty.bool))
@@ -582,7 +582,7 @@ and of_param st {pos;_} = match pos with
   | [ e ] -> of_expr st e
   | _ -> failwith "TODO not just 1 pos parameter"
 
-let rec of_instr st (p,i:Ast.instr) = match i with
+let rec of_instr (_,st_l as st) (p,i:Ast.instr) = match i with
   | Block il ->
     begin match List.map (of_instr st) il with
       | [] -> const p st none
@@ -597,7 +597,7 @@ let rec of_instr st (p,i:Ast.instr) = match i with
       |> List.map (fun id -> Source id)
     in
     let x = of_spec spec in
-    let e = of_instr st body in
+    let e = of_instr (lam_st,locals@st_l) body in
     var_set p st (Source id)
       (lambda p false st x (lam_st,locals) e)
   | Return eo ->

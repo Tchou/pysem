@@ -216,7 +216,7 @@ let () =
   then begin
     Colors.add_ansi_marking Format.std_formatter;
     match Terminal_size.get_columns () with
-    | None -> () | Some i -> Format.set_margin i
+    | None -> () | Some i -> Format.set_margin (i-1)
   end;
   try main () with
   | Parsing.Syntax (file, e) ->
