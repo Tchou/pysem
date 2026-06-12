@@ -69,6 +69,13 @@ module MSAstPrinter = struct
                  pp_t)
           tl col
     | Tag t -> fprintf fmt "@[%a#[%a]@]" pp_tag t (pp_list ~sep:",@ " pp_t) tl
+    | Ternary ty -> begin match tl with
+        | [c;thn;els] ->
+          fprintf fmt
+            "@[<v>@[<hov 2>ιf %a is %a@]@ @[<hov 2>τhen@ %a@]@ @[ϵlse %a@]@]"
+            pp_t c pp_ty ty pp_t thn pp_t els
+        | _ -> failwith "Wrong Ternary constructor!"
+      end
     | _ ->
       let col = Colors.next_color () in
       fprintf fmt "@[<hov 2>%a@{<bold;%s>(@}%a@{<bold;%s>)@}@]"
