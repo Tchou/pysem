@@ -169,7 +169,7 @@ let treat_file file =
 
 (* CLI *)
 
-let usage_message = Format.sprintf "%s <file.py>" Sys.argv.(0)
+let usage_message = Format.sprintf "%s [options] <file.py>" Sys.argv.(0)
 
 let input_file = ref None
 

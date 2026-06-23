@@ -72,7 +72,7 @@ module MSAstPrinter = struct
     | Ternary ty -> begin match tl with
         | [c;thn;els] ->
           fprintf fmt
-            "@[<v>@[<hov 2>ιf %a is %a@]@ @[<hov 2>τhen@ %a@]@ @[ϵlse %a@]@]"
+            "@[<v>@[<hov 2>tif %a is %a@]@ @[<hov 2>then@ %a@]@ @[else %a@]@]"
             pp_t c pp_ty ty pp_t thn pp_t els
         | _ -> failwith "Wrong Ternary constructor!"
       end
@@ -125,6 +125,7 @@ module MSAstPrinter = struct
       (pp_list pp_print_string) x_l
 
   and pp_e' pp_t (fmt:formatter) (e:MSAst.e) :unit =
+    let check_str = function Check -> ":" | NoCheck -> "!" | CheckStatic -> "s" in
     match e with
     | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
@@ -157,14 +158,15 @@ module MSAstPrinter = struct
       end
     | Projection (p,t) -> pp_projection_arg fmt (p,t) pp_t
     | Let (tyl,v,t1,t2) ->
-      fprintf fmt "@[@[<hov 2>let %a@{<bold;purple>%s@[%a@]@} =@ @[%a@]@ in@]@\n%a@]"
+      fprintf fmt
+        "@[<v>@[<hov 2>let %a@{<bold;purple>%s@[%a@]@} =@ @[%a@]@ in@]@\n@[%a@]@]"
         pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t1 pp_t t2
-    | TypeCast (t,ty,_) ->
-      fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ :> @[%a@]@}@]"
-        pp_t t pp_gty ty
-    | TypeCoerce (t,gty,_) ->
-      fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ <: @[%a@]@}@]"
-        pp_t t pp_gty gty
+    | TypeCast (t,ty,c) ->
+      fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ %s> @[%a@]@}@]"
+        pp_t t (check_str c) pp_gty ty
+    | TypeCoerce (t,gty,c) ->
+      fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ <%s @[%a@]@}@]"
+        pp_t t (check_str c) pp_gty gty
     | Alt (t1,t2) -> fprintf fmt "@[<hov 2>Alt(%a,@ %a)@]" pp_t t1 pp_t t2
   let rec pp_e fmt e = pp_e' pp_t fmt e
   and pp_t fmt (_,e) = pp_e' pp_t fmt e

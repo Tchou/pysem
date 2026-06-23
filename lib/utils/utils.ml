@@ -73,6 +73,8 @@ let mk_tag pos t e =
 let mk_proj_tag pos t e =
   MLAst.Projection (MSAst.PiTag t, e) |> ml_annot pos
 let mk_proj_tuple pos n i e =
+  (* Tuple of length n, i∈[0;n[.
+     For example n=2, i=0 produce fst function *)
   MLAst.Projection (MSAst.Pi (n, i), e) |> ml_annot pos
 
 let mk_tuple pos l =
