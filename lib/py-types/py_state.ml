@@ -3,11 +3,20 @@ open Aliases
 type res_kind = R | V
 type ident = Simple of MlVar.t
            | Source of Ast.ident
+type fun_ctx = {
+  (* λp.e = λ(x,s).let s_arg = { s with ⋯ } in let ⋯ = e s_arg in ⋯ *)
+  pty : Sstt.Ty.t ; (* type of p, the pair argument (x,s) *)
+  xid : ident ; xty : Sstt.Ty.t ; (* id and type of x *)
+  sty_out : Sstt.Ty.t ; (* type of s (given state) *)
+  sid_in : ident ; sty_in : Sstt.Ty.t ; idl : ident list ;
+  (* id, type and fields of s_arg (local state) *)
+  add_ret : bool ; (* should we return the produced value? *)
+}
 type lambda_kind =
-  | Normal of Sstt.Ty.t | State of Sstt.Ty.t * (ident list) (* list of locals *)
-  | Both of Sstt.(Ty.t * ident * Ty.t * ident * (Ty.t * (ident list)))
+  | Normal of fun_ctx
+  | State of Sstt.Ty.t (* record *) * (ident list) (* domain of the record *)
 
-let is_admin = function Normal _ -> false | _ -> true
+let is_admin = function State _ -> true | _ -> false
 type expr' =
   | Const of Ast.const
   | Var of ident
@@ -36,94 +45,38 @@ and v_tag_gt = v_tag_t MT.Ty.any |> MlGTy.mk
 
 let res_tag = function R -> r_tag | V -> v_tag
 
+let source x = Source x
+
 (* Config variables *)
-type ps_config =
-  { get_cast : Parsing.scope -> bool (* cast variable get access if… *)
-  ; set_cast : Parsing.scope -> bool (* cast variable set access if… *)
-  ; mk_state : Ast.scoped_identifiers -> MT.Ty.t
-  (* returns the Sstt.Ty.t of the state when entering a scope. *)
-  ; end_state_cast : expr -> MT.Ty.t -> ident list -> expr
-  (* cast the returned state in lambdas & fundef *)
-  ; fun_pair : bool (* def f(x):... to λ(x,s). and not λs.λx. *)
-  ; init_state : Ast.IdentSet.t -> MT.Ty.t
-  ; pack_toplevel : bool (* used by Main: 1 let toplevel or a sequence? *)
-  ; cast_toplevel : bool (* used by Main: cast each toplevel statement? *)
-  }
-
-(* let test_cfg : ps_config = *)
-(*   let get_cast sc = Parsing.(match sc with Nonlocal _ -> true | _ -> false) *)
-(*   and set_cast sc = Parsing.(match sc with Nonlocal _ -> true | _ -> false) *)
-(*   and mk_state (sid:Ast.scoped_identifiers) = *)
-(*     Env.(Vartbl.fold *)
-(*            (fun mlvar (scope_name,_,_) l -> *)
-(*               let ty = *)
-(*                 let open Ast.IdentSet in *)
-(*                 let tv = *)
-(*                   (\* _ty *\) *)
-(*                   Printing.mlvar_show mlvar |> Utils.mk_tv *)
-(*                 in *)
-(*                 if scope_name = Env.module_scope *)
-(*                 then tv *)
-(*                 else if mem_ml mlvar sid.nl_used *)
-(*                 then MT.Ty.conj [tv; MT.Ty.neg Utils.undef] *)
-(*                 else MT.Ty.any in *)
-(*               (MlVar.show mlvar, (ty, false))::l) *)
-(*            variables []) *)
-(*     |> MT.Record.mk_closed *)
-(*   and init_state _ = Env.vars_rec false |> MT.Record.mk_closed *)
-(*   and end_state_cast (pos,_ as e) st loc = *)
-(*     pos, Cast *)
-(*       ( ( pos, Tuple [ (pos, Pi (0,e)) ; *)
-(*            (pos, DelStateFields (loc, (pos, Pi (1,e)))) ] ) *)
-(*       , MT.(Tuple.mk [ TVar.(Some "res" |> mk KInfer |> typ) *)
-(*                      ; st ]) *)
-(*         |> MlGTy.mk) *)
-(*   in *)
-(*   { get_cast; set_cast; mk_state *)
-(*   ; end_state_cast *)
-(*   ; fun_pair = false *)
-(*   ; init_state *)
-(*   ; pack_toplevel = true *)
-(*   ; cast_toplevel = false *)
-(*   } *)
-
-let simple_cfg : ps_config =
-  let get_cast = Parsing.(function Local _ -> false | _ -> true)
-  and set_cast = fun _ -> false
-  and mk_state (sid:Ast.scoped_identifiers) =
-    let open Ast in
-    let f b ident l =
-      let name = Ast.Ident.name ident in
-      let _,_,tv = Env.get_var_infos ident.name in
-      let ty = if b
-        then
-          tv
-            (* Utils.undef *)
-        else tv in
-      (name, (ty, false))::l
-    in
-    IdentSet.(fold (f false) sid.nl_unused []
-              |> fold (f false) sid.nl_used
-              |> fold (f true) sid.locals)
-    |> List.rev |> MT.Record.mk_closed
-  and init_state (ids:Ast.IdentSet.t) =
-    Ast.IdentSet.fold
-      (fun id acc -> (MlVar.show id.name, (Utils.undef, false))::acc)
-      ids []
-    |> MT.Record.mk_closed
-  and end_state_cast (pos,_ as e) st _loc =
-    pos, Cast (e, st |> MlGTy.mk)
+let _, scpt = Utils.gen_cpt ()
+let get_cast = Parsing.(function Local _ -> false | _ -> true)
+and set_cast = fun _ -> false
+and mk_state ?(opened=false) (sid:Ast.scoped_identifiers) =
+  let open Ast in
+  let f b ident l =
+    let name = Ast.Ident.name ident in
+    let _,_,tv = Env.get_var_infos ident.name in
+    let ty = if b
+      then
+        tv
+        (* Utils.undef *)
+      else tv in
+    (name, (ty, false))::l
   in
-  { get_cast; set_cast; mk_state
-  ; end_state_cast
-  ; fun_pair = true
-  ; init_state
-  ; pack_toplevel = false
-  ; cast_toplevel = false
-  }
-
-let cfg = simple_cfg
-
+  IdentSet.(fold (f false) sid.nl_unused []
+            |> fold (f false) sid.nl_used
+            |> fold (f true) sid.locals)
+  |> List.rev |> MT.Record.(
+      if opened
+      then mk (Utils.mk_tv ("row" ^ scpt ()), false) (* TODO verify *)
+      else mk_closed)
+and init_state (ids:Ast.IdentSet.t) =
+  Ast.IdentSet.fold
+    (fun id acc -> (MlVar.show id.name, (Utils.undef, false))::acc)
+    ids []
+  |> MT.Record.mk_closed
+and pack_toplevel = false
+and cast_toplevel = false
 
 module PSBuiltins = struct
   let builtins : (string, (MlVar.t * Sstt.Ty.t)) Hashtbl.t =
@@ -262,7 +215,6 @@ let mk_ident_s =
   let _, sn = Utils.gen_cpt () in
   fun () -> mk_ident ("s" ^ sn ())
 
-
 let cast_if cond id pos expr =
   match id with
   | Source (Ast.{name;scope}) ->
@@ -315,7 +267,7 @@ let const pos st c =
 let var_get pos st id =
   let s = mk_ident_s () in
   let proj = Field ((pos, Var s), id) in
-  emon_ret pos V (pos, cast_if cfg.get_cast id pos proj) s
+  emon_ret pos V (pos, cast_if get_cast id pos proj) s
   |> smon_ret pos s st
 
 let var_set pos st id e =
@@ -325,7 +277,7 @@ let var_set pos st id e =
   smon_ret pos s0 st
     (bindV pos e s0
        v s1 (emon_upd pos V (pos, Const none) s1 id
-               (cast_if cfg.set_cast id pos (Var v))))
+               (cast_if set_cast id pos (Var v))))
 
 let return pos st e =
   let s0 = mk_ident_s ()
@@ -355,54 +307,17 @@ let seq pos st e1 e2 =
     (bindV pos e1 s0
        v s (smon_run pos e2 s))
 
-let lambda pos is_expr (sty,_ as st) x (_,locals as lam_st) e =
-  let s0 = mk_ident_s ()
-  and s1 = mk_ident_s ()
-  and s2 = mk_ident_s ()
-  and s3 = mk_ident_s ()
-  and s4 = mk_ident_s ()
-  and s = mk_ident_s () in
-  let v = mk_ident_v ()
-  and r = mk_ident_v ()
-  in
+let lambda pos is_expr (sty_out,_ as st) xid (sty_in,locals) e_body =
+  let sid_in = mk_ident_s () in
   let xty = (* state-passing style or static tv? *)
-    Utils.mk_tv MlVar.(mlvar x |> show)
+    Utils.mk_tv MlVar.(mlvar xid |> show)
     (* Env.(Vartbl.find variables (mlvar x) |> fun (_,_,t) -> t) *) in
-  let end_result =
-    (pair pos
-       (res pos R (pos, Var r))
-       (cfg.end_state_cast
-          ( pos, DelStateFields (locals, (pos, Var s4)))
-          sty locals)) in
-  let f_body =
-    (* bindv v', s2 = (λs1:lam_st. V(None), {s1 w/ x=x}) s0 in
-       bindr r , s4 = (λs3:lam_st.
-         bindv v,  s  = e s3 in
-         R(v), s  |or|  R(None), s) s2
-       in
-       (r,{ s4 w\ x } <: ty)
-    *)
-    bindV pos
-      (smon_ret pos s1 lam_st
-         (emon_upd_v pos V (pos, Const none) s1 x x)) s0
-      (mk_ident_v ()) s2
-      (bindR pos
-         (smon_ret pos s3 lam_st
-            (bindV pos e s2 v s
-               (if is_expr (* as id Python's lambdas had a return *)
-                then emon_ret pos R (pos, Var v) s
-                else emon_ret pos R (pos, Const none) s)
-               (* can be R: if there's a R above it will bypass this one. *)))
-            s2
-            r s4 end_result
-      )
-  in
-  let f =
-    if cfg.fun_pair
-    then let tp = MT.Tuple.mk [xty;sty] in
-      pos, Lambda (mk_ident "p", Both (tp,x,xty,s0,lam_st),f_body)
-    else
-      pos, Lambda (x, Normal xty, smon_ret pos s0 st f_body) in
+  let f = let fun_ctx = {
+      pty = MT.Tuple.mk [xty;sty_out];
+      xid; xty; sty_out; sid_in; sty_in; idl = locals;
+      add_ret = is_expr
+    } in
+    pos, Lambda (mk_ident "p", Normal fun_ctx,e_body) in
   let s0 = mk_ident_s () in
   smon_ret pos s0 st
     (emon_ret pos V f s0)
@@ -417,12 +332,10 @@ let apply pos st e1 e2 =
   and v = mk_ident_v () in
   let bind_r =
     let end_ret = emon_ret pos V (pos, Var v) s3 in
-    if cfg.fun_pair
-    then pos, IfR
-           { cond = app pos (pos, Var f) (pair pos (pos, Var x) (pos, Var s2));
-             v; s = s3; body = end_ret}
-    else bindR pos (app pos (pos, Var f) (pos, Var x)) s2
-        v s3 end_ret in
+    pos,
+    IfR { cond = app pos (pos, Var f) (pair pos (pos, Var x) (pos, Var s2));
+          v; s = s3; body = end_ret}
+  in
   smon_ret pos s0 st
     (bindV pos e1 s0
        f s1 (bindV pos e2 s1
@@ -548,10 +461,8 @@ let rec of_expr st (p,e:Ast.expr) : expr = match e with
   | Cst c -> (* λs.V(c),s *)
     const p st c
   | Lambda (spec,sid,body) ->
-    let lam_st = cfg.mk_state sid in
-    let locals = sid.locals |> Ast.IdentSet.to_list
-      |> List.map (fun id -> Source id)
-    in
+    let lam_st = mk_state sid in
+    let locals = sid.locals |> Ast.IdentSet.to_list |> List.map source in
     let x = of_spec spec in
     let e = of_expr st body in
     lambda p true st x (lam_st,locals) e
@@ -589,13 +500,8 @@ let rec of_instr (_,st_l as st) (p,i:Ast.instr) = match i with
       | e1::l -> List.fold_left (fun sq ((p,_) as e) -> seq p st sq e ) e1 l
     end
   | FunDef (id, spec, sid, body) ->
-    (* Format.printf "Function %a has scope: used:%a,unused:%a\n%!"
-      Ast.Ident.pp_full id Ast.IdentSet.pp sid.Ast.nl_used
-      Ast.IdentSet.pp sid.Ast.nl_unused; *)
-    let lam_st = cfg.mk_state sid in
-    let locals = sid.locals |> Ast.IdentSet.to_list
-      |> List.map (fun id -> Source id)
-    in
+    let lam_st = mk_state ~opened:true sid in
+    let locals = sid.locals |> Ast.IdentSet.to_list |> List.map source in
     let x = of_spec spec in
     let e = of_instr (lam_st,locals@st_l) body in
     var_set p st (Source id)
@@ -615,12 +521,9 @@ let rec of_instr (_,st_l as st) (p,i:Ast.instr) = match i with
   | Break | Continue -> failwith "TODO while control flow"
 
 let of_prog (p,g:Ast.prog) =
-  let g_id = Ast.IdentSet.to_list g in
-  let tyrec = List.map (fun id ->
-      let name = Ast.Ident.name id in
-      (name, (Utils.mk_tv name, false))) g_id
-    |> MT.Record.mk_closed in
-  List.map (of_instr (tyrec, List.map (fun aid -> Source aid) g_id)) p
+  let empty = Ast.IdentSet.empty in
+  let ty = mk_state ~opened:true {nl_used=empty; nl_unused=empty; locals=g} in
+  List.(map (of_instr (ty, map source Ast.IdentSet.(to_list g)))) p
 
 let ty_undef = MT.Enum.(define "%py_uninitialized" |> typ)
 let initial_env ids =
@@ -639,23 +542,41 @@ let ident_name id = mlvar id |> MlVar.show
 
 let cpt = Utils.gen_cpt () |> snd
 
-let mk_match p tag_gt tag cond v s body =
+let mk_match p tagpos tagneg cond v s body =
   let open Utils in
-  let c_ml = mk_ident_ml () |> mlvar in
-  let r_ml = mk_ident_ml () |> mlvar in
+  let tagp_gt = MT.(Tag.mk tagpos Ty.any) |> MlGTy.mk in
+  let tagn_gt = MT.(Tag.mk tagneg Ty.any) |> MlGTy.mk in
+  let c_ml = mk_ident_ml () |> mlvar in (* result of cond: c_ml = (t(v),s) *)
+  let r_ml = mk_ident_ml () |> mlvar in (* tag of result: t(v) *)
   let c_var = var_of_vart p c_ml in
   let r_var = var_of_vart p r_ml in
+  (* let c = cond in
+     let r = fst c in
+     if r is tag
+     then let v = r#tag in
+          let s = snd c in
+          body
+     else c *)
   mk_let p []
     c_ml cond
     (mk_let p []
-       r_ml (mk_proj_tuple p 2 0 c_var)
-       (mk_ite p r_var tag_gt
-          (mk_let p []
-             (mlvar v) (mk_proj_tag p tag r_var)
+       (mlvar s) (mk_proj_tuple p 2 1 c_var)
+       (mk_let p []
+          r_ml (mk_proj_tuple p 2 0 c_var)
+          (mk_ite_approx p r_var tagp_gt
              (mk_let p []
-                (mlvar s) (mk_proj_tuple p 2 1 c_var)
-                body))
-          (c_var)))
+                (mlvar v) (mk_proj_tag p tagpos
+                             (mk_cast p ~check:MSAst.NoCheck
+                                r_var
+                                tagp_gt)
+                          )
+                body)
+             (mk_tuple p [ (mk_cast p ~check:MSAst.NoCheck
+                              r_var
+                              tagn_gt)
+                         ; mlvar s |> var_of_vart p])
+          )
+       ))
 
 let mk_delete_fields p e l =
   List.fold_left (fun e f ->
@@ -670,9 +591,9 @@ let rec to_ml (p,e) =
   | Res (r, r_e) -> mk_tag p (res_tag r) (to_ml r_e)
   | Proj (r, p_e) -> mk_proj_tag p (res_tag r) (to_ml p_e)
   | IfV {cond;v;s;body} ->
-    mk_match p v_tag_gt v_tag (to_ml cond) v s (to_ml body)
+    mk_match p v_tag r_tag (to_ml cond) v s (to_ml body)
   | IfR {cond;v;s;body} ->
-    mk_match p r_tag_gt r_tag (to_ml cond) v s (to_ml body)
+    mk_match p r_tag v_tag (to_ml cond) v s (to_ml body)
   | Ite (test, e1, e2) ->
     mk_ite p (to_ml test) MT.(GTy.mk Ty.tt) (to_ml e1) (to_ml e2)
   | Tuple el -> mk_tuple p List.(map to_ml el)
@@ -681,38 +602,59 @@ let rec to_ml (p,e) =
   | RecUpdate (r, x, e) -> mk_record_update p (ident_name x) (to_ml e) (to_ml r)
   | Field (e, id) -> mk_projection p (MSAst.PiField (ident_name id)) (to_ml e)
   | Lambda (id,k,e) ->
-    (* let tyvar = MT.TVar.(mk KInfer (Some ("α" ^ cpt ())) |> typ) in *)
-    let ty,idl,bth = match k with
-      | Normal t -> t, [], None
-      | State (t,idl) -> t, idl, None (* MT.Ty.cap t tyvar *)
-      | Both (tp,x,tx,s,(ts,idl)) -> tp, idl, Some (x,tx,s,ts)
+    let ml_e = to_ml e in
+    let ml_id = mlvar id in
+    let id_ty, body = match k with
+      | Normal ctx ->
+        (* let s_arg = {p.s_run w/ x=p.x ; y=Undef ; ... }) in
+           let m = e s_arg in
+           let r = m.0 in
+           ( if r is V(v)
+             then R(v) |or|  R(None)
+             else r
+           , m.1 <: ty )
+        *)
+        let pid = var_of_vart p ml_id in
+        let ml_arg = mlvar ctx.sid_in in
+        let m = mk_ident_ml () |> mlvar in
+        let mvar = var_of_vart p m in
+        let r = mk_ident "tag" |> mlvar in
+        let rvar = var_of_vart p r in
+        let rec init_fun_state l e = match l with
+          (* initialise avec Undef : modifier pr init des arguments *)
+          | [] -> e
+          | id::l ->
+            let mlid = mlvar id in
+            let init_val = if MlVar.compare mlid (mlvar ctx.xid) = 0
+              then mk_proj_tuple p 2 0 pid
+              else (MlGTy.mk undef |> mk_value p)
+            in
+            init_fun_state l
+              (mk_record_update p (mlvar id |> MlVar.show) init_val e)
+        in
+        ctx.pty ,
+        mk_let p []
+          ml_arg (init_fun_state ctx.idl (mk_proj_tuple p 2 1 pid))
+          (mk_let p []
+             m (mk_app p ml_e (var_of_vart p ml_arg))
+             (mk_let p []
+                r (mk_proj_tuple p 2 0 (var_of_vart p m))
+                (mk_tuple p
+                   [ mk_ite p rvar v_tag_gt
+                       (mk_tag p r_tag
+                          (if ctx.add_ret
+                           then mk_proj_tag p v_tag rvar
+                           else to_ml (p, Const none)))
+                       rvar
+                   ; mk_cast p (mk_proj_tuple p 2 1 mvar) (MlGTy.mk ctx.sty_out)
+                   ])))
+      | State (sty,_idl) -> sty, ml_e
     in
-    let gty = MT.(ty |> GTy.mk) in
-    let ml_id = mlvar id
-    and ml_e = to_ml e in
-    let id_var = var_of_vart p ml_id in
-    let rec init_loc e = function
-      | [] -> e
-      | id::l -> init_loc (mk_record_update p
-                             (mlvar id |> MlVar.show)
-                             (MlGTy.mk undef |> mk_value p ) e) l in
-    mk_lambda p [] gty
-      ml_id
-      (match bth with
-       | None -> ml_e
-       | Some (x,tx,s,ts) ->
-         mk_let p [] (mlvar x)
-           (mk_coerce p
-              (mk_proj_tuple p 2 0 id_var)
-              (MlGTy.mk tx))
-           (mk_let p [] (mlvar s)
-              (mk_coerce p
-                 (init_loc (mk_proj_tuple p 2 1 id_var) idl)
-                 (MlGTy.mk ts))
-              ml_e))
+    mk_lambda p [] MT.(id_ty |> GTy.mk)
+      ml_id body
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
   | DelStateFields (l, e) -> mk_delete_fields p (to_ml e) l
-  | Cast (e, gty) -> mk_coerce p (to_ml e) gty
+  | Cast (e, gty) -> mk_cast p (to_ml e) gty
 
 let fold_ml _global_ids ml_l =
   let open Utils in
@@ -806,14 +748,11 @@ and pp_expr' fmt e =
   | Lambda (id, State (ty,_), e) ->
     fprintf fmt "@[<hov 2>ƛ %a @{<bold;purple>: %a@}@{<bold>.@}@ %a@]"
       pp_ident id MT.Ty.pp ty pp_expr e
-  | Lambda (id, Normal ty, e) ->
-    fprintf fmt "@[<hov 2>λ %a @{<bold;purple>: %a@}@{<bold>.@}@ %a@]"
-      pp_ident id MT.Ty.pp ty pp_expr e
-  | Lambda (id, Both (tp,x,_t1,s,(_t2,_)), e) ->
-    fprintf fmt "@[<hov 2>λƛ (%a, %a) @{<bold>as@} %a \
+  | Lambda (id, Normal {pty;xid;xty;sty_out;_}, e) ->
+    fprintf fmt "@[<hov 2>λƛ (%a, _) @{<bold>as@} %a \
                  @{<bold;purple>: %a = %a, %a @}@{<bold>.@}@ %a@]"
-      pp_ident x pp_ident s pp_ident id
-      MT.Ty.pp tp MT.Ty.pp _t1 MT.Ty.pp _t2 pp_expr e
+      pp_ident xid pp_ident id
+      MT.Ty.pp pty MT.Ty.pp xty MT.Ty.pp sty_out pp_expr e
   | App (e1, e2) -> fprintf fmt "@[<hov 2>(%a)@ %a@]" pp_expr e1 pp_expr e2
   | Cast (e, gty) ->
     fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ :> @[%a@]@}@]"

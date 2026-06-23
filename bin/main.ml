@@ -80,7 +80,7 @@ let treat_file file =
           let id = PCI.to_string pci in
           id, MT.TVar.(Some id |> mk KInfer |> typ, inner_let))
      ) in *)
-  let module_state = Py_state.cfg.init_state g
+  let module_state = Py_state.init_state g
     (* Env.vars_rec true
     |> List.map (fun (mlvar, (_ty, _b)) ->
         (mlvar, (Utils.undef, false)))
@@ -97,7 +97,7 @@ let treat_file file =
 
   let ml_er = List.map (fun (v,e) ->
       let p,mle as ml = Py_state.to_ml e in
-      v, (p, if Py_state.cfg.cast_toplevel
+      v, (p, if Py_state.cast_toplevel
           then MLAst.TypeCoerce (ml, module_state_t, MSAst.Check)
           else mle)
     ) er in
@@ -105,7 +105,7 @@ let treat_file file =
     | [] -> []
     | (s0,(p,_))::l -> (s0,(p,MLAst.Value module_state_t))::l in
   let ml_er =
-    if Py_state.cfg.pack_toplevel
+    if Py_state.pack_toplevel
     then match List.rev ml_er with
       | [] -> []
       | (_,e)::l -> [ MlVar.create (Some "final_state")
