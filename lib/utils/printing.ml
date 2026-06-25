@@ -24,9 +24,9 @@ let pp_list ?(sep:(unit,Format.formatter,unit) format=";@ ") =
 let pp_nel str = function [] -> "" | _ -> str
 
 let mlvar_show mlv = MlVar.(if !Utils.debug && not !Utils.export
-                            then get_unique_name mlv
+                            then show_uniq mlv
                             else show mlv)
-and mlvar_show_full = MlVar.get_unique_name
+and mlvar_show_full = MlVar.show_uniq
 
 module MSAstPrinter = struct
   open MSAst
@@ -34,6 +34,9 @@ module MSAstPrinter = struct
 
   let pp_variable fmt v = Format.fprintf fmt "%s" (mlvar_show v)
   let pp_gty = MlGTy.pp
+  let pp_ogty fmt = function
+    | None -> Format.pp_print_nothing fmt ()
+    | Some gty -> fprintf fmt "@{<bold;purple>: @[%a@]@} " pp_gty gty
   let pp_ty = MT.Ty.pp
   let pp_tag = MT.Tag.pp
   let pp_projection fmt p =
@@ -130,15 +133,15 @@ module MSAstPrinter = struct
     | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
     | Constructor (c,tl) -> pp_Constructor_arg fmt (c,tl) pp_t
-    | Lambda (gty,v,t) ->
-      fprintf fmt "@[<hov 2>fun %a@ @{<bold;purple>: @[%a@]@} ->@ %a@]"
-        pp_variable v pp_gty gty pp_t t
+    | Lambda (ogty,v,t) ->
+      fprintf fmt "@[<hov 2>fun %a@ %a->@ %a@]"
+        pp_variable v pp_ogty ogty pp_t t
     | LambdaRec l ->
       pp_list
         ~sep:"@\nand "
-        (fun fmt (gty,v,t) ->
-           fprintf fmt "@[<hov 2>rfun %a@ @{<bold;purple>: @[%a@]@} ->@ %a@]"
-            pp_variable v pp_gty gty pp_t t)
+        (fun fmt (ogty,v,t) ->
+           fprintf fmt "@[<hov 2>rfun %a@ %a->@ %a@]"
+            pp_variable v pp_ogty ogty pp_t t)
         fmt
         l
     | Ite (test,ty,t1,t2) ->
@@ -184,6 +187,7 @@ module MLAstPrinter = struct
 
   let pp_variable = MSAstPrinter.pp_variable
   let pp_gty = MlGTy.pp
+  let pp_ogty = MSAstPrinter.pp_ogty
   let pp_ty = MT.Ty.pp
   let pp_projection = MSAstPrinter.pp_projection
   let pp_operation = SA.pp_operation
@@ -246,14 +250,14 @@ module MLAstPrinter = struct
     | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
     | Constructor (c,tl) -> MSAstPrinter.pp_Constructor_arg fmt (c,tl) pp_t
-    | Lambda (_,gty,v,t) ->
-      fprintf fmt "@[<hov 2>fun %a@ @{<bold;purple>: @[%a@]@} ->@ %a@]"
-        pp_variable v pp_gty gty pp_t t
+    | Lambda (_,ogty,v,t) ->
+      fprintf fmt "@[<hov 2>fun %a@ %a->@ %a@]"
+        pp_variable v pp_ogty ogty pp_t t
     | LambdaRec l ->
       pp_list
         ~sep:"@\nand "
-        (fun fmt (gty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ @{<bold;purple>: @[%a@]@} ->@ %a@]"
-            pp_variable v pp_gty gty pp_t t)
+        (fun fmt (ogty,v,t) -> fprintf fmt "@[<hov 2>rfun %a@ %a->@ %a@]"
+            pp_variable v pp_ogty ogty pp_t t)
         fmt
         l
     | Ite (test,ty,t1,t2) ->
@@ -337,7 +341,7 @@ module PAstPrinter = struct
          (pp_list pp_var_pattern) l
          (if b then " .." else ""))
     | PatAssign ((_,v),c) -> fprintf fmt "P(%s:=%a)" v pp_const c
-  and pp_ast (fmt:formatter) (ast:('a,'b,'c,'d,'e) Mlsem_app.PAst.ast) :unit =
+  and pp_ast (fmt:formatter) (ast:('a,'b,'c,'d,'e,'f) Mlsem_app.PAst.ast):unit =
     match ast with
     | Magic _ -> fprintf fmt "Magic"
     | Const c -> fprintf fmt "@[%a@]" pp_const c
@@ -363,8 +367,8 @@ module PAstPrinter = struct
                    (pp_list ~sep:",@ " pp_t)
                    l
     | Cons (t1,t2) -> fprintf fmt "@[Cons(@[%a@],@[%a@])@]" pp_t t1 pp_t t2
-    | Projection (p,t) -> fprintf fmt "@[<hov 2>proj(@[%a@],@ @[%a@])@]"
-                            pp_projection p pp_t t
+    | TupleProj (t,n,i) -> fprintf fmt "@[<hov 2>proj(@[%a@],@ @[%d/%d@])@]"
+                             pp_t t n i
     | RecordUpdate (t,s,ot) ->
       let none = fun _ _ -> () in
       fprintf fmt "@[<hov 2>{upd %a@ %s@ %a}@]"

@@ -261,7 +261,8 @@ let record_atom_to_sig builder r =
   let pos, kwd =
     r.Op.Records.Atom.bindings
     |> Op.Records.Atom.LabelMap.to_list
-    |> List.fold_left (fun (apos, akwd) (l, (ty, opt)) ->
+    |> List.fold_left (fun (apos, akwd) (l, (_ot:Ty.O.t)) ->
+        let ty, opt = failwith "Fix needed: Ty.t * bool with Ty.O.t" in
         assert (not opt);
         let ty = builder ty in
         (* Keep in sync with field_name_pos and

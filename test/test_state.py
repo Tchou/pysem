@@ -59,6 +59,10 @@
   # y = 1
   # return x
 
-y=0
+y="hey"
 def id(x):
-  return x + y
+  def ii(u):
+    return x + u + y
+  return ii(x+y)
+y=0
+z=id(3)

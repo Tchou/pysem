@@ -52,9 +52,9 @@ module PAstPrinter : sig
   val pp_projection : Format.formatter -> MSAst.projection -> unit
 
   open Mlsem_app
-  val pp_pattern : Format.formatter -> ('a, 'b ,'c, string) PAst.pattern -> unit
-  val pp_ast : Format.formatter -> ('a, 'b, 'c, 'd, string) PAst.ast -> unit
-  val pp_t : Format.formatter -> ('a, 'b ,'c, 'd, string) PAst.t -> unit
+  val pp_pattern : Format.formatter -> ('a, 'b ,'c, 'd, string) PAst.pattern -> unit
+  val pp_ast : Format.formatter -> ('a, 'b, 'c, 'd, 'e, string) PAst.ast -> unit
+  val pp_t : Format.formatter -> ('a, 'b ,'c, 'd, 'e,  string) PAst.t -> unit
 end
 (** Mlsem_app.Past.t printer **)
 

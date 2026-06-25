@@ -7,8 +7,8 @@ type fun_ctx = {
   (* λp.e = λ(x,s).let s_arg = { s with ⋯ } in let ⋯ = e s_arg in ⋯ *)
   pty : Sstt.Ty.t ; (* type of p, the pair argument (x,s) *)
   xid : ident ; xty : Sstt.Ty.t ; (* id and type of x *)
-  sty_out : Sstt.Ty.t ; (* type of s (given state) *)
-  sid_in : ident ; sty_in : Sstt.Ty.t ; idl : ident list ;
+  sty_out : Sstt.Ty.t ; idl_out : ident list ; (* type and fields of s (given state) *)
+  sid_in : ident ; sty_in : Sstt.Ty.t ; idl_in : ident list ;
   (* id, type and fields of s_arg (local state) *)
   add_ret : bool ; (* should we return the produced value? *)
 }
@@ -68,7 +68,7 @@ and mk_state ?(opened=false) (sid:Ast.scoped_identifiers) =
             |> fold (f true) sid.locals)
   |> List.rev |> MT.Record.(
       if opened
-      then mk (Utils.mk_tv ("row" ^ scpt ()), false) (* TODO verify *)
+      then (fun l -> mk' (Utils.mk_rtv ("row" ^ scpt ())) (List.map (fun (s,oty) -> s,(MT.FTy.of_oty oty) ) l))
       else mk_closed)
 and init_state (ids:Ast.IdentSet.t) =
   Ast.IdentSet.fold
@@ -307,14 +307,14 @@ let seq pos st e1 e2 =
     (bindV pos e1 s0
        v s (smon_run pos e2 s))
 
-let lambda pos is_expr (sty_out,_ as st) xid (sty_in,locals) e_body =
+let lambda pos is_expr (sty_out,idl_out as st) xid (sty_in,locals) e_body =
   let sid_in = mk_ident_s () in
   let xty = (* state-passing style or static tv? *)
     Utils.mk_tv MlVar.(mlvar xid |> show)
     (* Env.(Vartbl.find variables (mlvar x) |> fun (_,_,t) -> t) *) in
   let f = let fun_ctx = {
       pty = MT.Tuple.mk [xty;sty_out];
-      xid; xty; sty_out; sid_in; sty_in; idl = locals;
+      xid; xty; sty_out; idl_out ; sid_in; sty_in; idl_in = locals;
       add_ret = is_expr
     } in
     pos, Lambda (mk_ident "p", Normal fun_ctx,e_body) in
@@ -612,7 +612,7 @@ let rec to_ml (p,e) =
            ( if r is V(v)
              then R(v) |or|  R(None)
              else r
-           , m.1 <: ty )
+           , { p.s_run with g = (m.1):> for g in dom(s_run) } )
         *)
         let pid = var_of_vart p ml_id in
         let ml_arg = mlvar ctx.sid_in in
@@ -632,9 +632,14 @@ let rec to_ml (p,e) =
             init_fun_state l
               (mk_record_update p (mlvar id |> MlVar.show) init_val e)
         in
+        let input_state = (mk_proj_tuple p 2 1 pid) in
+        let output_state s = List.fold_left
+            (fun acc id -> mk_record_update p (ident_name id)
+                (mk_projection p (MSAst.PiField (ident_name id)) s) acc )
+            input_state ctx.idl_out in
         ctx.pty ,
         mk_let p []
-          ml_arg (init_fun_state ctx.idl (mk_proj_tuple p 2 1 pid))
+          ml_arg (init_fun_state ctx.idl_in input_state)
           (mk_let p []
              m (mk_app p ml_e (var_of_vart p ml_arg))
              (mk_let p []
@@ -646,11 +651,11 @@ let rec to_ml (p,e) =
                            then mk_proj_tag p v_tag rvar
                            else to_ml (p, Const none)))
                        rvar
-                   ; mk_cast p (mk_proj_tuple p 2 1 mvar) (MlGTy.mk ctx.sty_out)
+                   ; mk_cast p (mk_proj_tuple p 2 1 mvar |> output_state) (MlGTy.mk ctx.sty_out)
                    ])))
       | State (sty,_idl) -> sty, ml_e
     in
-    mk_lambda p [] MT.(id_ty |> GTy.mk)
+    mk_lambda p [] ~gty:MT.(id_ty |> GTy.mk)
       ml_id body
   | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
   | DelStateFields (l, e) -> mk_delete_fields p (to_ml e) l

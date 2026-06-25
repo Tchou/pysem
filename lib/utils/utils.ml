@@ -42,6 +42,8 @@ let gen_cpt () =
 
 let mk_tv ?(k=MT.KInfer) str =
   MT.TVar.(mk k (Some str) |> typ)
+let mk_rtv ?(k=MT.KInfer) str =
+  MT.RVar.(mk k (Some str) |> fty)
 let mk_rec_disj opn (fbt_ll:(string * (MT.Ty.t*bool)) list list) =
   let open MT in
   List.map MT.Record.(if opn then mk_open else mk_closed) fbt_ll
@@ -92,7 +94,7 @@ let mk_record_update pos id expr record =
       |> ml_annot pos )
   |> ml_annot pos
 
-let mk_lambda pos ty gty id body =
+let mk_lambda pos ty ?gty id body =
   MLAst.Lambda (ty, gty, id, body) |> ml_annot pos
 
 let mk_ite pos test ty thn els = MLAst.Ite (test,ty,thn,els) |> ml_annot pos
