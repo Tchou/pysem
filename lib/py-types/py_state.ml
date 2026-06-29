@@ -68,8 +68,10 @@ and mk_state ?(opened=false) (sid:Ast.scoped_identifiers) =
             |> fold (f true) sid.locals)
   |> List.rev |> MT.Record.(
       if opened
-      then (fun l -> mk' (Utils.mk_rtv ("row" ^ scpt ())) (List.map (fun (s,oty) -> s,(MT.FTy.of_oty oty) ) l))
-      else mk_closed)
+      then begin fun l -> l |>
+        List.map (fun (s,oty) -> s,(MT.FTy.of_oty oty))
+        |> mk' ("row" ^ scpt () |> Utils.mk_rtv)
+      end else mk_closed)
 and init_state (ids:Ast.IdentSet.t) =
   Ast.IdentSet.fold
     (fun id acc -> (MlVar.show id.name, (Utils.undef, false))::acc)
