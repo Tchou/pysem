@@ -17,12 +17,8 @@ let ml_type mcenv ast =
 
 let upd_env mce v ts =
   ( if MC.Env.mem v mce
-    then
-      (* if !Utils.shadowing *)
-      (* then MC.Env.rm v mce *)
-      (* else *)
-      failwith (Format.sprintf "Cannot add '%s' twice to environement!"
-                  (mlvar_show v))
+    then failwith (Format.sprintf "Cannot add '%s' twice to environement!"
+                     (mlvar_show v))
     else mce )
   |> MC.Env.add v ts
 
