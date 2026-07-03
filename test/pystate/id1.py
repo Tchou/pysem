@@ -1,2 +1,2 @@
 def id(x):
-  return x
+  return f(42)

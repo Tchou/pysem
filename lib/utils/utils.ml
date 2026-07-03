@@ -94,7 +94,7 @@ let mk_record_update pos id expr record =
       |> ml_annot pos )
   |> ml_annot pos
 
-let mk_lambda pos ty ?gty id body =
+let mk_lambda  pos ty ?gty id body =
   MLAst.Lambda (ty, gty, id, body) |> ml_annot pos
 
 let mk_ite pos test ty thn els = MLAst.Ite (test,ty,thn,els) |> ml_annot pos
@@ -142,7 +142,7 @@ let mk_ite_rectest pos record field _opn thn els =
           [ field, (MT.Ty.any, false) ]|> GTy.mk)
     thn els
 
-let mk_2app pos f x y = mk_app pos (mk_app pos f x) y
+let mk_2app pos f x y = mk_app pos  (mk_app pos f x) y
 
 let join_let_rev var_in last =
   List.fold_left (fun body (v,e) ->

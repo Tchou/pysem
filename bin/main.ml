@@ -10,7 +10,7 @@ module MTS = MT.TyScheme
 (* TRANSLATE AND TYPE *)
 
 let ml_type mcenv ast =
-  let annot = MS.Reconstruction.infer mcenv
+  let annot = MS.Reconstruction.infer ~direct_narrowing:true ~partition_narrowing:false mcenv
       (MS.Refinement.refinements mcenv ast) ast in
   MSC.typeof_def mcenv annot ast
   |> MTS.norm_and_simpl

@@ -17,7 +17,7 @@ type fun_ctx = {
 type lambda_kind =
   | Normal of fun_ctx
   | State of Sstt.Ty.t (* record *) * (ident list) (* domain of the record *)
-
+type call_kind = Normal_call | State_call
 let is_admin = function State _ -> true | _ -> false
 type expr' =
   | Const of Ast.const
@@ -34,7 +34,7 @@ type expr' =
   | Field of expr * ident
   | DelStateFields of ident list * expr
   | Lambda of ident * lambda_kind * expr (* true ⇒ synthetic *)
-  | App of expr * expr
+  | App of call_kind * expr * expr
   | Cast of expr * MlGTy.t
 and expr = MC.Position.t * expr'
 
@@ -44,6 +44,21 @@ let r_tag_t ty = MT.(Tag.mk r_tag ty )
 and v_tag_t ty = MT.(Tag.mk v_tag ty )
 let r_tag_gt = r_tag_t MT.Ty.any |> MlGTy.mk
 and v_tag_gt = v_tag_t MT.Ty.any |> MlGTy.mk
+
+let mk_fun_cast p f =
+  let vdom = Utils.mk_tv ~k:MT.KInfer "i" in
+  let vimg = Utils.mk_tv ~k:MT.KInfer "o" in
+  let v_in_st = Utils.mk_rtv ~k:MT.KInfer "si" in
+  let v_out_st = Utils.mk_rtv ~k:MT.KInfer "so" in
+  let open MT in
+  let i = Tuple.mk [ vdom; Record.mk' v_in_st [] ] in
+  let o = Tuple.mk [ r_tag_t vimg; Record.mk' v_out_st [] ] in
+  let ty = GTy.mk (Arrow.mk i o) in
+  Utils.mk_coerce p
+    ~check:MSAst.CheckStatic
+    f ty
+
+
 
 let res_tag = function R -> r_tag | V -> v_tag
 
@@ -123,7 +138,7 @@ let subst e s = (* unsound in general but ok since it's only called for
     | RecUpdate (e1, id, e2) -> RecUpdate(loop e1, id, loop e2)
     | Field(e, id) -> Field (loop e, id)
     | Lambda (id, k, e) -> Lambda(id, k, loop e)
-    | App (e1, e2) -> App (loop e1, loop e2)
+    | App (c, e1, e2) -> App (c,  loop e1, loop e2)
     | DelStateFields (l, e) -> DelStateFields(l, loop e)
     | Cast (e, gty) -> Cast (loop e, gty)
   in loop e
@@ -174,7 +189,7 @@ let reduce e =
         | Tuple [_,Res (R,e) ;s] -> snd (subst body [r.v, e; r.s, s])
         | _ -> IfR{r with cond; body }
       )
-          (* IfR r *)
+    (* IfR r *)
     | Ite(e1, e2, e3) -> Ite(loop e1, loop e2, loop e3)
     | Tuple l -> Tuple (List.map loop l)
     | Pi (i, e) -> (match loop e with
@@ -189,7 +204,7 @@ let reduce e =
         (match find_field e id with
            e' -> snd e'
          | exception Not_found -> Field (e,id))
-        else Field(e,id)
+      else Field(e,id)
     | DelStateFields(l, e) ->
       let e = loop e in
       (match e with
@@ -197,12 +212,12 @@ let reduce e =
          DelStateFields(l, loop (p,e1))
        | _ -> DelStateFields(l, e))
     | Lambda (id, k, e) -> Lambda (id, k, loop e)
-    | App(e1, e2) ->
+    | App(c, e1, e2) ->
       let e1 = loop e1 in
       let e2 = loop e2 in
       (match snd e1 with
        | Lambda(id, k, e) when is_admin k -> snd (loop (subst e [id, e2]))
-       | _ -> App (e1, e2))
+       | _ -> App (c, e1, e2))
     | Cast (e, gty) -> Cast (loop e, gty)
   in loop e
 
@@ -242,7 +257,7 @@ let emon_upd_v pos k res s id v = emon_upd pos k res s id (Var v)
 let smon_ret pos s (sty,idl) e =
   pos, Lambda (s, State (sty,idl), e)
 let smon_run pos e s =
-  pos, App (e, (pos, Var s))
+  pos, App (State_call, e, (pos, Var s))
 
 (** bindv v, s = e s0 in body *)
 let bindV pos e s0 v s body =
@@ -253,7 +268,7 @@ and bindR pos e s0 v s body =
   pos, IfR { cond; v; s; body }
 
 let app pos e1 e2 =
-  pos, App(e1, e2)
+  pos, App(Normal_call, e1, e2)
 let none = Ast.None_
 
 (* Combinators *)
@@ -366,11 +381,11 @@ let binop pos st e1 (bop:Ast.binop) e2 =
   let op =
     let bop_str, ty =
       let end_ty t = t
-        (* let state = *)
-        (*   (\* st *\) *)
-        (*   MT.(Ty.conj [Utils.mk_tv "σ"; Record.any]) *)
-        (* in *)
-        (* MT.(Arrow.mk state (Tuple.mk [v_tag_t t; state])) *)
+      (* let state = *)
+      (*   (\* st *\) *)
+      (*   MT.(Ty.conj [Utils.mk_tv "σ"; Record.any]) *)
+      (* in *)
+      (* MT.(Arrow.mk state (Tuple.mk [v_tag_t t; state])) *)
       in
       let pol_cmp _ =
         let tv = Utils.mk_tv "θ" in
@@ -617,26 +632,38 @@ let rec to_ml (p,e) =
         let mvar = var_of_vart p m in
         let r = mk_ident "tag" |> mlvar in
         let rvar = var_of_vart p r in
-        let rec init_fun_state l e = match l with
-          (* initialise avec Undef : modifier pr init des arguments *)
-          | [] -> e
-          | id::l ->
-            let mlid = mlvar id in
-            let init_val = if MlVar.compare mlid (mlvar ctx.xid) = 0
-              then mk_proj_tuple p 2 0 pid
-              else (MlGTy.mk undef |> mk_value p)
-            in
-            init_fun_state l
-              (mk_record_update p (mlvar id |> MlVar.show) init_val e)
+        (* initialize the local scope of the function
+           - start from an *empty record*
+           - copy the outer scope that is used
+           - copy the parameter
+           - initialize locals
+             The parameter is in locals *)
+        let input_state = mk_proj_tuple p 2 1 pid in
+        let outer_f = ctx.nl_used |>
+          List.map (fun id ->
+              ident_name id,
+              mk_projection p (MSAst.PiField (ident_name id)) input_state)
         in
-        let input_state = (mk_proj_tuple p 2 1 pid) in
-        let output_state s = List.fold_left
+        let param_f = [ (ident_name ctx.xid, mk_proj_tuple p 2 0 pid)] in
+        let local_f = ctx.locals |>
+          List.map (fun id ->
+              let nid = ident_name id in
+              (nid, if nid = ident_name ctx.xid then mk_proj_tuple p 2 0 pid
+               else MlGTy.mk undef |> mk_value p))
+        in
+        let local_env =
+          outer_f @ param_f @ local_f
+          |> List.fold_left (fun acc (id, e) ->
+              mk_record_update p id e acc
+            ) (Utils.mk_record p [] [])
+        in
+        let restore_env s = List.fold_left
             (fun acc id -> mk_record_update p (ident_name id)
                 (mk_projection p (MSAst.PiField (ident_name id)) s) acc )
             input_state ctx.nl_used in
         ctx.pty ,
         mk_let p []
-          ml_arg (init_fun_state ctx.locals input_state)
+          ml_arg local_env
           (mk_let p []
              m (mk_app p ml_e (var_of_vart p ml_arg))
              (mk_let p []
@@ -647,14 +674,23 @@ let rec to_ml (p,e) =
                      else mk_ite p rvar v_tag_gt
                          (mk_tag p r_tag (to_ml (p, Const none)))
                          rvar
-                   ; mk_cast p (mk_proj_tuple p 2 1 mvar |> output_state)
-                       (MlGTy.mk ctx.outer_sty)
+                   ; (*mk_cast p*) (mk_proj_tuple p 2 1 mvar |> restore_env)
+                     (*(MlGTy.mk ctx.outer_sty)*)
                    ])))
       | State (sty,_idl) -> sty, ml_e
     in
-    mk_lambda p [] ~gty:MT.(GTy.mk id_ty)
-      ml_id body
-  | App (e1, e2) -> mk_app p (to_ml e1) (to_ml e2)
+    let ml_fun =
+      mk_lambda p [] ~gty:MT.(GTy.mk id_ty)
+        ml_id body
+    in begin
+      match k with
+        State _ -> ml_fun
+      | Normal _ -> mk_fun_cast p ml_fun
+    end
+  | App (c, e1, e2) ->
+    let f = to_ml e1 in
+    let f = match c with Normal_call -> mk_fun_cast p f | State_call -> f in
+    mk_app p f (to_ml e2)
   | DelStateFields (l, e) -> mk_delete_fields p (to_ml e) l
   | Cast (e, gty) -> mk_cast p (to_ml e) gty
 
@@ -688,7 +724,7 @@ let prepare_toplevel le =
         let vn = var (i+1) in
         let e1 : expr = (p,e) in
         let e2 : expr = (p, Var (Simple v)) in
-        (i+1, vn, (vn, (p, (Pi (1, (p, App (e1,e2))))))
+        (i+1, vn, (vn, (p, (Pi (1, (p, App (Normal_call, e1,e2))))))
                   ::accl))
       (0, v0, [v0,(MC.Position.dummy, EmptyRec)]) le
   in
@@ -755,7 +791,9 @@ and pp_expr' fmt e =
                  @{<bold;purple>: %a = %a, %a @}@{<bold>.@}@ %a@]"
       pp_ident xid pp_ident id
       MT.Ty.pp pty MT.Ty.pp xty MT.Ty.pp outer_sty pp_expr e
-  | App (e1, e2) -> fprintf fmt "@[<hov 2>(%a)@ %a@]" pp_expr e1 pp_expr e2
+  | App (c, e1, e2) -> fprintf fmt "@[<hov 2>%s(%a)@ %a@]" 
+                         (if c = Normal_call then "" else "!")
+                         pp_expr e1 pp_expr e2
   | Cast (e, gty) ->
     fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ :> @[%a@]@}@]"
       pp_expr e MlGTy.pp gty
