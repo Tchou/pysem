@@ -58,8 +58,6 @@ let mk_fun_cast p f =
     ~check:MSAst.CheckStatic
     f ty
 
-
-
 let res_tag = function R -> r_tag | V -> v_tag
 
 let source x = Source x
@@ -259,31 +257,36 @@ let smon_ret pos s (sty,idl) e =
 let smon_run pos e s =
   pos, App (State_call, e, (pos, Var s))
 
-(** bindv v, s = e s0 in body *)
 let bindV pos e s0 v s body =
+  (* bindv v, s = e s0 in body *)
   let cond = smon_run pos e s0 in
   pos, IfV { cond; v; s; body }
 and bindR pos e s0 v s body =
+  (* bindr v, s = e s0 in body *)
   let cond = smon_run pos e s0 in
   pos, IfR { cond; v; s; body }
 
 let app pos e1 e2 =
   pos, App(Normal_call, e1, e2)
+
 let none = Ast.None_
 
 (* Combinators *)
 let const pos st c =
+  (* λ s. V(c), s *)
   let s = mk_ident_s () in
   smon_ret pos s st
     (emon_ret pos V (pos, Const c) s)
 
 let var_get pos st id =
+  (* λ s. V(s.id :> ~Undef), s *)
   let s = mk_ident_s () in
   let proj = Field ((pos, Var s), id) in
-  emon_ret pos V (pos, cast_if get_cast id pos proj) s
-  |> smon_ret pos s st
+  smon_ret pos s st
+    (emon_ret pos V (pos, cast_if get_cast id pos proj) s)
 
 let var_set pos st id e =
+  (* λ s0. bindv v, s1 = e s0 in V(None), { s1 with id = v } *)
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s () in
   let v = mk_ident_v () in
@@ -293,32 +296,38 @@ let var_set pos st id e =
                (cast_if set_cast id pos (Var v))))
 
 let return pos st e =
+  (* λ s0. bindv v, s1 = e s0 in R(v), s1 *)
   let s0 = mk_ident_s ()
-  and s = mk_ident_s () in
+  and s1 = mk_ident_s () in
   let v = mk_ident_v () in
   smon_ret pos s0 st
-    (bindV pos e s0 v s
-       (emon_ret pos R (pos, Var v) s))
+    (bindV pos e s0 v s1
+       (emon_ret pos R (pos, Var v) s1))
 
 let ite pos st cond e1 e2 =
+  (* λ s0. bindv v, s1 = cond s0 in
+           if v in True
+           then e1 s1
+           else e2 s1 *)
   let s0 = mk_ident_s ()
-  and s = mk_ident_s () in
+  and s1 = mk_ident_s () in
   let v = mk_ident_v () in
-  let ps = pos, Var s in
+  let ps1 = pos, Var s1 in
   smon_ret pos s0 st
     (bindV pos cond s0
-       v s (pos, Ite
+       v s1 (pos, Ite
               ((pos, Var v),
-               app pos e1 ps,
-               app pos e2 ps)))
+               app pos e1 ps1,
+               app pos e2 ps1)))
 
 let seq pos st e1 e2 =
+  (* λ s0. bindv _v, s = e1 s0 in e2 s1 *)
   let s0 = mk_ident_s ()
-  and s = mk_ident_s () in
+  and s1 = mk_ident_s () in
   let v = mk_ident_v () in
   smon_ret pos s0 st
     (bindV pos e1 s0
-       v s (smon_run pos e2 s))
+       v s1 (smon_run pos e2 s1))
 
 let mk_fun_ctx xid sid add_ret =
   let inner_sty, outer_sty = mk_lambda_states sid in
@@ -332,12 +341,17 @@ let mk_fun_ctx xid sid add_ret =
     add_ret }
 
 let lambda pos fun_ctx e_body =
+  (* λ s. V(λ p.fun_ctx. e), s *)
   let f = pos, Lambda (mk_ident "p", Normal fun_ctx,e_body) in
-  let s0 = mk_ident_s () in
-  smon_ret pos s0 (MT.Record.mk' Utils.("row" ^ scpt () |>  mk_rtv)  [],[])
-    (emon_ret pos V f s0)
+  let s = mk_ident_s () in
+  smon_ret pos s (MT.Record.mk' Utils.("row" ^ scpt () |>  mk_rtv)  [],[])
+    (emon_ret pos V f s)
 
 let apply pos st e1 e2 =
+  (* λ s0. bindv f, s1 = e1 s0 in
+           bindv x, s2 = e2 s1 in
+           bindr r, s3 = f (x,s2) in
+           V(r), s3 *)
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s ()
   and s2 = mk_ident_s ()
@@ -345,18 +359,20 @@ let apply pos st e1 e2 =
   let f = mk_ident_v ()
   and x = mk_ident_v ()
   and v = mk_ident_v () in
-  let bind_r =
-    let end_ret = emon_ret pos V (pos, Var v) s3 in
+  let app =
     pos,
     IfR { cond = app pos (pos, Var f) (pair pos (pos, Var x) (pos, Var s2));
-          v; s = s3; body = end_ret}
+          v; s = s3; body = emon_ret pos V (pos, Var v) s3}
   in
   smon_ret pos s0 st
     (bindV pos e1 s0
        f s1 (bindV pos e2 s1
-               x s2 bind_r))
+               x s2 app))
 
 let tuple2 pos st e1 e2 =
+  (* λ s0. bindv v1, s1 = e1 s0 in
+           bindv v2, s2 = e2 s1 in
+           V((v1,v2)), s2 *)
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s ()
   and s2 = mk_ident_s () in
@@ -371,8 +387,8 @@ let tuple2 pos st e1 e2 =
 let binop pos st e1 (bop:Ast.binop) e2 =
   (* λs0. bind v1, s1 = [e1] s0 in
           bind v2, s2 = [e2] s1 in
-          bind op, s3 = [op] s2 in
-          ((op e1) e2) s3 (??) *)
+          (* op in builtins *)
+          V((op v1) v2), s2 *)
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s ()
   and s2 = mk_ident_s () in
@@ -380,20 +396,13 @@ let binop pos st e1 (bop:Ast.binop) e2 =
   and v2 = mk_ident_v () in
   let op =
     let bop_str, ty =
-      let end_ty t = t
-      (* let state = *)
-      (*   (\* st *\) *)
-      (*   MT.(Ty.conj [Utils.mk_tv "σ"; Record.any]) *)
-      (* in *)
-      (* MT.(Arrow.mk state (Tuple.mk [v_tag_t t; state])) *)
-      in
       let pol_cmp _ =
         let tv = Utils.mk_tv "θ" in
-        MT.( Arrow.mk tv      (Arrow.mk tv      (end_ty Ty.bool))) in
+        MT.( Arrow.mk tv      (Arrow.mk tv      Ty.bool)) in
       Ast.Binop.str_ty
-        MT.( Arrow.mk Ty.int  (Arrow.mk Ty.int  (end_ty Ty.int))
-           , Arrow.mk Ty.bool (Arrow.mk Ty.bool (end_ty Ty.bool))
-           , Arrow.mk Ty.int  (Arrow.mk Ty.int  (end_ty Ty.bool))
+        MT.( Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.int)
+           , Arrow.mk Ty.bool (Arrow.mk Ty.bool Ty.bool)
+           , Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.bool)
            , pol_cmp) bop
     in
     let bop_str = Utils.mk_id "%s" bop_str in
@@ -564,7 +573,7 @@ let mk_match p tagpos tagneg cond v s body =
   let r_var = var_of_vart p r_ml in
   (* let c = cond in
      let r = fst c in
-     if r is tag
+     tif r is tag
      then let v = r#tag in
           let s = snd c in
           body
@@ -580,15 +589,12 @@ let mk_match p tagpos tagneg cond v s body =
                 (mlvar v) (mk_proj_tag p tagpos
                              (mk_cast p ~check:MSAst.NoCheck
                                 r_var
-                                tagp_gt)
-                          )
+                                tagp_gt))
                 body)
              (mk_tuple p [ (mk_cast p ~check:MSAst.NoCheck
                               r_var
                               tagn_gt)
-                         ; mlvar s |> var_of_vart p])
-          )
-       ))
+                         ; mlvar s |> var_of_vart p]) )))
 
 let mk_delete_fields p e l =
   List.fold_left (fun e f ->
@@ -618,16 +624,8 @@ let rec to_ml (p,e) =
     let ml_id = mlvar id in
     let id_ty, body = match k with
       | Normal ctx ->
-        (* let s_arg = {p.s_run w/ x=p.x ; y=Undef ; ... }) in
-           let m = e s_arg in
-           let r = m.0 in
-           ( if r is V(v)
-             then R(v) |or|  R(None)
-             else r
-           , { p.s_run with g = (m.1):> for g in dom(s_run) } )
-        *)
         let pid = var_of_vart p ml_id in
-        let ml_arg = mlvar ctx.inner_sid in
+        let s_arg = mlvar ctx.inner_sid in
         let m = mk_ident_ml () |> mlvar in
         let mvar = var_of_vart p m in
         let r = mk_ident "tag" |> mlvar in
@@ -661,11 +659,21 @@ let rec to_ml (p,e) =
             (fun acc id -> mk_record_update p (ident_name id)
                 (mk_projection p (MSAst.PiField (ident_name id)) s) acc )
             input_state ctx.nl_used in
+        (* let s_arg = {p.input_state w/ x=p.x ; y=Undef ; ... }) in
+           let m = e s_arg in
+           let r = m.0 in
+           ( R(r#V)
+             |or|
+             if r is V
+             then R(None)
+             else r
+           , { p.input_state with g = (m.1) for g in dom(s_run) } )
+        *)
         ctx.pty ,
         mk_let p []
-          ml_arg local_env
+          s_arg local_env
           (mk_let p []
-             m (mk_app p ml_e (var_of_vart p ml_arg))
+             m (mk_app p ml_e (var_of_vart p s_arg))
              (mk_let p []
                 r (mk_proj_tuple p 2 0 (var_of_vart p m))
                 (mk_tuple p
@@ -694,7 +702,7 @@ let rec to_ml (p,e) =
   | DelStateFields (l, e) -> mk_delete_fields p (to_ml e) l
   | Cast (e, gty) -> mk_cast p (to_ml e) gty
 
-let fold_ml _global_ids ml_l =
+let _fold_ml _global_ids ml_l =
   let open Utils in
   let cpt = gen_cpt () |> snd in
   let mk_tmp_state () =
