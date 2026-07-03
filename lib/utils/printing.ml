@@ -141,7 +141,7 @@ module MSAstPrinter = struct
         ~sep:"@\nand "
         (fun fmt (ogty,v,t) ->
            fprintf fmt "@[<hov 2>rfun %a@ %a->@ %a@]"
-            pp_variable v pp_ogty ogty pp_t t)
+             pp_variable v pp_ogty ogty pp_t t)
         fmt
         l
     | Ite (test,ty,t1,t2) ->
@@ -170,7 +170,7 @@ module MSAstPrinter = struct
     | TypeCoerce (t,gty,c) ->
       fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ <%s @[%a@]@}@]"
         pp_t t (check_str c) pp_gty gty
-    | Alt (t1,t2) -> fprintf fmt "@[<hov 2>Alt(%a,@ %a)@]" pp_t t1 pp_t t2
+    | Alt (set,tl) -> fprintf fmt "@[<hov 2>Alt({aname=%s,@ [%a])@]" set.aname (pp_list ~sep:";@ " pp_t) tl
   let rec pp_e fmt e = pp_e' pp_t fmt e
   and pp_t fmt (_,e) = pp_e' pp_t fmt e
 
@@ -296,10 +296,12 @@ module MLAstPrinter = struct
     | VarAssign (v,t) -> fprintf fmt "@[<hov 2>%a :=@ %a@]"
                            pp_variable v pp_t t
     | Loop t -> fprintf fmt "@[<hov 2>loop:@ %a@]" pp_t t
-    | Try (t1,t2) -> fprintf fmt "@[<hov 2>try@ %a@]@ @[<hov 2>with@ %a@]"
-                       pp_t t1 pp_t t2
+    | Try tl -> fprintf fmt "@[<hov 2>try@ [%a]@]"
+                  (pp_list ~sep:",@ " pp_t) tl
     | Seq (t1,t2) -> fprintf fmt "@[<hov 2>%a;@ %a@]" pp_t t1 pp_t t2
-    | Alt (t1,t2) -> fprintf fmt "@[<hov 2>Alt(%a,@ %a)@]" pp_t t1 pp_t t2
+    | Alt (set,tl) -> fprintf fmt "@[<hov 2>Alt({aname=%s,@ [%a])@]"
+                        set.aname (pp_list ~sep:";@ " pp_t) tl
+
     | Block (_,t) -> fprintf fmt "@[<hov 2>Block:@ %a@]" pp_t t
     | Ret (_,ot) -> fprintf fmt "@[<hov 2>Ret:@ %a@]"
                       (pp_print_option pp_t) ot

@@ -252,9 +252,9 @@ type 'ty descr =
   | Exact of 'ty param_kind list
   | Approx of bool * ('ty list * (string * 'ty) list) list
 
-let map f d = match d with
-  | Exact l -> Exact (map_exact f l)
-  | Approx (b, l) -> Approx (b,map_approx f l)
+let map f_ty _f_fty d = match d with
+  | Exact l -> Exact (map_exact f_ty l)
+  | Approx (b, l) -> Approx (b,map_approx f_ty l)
 
 let record_atom_to_sig builder r =
   let open Sstt in
