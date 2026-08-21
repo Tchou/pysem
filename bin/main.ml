@@ -167,12 +167,13 @@ let treat_file file =
 
 let usage_message = Format.sprintf "%s [options] <file.py>" Sys.argv.(0)
 
-let input_file = ref None
+let input_file = ref []
 
 let add_input_file s =
   match !input_file with
-  | None -> input_file := (Some s)
-  | Some _ -> raise (Arg.Bad "multiple files provided")
+  | [] -> input_file := [s]
+  | ss::_ as l -> (input_file := s::l;
+    (Printf.printf "multiple files provided (%s|%s)\n%!" s ss))
 
 let options =
   Arg.align
@@ -189,23 +190,27 @@ let set_env_vars () =
 
 (* ENTRY POINT *)
 
+let check file suf =
+  let treat_file = MT.PEnv.(sequential_handler empty treat_file) in
+  if !Utils.debug
+  then begin
+    MT.Recording.start_recording ();
+    treat_file file |> fst;
+    MT.Recording.stop_recording ();
+    MT.Recording.(tally_calls () |> save_to_file ("tally_calls" ^ suf));
+  end
+  else treat_file file |> fst
+
 let main () =
   set_env_vars ();
   Arg.parse options add_input_file usage_message;
+  input_file := List.rev !input_file;
   match !input_file with
-  | None ->
+  | [] ->
     Format.eprintf "%s: missing file@\n%s" Sys.argv.(0)
       (Arg.usage_string options usage_message)
-  | Some file ->
-    let treat_file = MT.PEnv.(sequential_handler empty treat_file) in
-    if !Utils.debug
-    then begin
-      MT.Recording.start_recording ();
-      treat_file file |> fst;
-      MT.Recording.stop_recording ();
-      MT.Recording.(tally_calls () |> save_to_file "tally_calls");
-    end
-    else treat_file file |> fst
+  | [file] -> check file ""
+  | l -> List.iteri (fun i file -> check file (string_of_int i)) l
 
 let () =
   if Unix.isatty Unix.stdout
