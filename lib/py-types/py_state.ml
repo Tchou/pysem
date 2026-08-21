@@ -358,11 +358,11 @@ let apply pos st e1 e2 =
   and s3 = mk_ident_s () in
   let f = mk_ident_v ()
   and x = mk_ident_v ()
-  and v = mk_ident_v () in
+  and r = mk_ident_v () in
   let app =
     pos,
     IfR { cond = app pos (pos, Var f) (pair pos (pos, Var x) (pos, Var s2));
-          v; s = s3; body = emon_ret pos V (pos, Var v) s3}
+          v = r; s = s3; body = emon_ret pos V (pos, Var r) s3}
   in
   smon_ret pos s0 st
     (bindV pos e1 s0
@@ -385,24 +385,33 @@ let tuple2 pos st e1 e2 =
                          (pos, Tuple [pos,Var v1; pos,Var v2]) s2)))
 
 let binop pos st e1 (bop:Ast.binop) e2 =
-  (* λs0. bind v1, s1 = [e1] s0 in
-          bind v2, s2 = [e2] s1 in
+  (* λs0. bindv v1, s1 = e1 s0 in
+          bindv v2, s2 = e2 s1 in
           (* op in builtins *)
-          V((op v1) v2), s2 *)
+          bindr v3, s3 = op ((v1,v2),s2) in
+          V(v3), s3 *)
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s ()
-  and s2 = mk_ident_s () in
+  and s2 = mk_ident_s ()
+  and s3 = mk_ident_s () in
   let v1 = mk_ident_v ()
-  and v2 = mk_ident_v () in
-  let op =
+  and v2 = mk_ident_v ()
+  and v3 = mk_ident_v () in
+  let op = (* get unique operator id (create and register if doesn't exist) *)
     let bop_str, ty =
+      let s_tv = MT.Record.mk' (Utils.mk_rtv ~k:MT.KInfer "ρ") [] in
+      let bop_arrow a b o =
+        let open MT in
+        Arrow.mk Tuple.(mk [mk [a;b]; s_tv]) (Tuple.mk [r_tag_t o; s_tv])
+      in
       let pol_cmp _ =
         let tv = Utils.mk_tv "θ" in
-        MT.( Arrow.mk tv      (Arrow.mk tv      Ty.bool)) in
+        bop_arrow tv tv MT.Ty.bool
+      in
       Ast.Binop.str_ty
-        MT.( Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.int)
-           , Arrow.mk Ty.bool (Arrow.mk Ty.bool Ty.bool)
-           , Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.bool)
+        MT.( bop_arrow Ty.int  Ty.int  Ty.int
+           , bop_arrow Ty.bool Ty.bool Ty.bool
+           , bop_arrow Ty.int  Ty.int  Ty.bool
            , pol_cmp) bop
     in
     let bop_str = Utils.mk_id "%s" bop_str in
@@ -410,16 +419,17 @@ let binop pos st e1 (bop:Ast.binop) e2 =
         | Some v -> v
         | None -> PSBuiltins.add bop_str ty)
   in
+  let app =
+    pos,
+    IfR { cond = app pos
+              (pos, Var op)
+              (pair pos (pos, Tuple [pos, Var v1; pos, Var v2]) (pos, Var s2));
+          v = v3; s = s3; body = emon_ret pos V (pos, Var v3) s3}
+  in
   smon_ret pos s0 st
     (bindV pos e1 s0
        v1 s1 (bindV pos e2 s1
-                v2 s2 (emon_ret pos V
-                         (app pos
-                            (app pos
-                               (pos, Var op)
-                               (pos, Var v1))
-                            (pos, Var v2))
-                         s2) ))
+          v2 s2 app))
 
 (* Translation pysem -> pystate *)
 
