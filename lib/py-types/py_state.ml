@@ -332,7 +332,7 @@ let seq pos st e1 e2 =
 let mk_fun_ctx xid sid add_ret =
   let inner_sty, outer_sty = mk_lambda_states sid in
   let locals = sid.locals |> Ast.IdentSet.to_list |> List.map source in
-  let nl_used = sid.nl_used |> Ast.IdentSet.to_list |> List.map source in  
+  let nl_used = sid.nl_used |> Ast.IdentSet.to_list |> List.map source in
   let _,_,xty = Env.get_var_infos (mlvar xid) in
   { pty = MT.Tuple.mk [xty;outer_sty];
     xid; xty;
@@ -801,7 +801,7 @@ and pp_expr' fmt e =
                  @{<bold;purple>: %a = %a, %a @}@{<bold>.@}@ %a@]"
       pp_ident xid pp_ident id
       MT.Ty.pp pty MT.Ty.pp xty MT.Ty.pp outer_sty pp_expr e
-  | App (c, e1, e2) -> fprintf fmt "@[<hov 2>%s(%a)@ %a@]" 
+  | App (c, e1, e2) -> fprintf fmt "@[<hov 2>%s(%a)@ %a@]"
                          (if c = Normal_call then "" else "!")
                          pp_expr e1 pp_expr e2
   | Cast (e, gty) ->

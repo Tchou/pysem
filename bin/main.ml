@@ -10,7 +10,8 @@ module MTS = MT.TyScheme
 (* TRANSLATE AND TYPE *)
 
 let ml_type mcenv ast =
-  let annot = MS.Reconstruction.infer ~direct_narrowing:true ~partition_narrowing:false mcenv
+  let annot = MS.Reconstruction.infer
+      ~direct_narrowing:true ~partition_narrowing:false mcenv
       (MS.Refinement.refinements mcenv ast) ast in
   MSC.typeof_def mcenv annot ast
   |> MTS.norm_and_simpl
@@ -178,7 +179,8 @@ let options =
   Arg.align
     [ "-debug" , Arg.Set Utils.debug , " Print debug information"
     ; "-sumup" , Arg.Set Utils.sumup , " Print only essential information"
-    ; "-export", Arg.Set Utils.export, " Print code without illegal characters" ]
+    ; "-export", Arg.Set Utils.export, " Print code without illegal characters"
+    ]
 
 let set_env_vars () =
   Utils.user_vars
@@ -189,6 +191,8 @@ let set_env_vars () =
           |> Option.iter (fun v -> ref_v := v)))
 
 exception Sigint
+
+let backwards = ref ""
 
 (* ENTRY POINT *)
 
@@ -231,11 +235,12 @@ let () =
   then begin
     Colors.add_ansi_marking Format.std_formatter;
     Colors.add_ansi_marking Format.err_formatter;
+    backwards := "\x08\x08";
     match Terminal_size.get_columns () with
     | None -> () | Some i -> Format.set_margin (i-1)
   end;
   Sys.(Signal_handle (fun _ ->
-      Format.eprintf "@{<bold;red>Interrupted…@}@\n%!";
+      Format.eprintf "%s@{<bold;red>Interrupted…@}@\n%!" !backwards;
       raise Sigint)
      |> set_signal sigint);
   try
