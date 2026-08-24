@@ -197,10 +197,13 @@ let check ?(suf="") file =
   try
     if !Utils.debug
     then begin
-      MT.Recording.start_recording ();
+      MT.Recording.(
+        clear ();
+        start_recording () );
       treat_file file |> fst;
-      MT.Recording.stop_recording ();
-      MT.Recording.(tally_calls () |> save_to_file ("tally_calls" ^ suf));
+      MT.Recording.(
+        stop_recording ();
+        tally_calls () |> save_to_file ("tally_calls" ^ suf) );
     end
     else treat_file file |> fst;
     0
