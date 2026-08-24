@@ -1,6 +1,7 @@
 RUN=dune exec --
 MAINEXE=./bin/main.exe
 DEBUG=-debug
+SUMUP=-sumup
 
 RUNM=$(RUN) $(MAINEXE)
 
@@ -26,3 +27,6 @@ pystate:build
 
 pystated:build
 	$(RUNM) $(DEBUG) ./test/test_state.py
+
+pstest:build
+	$(RUNM) $(SUMUP) ./test/pystate/*
