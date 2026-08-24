@@ -404,15 +404,8 @@ let binop pos st e1 (bop:Ast.binop) e2 =
         let open MT in
         Arrow.mk Tuple.(mk [mk [a;b]; s_tv]) (Tuple.mk [r_tag_t o; s_tv])
       in
-      let pol_cmp _ =
-        let tv = Utils.mk_tv "θ" in
-        bop_arrow tv tv MT.Ty.bool
-      in
-      Ast.Binop.str_ty
-        MT.( bop_arrow Ty.int  Ty.int  Ty.int
-           , bop_arrow Ty.bool Ty.bool Ty.bool
-           , bop_arrow Ty.int  Ty.int  Ty.bool
-           , pol_cmp) bop
+      let pol_tv _ = Utils.mk_tv "θ" in
+      Ast.Binop.str_ty bop_arrow pol_tv bop
     in
     let bop_str = Utils.mk_id "%s" bop_str in
     Simple (match PSBuiltins.find_opt bop_str with

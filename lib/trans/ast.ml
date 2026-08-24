@@ -182,38 +182,41 @@ module Binop = struct
 
     | In | NotIn -> failwith "Not implemented (Binop)."
 
-  let str_ty (int_op, _bool_op, int_cmp, pol_cmp) = function
+  let str_ty bop_arrow pol_tv binop =
+    let open MT in
+    let int_op = bop_arrow Ty.int Ty.int Ty.int
+    and int_cmp = bop_arrow Ty.int Ty.int Ty.bool
+    and and_op = Ty.conj [ bop_arrow Ty.tt   Ty.tt   Ty.tt
+                         ; bop_arrow Ty.bool Ty.ff   Ty.ff
+                         ; bop_arrow Ty.ff   Ty.bool Ty.ff]
+    and or_op  = Ty.conj [ bop_arrow Ty.tt   Ty.tt   Ty.tt
+                         ; bop_arrow Ty.bool Ty.ff   Ty.ff
+                         ; bop_arrow Ty.ff   Ty.bool Ty.ff]
+    and pol_cmp = let a, b = pol_tv (), pol_tv () in
+      bop_arrow a b Ty.bool in
+    match binop with
     | Add -> "+", int_op
     | Sub -> "-", int_op
     | Mult -> "*", int_op
     | Div -> "/", int_op
     | Mod -> "mod", int_op
     | Pow -> "^^", int_op
-    | And -> "&&", (* _bool_op *)
-             MT.(Ty.conj [ Arrow.mk Ty.tt (Arrow.mk Ty.tt Ty.tt)
-                         ; Arrow.mk Ty.bool (Arrow.mk Ty.ff Ty.ff)
-                         ; Arrow.mk Ty.ff (Arrow.mk Ty.bool Ty.ff)] )
-    | Or -> "||", (* _bool_op *)
-             MT.(Ty.conj [ Arrow.mk Ty.ff (Arrow.mk Ty.ff Ty.ff)
-                         ; Arrow.mk Ty.bool (Arrow.mk Ty.tt Ty.tt)
-                         ; Arrow.mk Ty.tt (Arrow.mk Ty.bool Ty.tt)] )
-    | Eq -> "(=)", pol_cmp ()
-    | Neq -> "<>", pol_cmp ()
+    | And -> "&&", and_op
+    | Or -> "||", or_op
+    | Eq -> "(=)", pol_cmp
+    | Neq -> "<>", pol_cmp
     | Lt -> "<", int_cmp
     | Gt -> ">", int_cmp
     | Le -> "≤", int_cmp
     | Ge -> "≥", int_cmp
-    | Is -> "is", pol_cmp ()
-    | Isn -> "isn", pol_cmp ()
+    | Is -> "is", pol_cmp
+    | Isn -> "isn", pol_cmp
 
   let to_ml pos op =
     let open Utils in
-    let int_op  = MT.(Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.int ))
-    and int_cmp = MT.(Arrow.mk Ty.int  (Arrow.mk Ty.int  Ty.bool))
-    and bool_op = MT.(Arrow.mk Ty.bool (Arrow.mk Ty.bool Ty.bool))
-    and pol_cmp _ = let tv = mk_tv "bop_tv" in
-      MT.(Arrow.mk tv    (Arrow.mk tv      Ty.bool)) in
-    let strkey, ty = str_ty (int_op, bool_op, int_cmp, pol_cmp) op in
+    let bop_arrow a b o = MT.(Arrow.mk a (Arrow.mk b o ))
+    and pol_tv _ = mk_tv "bop_tv" in
+    let strkey, ty = str_ty bop_arrow pol_tv op in
     let op_name = mk_id "%s" strkey in
     (match Builtins.find_opt op_name with
        Some v -> v
