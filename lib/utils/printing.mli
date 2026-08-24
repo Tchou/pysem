@@ -1,6 +1,9 @@
 open Aliases
 
-val pr : string -> ('a, Format.formatter, unit, unit) format4 -> 'a
+val new_file : unit -> unit
+(** Call when opening a new file. Cosmetic implications. *)
+
+val pr : ?dbg:int -> string -> ('a, Format.formatter, unit, unit) format4 -> 'a
 (** [pr title format] prints [title] in cyan bold, [":"] and then acts like
     [Printf.printf format].
  *)

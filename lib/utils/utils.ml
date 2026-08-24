@@ -4,12 +4,15 @@ open Aliases
 
 let debug = ref false (** Show debug informations. *)
 
+and sumup = ref false (** Show only resumed information. *)
+
 and export = ref true (** Print code with legals characters. *)
 
 (* let shadowing = ref false (\** Allow shadowing in toplevel. *\) *)
 
 let user_vars =
   [ debug , "PYSEM_DEBUG"
+  ; sumup , "PYSEM_SUMUP"
   ; export, "PYSEM_EXPORT"
   ] (** Configurable variables. *)
 

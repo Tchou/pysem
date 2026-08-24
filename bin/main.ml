@@ -142,7 +142,7 @@ let treat_file file =
 
   ( * *)
 
-  pr "reconstruction environement"
+  pr ~dbg:0 "reconstruction environement"
     "@{<yellow;italic>checked in %.2fms@}@\n%a"
     (ms_of_us tt)
     (let nl = ref true in
@@ -172,12 +172,12 @@ let input_file = ref []
 let add_input_file s =
   match !input_file with
   | [] -> input_file := [s]
-  | ss::_ as l -> (input_file := s::l;
-    (Printf.printf "multiple files provided (%s|%s)\n%!" s ss))
+  | l -> input_file := s::l
 
 let options =
   Arg.align
     [ "-debug" , Arg.Set Utils.debug , " Print debug information"
+    ; "-sumup" , Arg.Set Utils.sumup , " Print only essential information"
     ; "-export", Arg.Set Utils.export, " Print code without illegal characters" ]
 
 let set_env_vars () =
@@ -188,58 +188,79 @@ let set_env_vars () =
           List.assoc_opt str Utils.sh_values
           |> Option.iter (fun v -> ref_v := v)))
 
+exception Sigint
+
 (* ENTRY POINT *)
 
-let check file suf =
+let check ?(suf="") file =
   let treat_file = MT.PEnv.(sequential_handler empty treat_file) in
-  if !Utils.debug
-  then begin
-    MT.Recording.start_recording ();
-    treat_file file |> fst;
-    MT.Recording.stop_recording ();
-    MT.Recording.(tally_calls () |> save_to_file ("tally_calls" ^ suf));
-  end
-  else treat_file file |> fst
-
-let main () =
-  set_env_vars ();
-  Arg.parse options add_input_file usage_message;
-  input_file := List.rev !input_file;
-  match !input_file with
-  | [] ->
-    Format.eprintf "%s: missing file@\n%s" Sys.argv.(0)
-      (Arg.usage_string options usage_message)
-  | [file] -> check file ""
-  | l -> List.iteri (fun i file -> check file (string_of_int i)) l
-
-let () =
-  if Unix.isatty Unix.stdout
-  then begin
-    Colors.add_ansi_marking Format.std_formatter;
-    match Terminal_size.get_columns () with
-    | None -> () | Some i -> Format.set_margin (i-1)
-  end;
-  try main () with
+  try
+    if !Utils.debug
+    then begin
+      MT.Recording.start_recording ();
+      treat_file file |> fst;
+      MT.Recording.stop_recording ();
+      MT.Recording.(tally_calls () |> save_to_file ("tally_calls" ^ suf));
+    end
+    else treat_file file |> fst;
+    0
+  with
   | Parsing.Syntax (file, e) ->
-    Format.eprintf "%s: %d:%d-%d:%d : %s@\n"
+    Format.eprintf "@{<bold;red>Syntax error@} %s: %d:%d-%d:%d : %s@\n%!"
       file e.line e.column e.end_line e.end_column e.message;
-    exit 3
-  | Sys_error msg -> Format.eprintf "%s@\n" msg; exit 1
+    2
   | MSC.Untypeable err ->
     let pos = MC.Eid.loc err.eid in
     let start_p = MC.Position.start_of_position pos in
     let end_p = MC.Position.end_of_position pos in
     let message = match err.descr with None -> "" | Some s -> " (" ^ s ^ ")" in
-    Format.eprintf "%s: %d:%d-%d:%d : %s%s@\n"
-      start_p.pos_fname
-      start_p.pos_lnum
-      (start_p.pos_cnum - start_p.pos_bol + 1)
-      end_p.pos_lnum
-      (end_p.pos_cnum - end_p.pos_bol + 1)
-      err.title message;
-    exit 2 (* printed above *)
+    Format.eprintf
+      "@{<bold;red>%s@} at %s: %d:%d-%d:%d :@\n%s@\n%!"
+      err.title start_p.pos_fname
+      start_p.pos_lnum (start_p.pos_cnum - start_p.pos_bol + 1)
+      end_p.pos_lnum (end_p.pos_cnum - end_p.pos_bol + 1)
+      message;
+    1
+  | Sigint -> 1
+
+let () =
+  if Unix.isatty Unix.stdout
+  then begin
+    Colors.add_ansi_marking Format.std_formatter;
+    Colors.add_ansi_marking Format.err_formatter;
+    match Terminal_size.get_columns () with
+    | None -> () | Some i -> Format.set_margin (i-1)
+  end;
+  Sys.(Signal_handle (fun _ ->
+      Format.eprintf "@{<bold;red>Interrupted…@}@\n%!";
+      raise Sigint)
+     |> set_signal sigint);
+  try
+    set_env_vars ();
+    Arg.parse options add_input_file usage_message;
+    input_file := List.rev !input_file;
+    let ecode = match !input_file with
+      | [] ->
+        Format.eprintf "%s: missing file@\n%s" Sys.argv.(0)
+          (Arg.usage_string options usage_message);
+        2
+      | [file] -> check file
+      | l ->
+        let total, ok, ecode =
+          List.fold_left (fun (i,ok,exit_code) file ->
+              if i <> 0 then Printing.new_file ();
+              pr ~dbg:0 "" "@{<bold>File:@} %s" file;
+              let c = check ~suf:(string_of_int i) file in
+              i+1, ok + (if c = 0 then 1 else 0), max exit_code c )
+            (0,0,0) l in
+        pr ~dbg:0 "" "@.@{<bold>Total:@} %d/%d passed" ok total;
+        ecode
+    in
+    if ecode > 0 then exit ecode
+  with
+  | Sys_error msg -> Format.eprintf "%s@\n%!" msg; exit 1
   | e ->
-    Format.eprintf "ERROR: %s@\n%s@\n"
+    Format.eprintf "ERROR: %s@\n%s@\n%!"
       (Printexc.to_string e)
       (Printexc.get_backtrace ());
     exit 10

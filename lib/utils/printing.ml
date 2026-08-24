@@ -1,23 +1,34 @@
 open Aliases
 
+let fst_pp = ref true
+let new_file () =
+  fst_pp := true;
+  Format.printf "@."
+
 let pp_begin =
-  let f = ref true in
-  fun fmt -> Format.fprintf fmt (if !f then (f:=false ; "") else "——@.")
+  fun fmt -> Format.fprintf fmt
+      (if !fst_pp then (fst_pp:=false ; "") else "——@.")
 and pp_end fmt = Format.fprintf fmt "@."
 
-let pr str =
+let pr ?(dbg=1) str =
   let open Format in
-  pp_begin std_formatter;
-  printf "@{<bold>@{<cyan>%s@}:@}@." str;
-  kfprintf pp_end std_formatter
-and dbg_pr str =
-  let open Format in
-  if !Utils.debug
-  then (
-    pp_begin std_formatter;
-    printf "@{<bold>@{<yellow>%s@}:@}@." str;
+  let pr_f format =
+    if str <> ""
+    then (pp_begin std_formatter;
+          printf format str);
     kfprintf pp_end std_formatter
-  ) else ikfprintf ignore std_formatter
+  in
+  if dbg <= 0                     (* print in all cases *)
+  then pr_f "@{<bold>@{<cyan>%s@}:@}@."
+  else if !Utils.sumup            (* don't print if need to summerize *)
+  then ikfprintf ignore std_formatter
+  else if dbg = 1                 (* normal print *)
+  then pr_f "@{<bold>@{<cyan>%s@}:@}@."
+  else if dbg > 1 && !Utils.debug (* debug print *)
+  then pr_f "@{<bold>@{<yellow>%s@}:@}@."
+  else ikfprintf ignore std_formatter
+
+let dbg_pr str = pr ~dbg:2 str
 
 let pp_list ?(sep:(unit,Format.formatter,unit) format=";@ ") =
   Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt sep)
