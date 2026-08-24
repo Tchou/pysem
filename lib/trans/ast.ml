@@ -182,7 +182,25 @@ module Binop = struct
 
     | In | NotIn -> failwith "Not implemented (Binop)."
 
-  let str_ty bop_arrow pol_tv binop =
+  let str = function
+    | Add  -> "+"
+    | Sub  -> "-"
+    | Mult -> "*"
+    | Div  -> "/"
+    | Mod  -> "mod"
+    | Pow  -> "^^"
+    | And  -> "&&"
+    | Or   -> "||"
+    | Eq   -> "(=)"
+    | Neq  -> "<>"
+    | Lt   -> "<"
+    | Gt   -> ">"
+    | Le   -> "≤"
+    | Ge   -> "≥"
+    | Is   -> "is"
+    | Isn  -> "isn"
+
+  let ty bop_arrow pol_tv binop =
     let open MT in
     let int_op = bop_arrow Ty.int Ty.int Ty.int
     and int_cmp = bop_arrow Ty.int Ty.int Ty.bool
@@ -195,33 +213,35 @@ module Binop = struct
     and pol_cmp = let a, b = pol_tv (), pol_tv () in
       bop_arrow a b Ty.bool in
     match binop with
-    | Add -> "+", int_op
-    | Sub -> "-", int_op
-    | Mult -> "*", int_op
-    | Div -> "/", int_op
-    | Mod -> "mod", int_op
-    | Pow -> "^^", int_op
-    | And -> "&&", and_op
-    | Or -> "||", or_op
-    | Eq -> "(=)", pol_cmp
-    | Neq -> "<>", pol_cmp
-    | Lt -> "<", int_cmp
-    | Gt -> ">", int_cmp
-    | Le -> "≤", int_cmp
-    | Ge -> "≥", int_cmp
-    | Is -> "is", pol_cmp
-    | Isn -> "isn", pol_cmp
+    | Add  -> int_op
+    | Sub  -> int_op
+    | Mult -> int_op
+    | Div  -> int_op
+    | Mod  -> int_op
+    | Pow  -> int_op
+    | And  -> and_op
+    | Or   -> or_op
+    | Eq   -> pol_cmp
+    | Neq  -> pol_cmp
+    | Lt   -> int_cmp
+    | Gt   -> int_cmp
+    | Le   -> int_cmp
+    | Ge   -> int_cmp
+    | Is   -> pol_cmp
+    | Isn  -> pol_cmp
 
   let to_ml pos op =
     let open Utils in
-    let bop_arrow a b o = MT.(Arrow.mk a (Arrow.mk b o ))
-    and pol_tv _ = mk_tv "bop_tv" in
-    let strkey, ty = str_ty bop_arrow pol_tv op in
+    let strkey = str op in
     let op_name = mk_id "%s" strkey in
     (match Builtins.find_opt op_name with
-       Some v -> v
-     | None -> Builtins.add op_name
-                 (MlGTy.mk ty |> (mk_value dummy_pos)))
+     | Some v -> v
+     | None ->
+       let bop_arrow a b o = MT.(Arrow.mk a (Arrow.mk b o ))
+       and pol_tv _ = mk_tv "bop_tv" in
+       Builtins.add op_name
+         (ty bop_arrow pol_tv op
+          |> MlGTy.mk |> (mk_value dummy_pos)))
     |> var_of_vart pos
 end
 

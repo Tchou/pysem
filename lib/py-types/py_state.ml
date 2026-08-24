@@ -398,19 +398,18 @@ let binop pos st e1 (bop:Ast.binop) e2 =
   and v2 = mk_ident_v ()
   and v3 = mk_ident_v () in
   let op = (* get unique operator id (create and register if doesn't exist) *)
-    let bop_str, ty =
-      let s_tv = MT.Record.mk' (Utils.mk_rtv ~k:MT.KInfer "ρ") [] in
-      let bop_arrow a b o =
-        let open MT in
-        Arrow.mk Tuple.(mk [mk [a;b]; s_tv]) (Tuple.mk [r_tag_t o; s_tv])
-      in
-      let pol_tv _ = Utils.mk_tv "θ" in
-      Ast.Binop.str_ty bop_arrow pol_tv bop
-    in
-    let bop_str = Utils.mk_id "%s" bop_str in
+    let bop_str = Utils.mk_id "%s" (Ast.Binop.str bop) in
     Simple (match PSBuiltins.find_opt bop_str with
         | Some v -> v
-        | None -> PSBuiltins.add bop_str ty)
+        | None ->
+          let s_tv = MT.Record.mk' (Utils.mk_rtv ~k:MT.KInfer "ρ") [] in
+          let bop_arrow a b o =
+            let open MT in
+            Arrow.mk Tuple.(mk [mk [a;b]; s_tv]) (Tuple.mk [r_tag_t o; s_tv])
+          in
+          let pol_tv _ = Utils.mk_tv "θ" in
+          Ast.Binop.ty bop_arrow pol_tv bop
+          |> PSBuiltins.add bop_str)
   in
   let app =
     pos,
