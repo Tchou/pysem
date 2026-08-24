@@ -213,7 +213,7 @@ let check ?(suf="") file =
     let pos = MC.Eid.loc err.eid in
     let start_p = MC.Position.start_of_position pos in
     let end_p = MC.Position.end_of_position pos in
-    let message = match err.descr with None -> "" | Some s -> " (" ^ s ^ ")" in
+    let message = match err.descr with None -> "" | Some s -> s in
     Format.eprintf
       "@{<bold;red>%s@} at %s: %d:%d-%d:%d :@\n%s@\n%!"
       err.title start_p.pos_fname
