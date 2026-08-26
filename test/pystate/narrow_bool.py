@@ -1,8 +1,15 @@
-x = 2 < 3
+tt = 2 < 3
+ff = 2 < 3
 
-if x:
-  x = x
+if tt:
+  tt = tt
 else:
-  x = True
+  tt = True
 
-# x is True
+# tt is True
+
+
+if ff:
+  ff = False
+else:
+  ff = ff
