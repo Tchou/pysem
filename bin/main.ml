@@ -143,6 +143,9 @@ let treat_file file =
 
   ( * *)
 
+  let names =
+    (* if !Utils.sumup then match names with [] -> [] | x::_ -> [x] else *)
+      List.rev names in
   pr ~dbg:0 "reconstruction environement"
     "@{<yellow;italic>checked in %.2fms@}@\n%a"
     (ms_of_us tt)
@@ -160,7 +163,7 @@ let treat_file file =
            then Format.fprintf fmt "@[<hov>%a@]"
                Printing.pp_ml_tys (v, s)
            else nl := false ))
-    (List.rev names)
+    names
 
   (* *)
 
