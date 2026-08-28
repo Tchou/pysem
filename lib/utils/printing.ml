@@ -166,6 +166,7 @@ module MSAstPrinter = struct
     | Operation (op, t) -> begin match op with
         | RecUpd field -> pp_operation_recupd pp_t fmt t field
         | RecDel field -> pp_operation_recdel pp_t fmt t field
+        | Ignore ty -> fprintf fmt "@[%a@]" pp_ty ty
         | OCustom _ ->
           fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
             pp_t t pp_operation op
@@ -257,6 +258,7 @@ module MLAstPrinter = struct
     | Exc -> fprintf fmt "Exc"
     | Void -> fprintf fmt "Void"
     | Voidify t -> fprintf fmt "@[<hov 2>Vdfy %a@]" pp_t t
+    | Ignore t -> fprintf fmt "@[<hov 2>Ign %a@]" pp_t t
     | Isolate t -> fprintf fmt "@[<hov 2>Islt %a@]" pp_t t
     | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
@@ -287,6 +289,7 @@ module MLAstPrinter = struct
     | Operation (op, t) -> begin match op with
         | RecUpd field -> pp_operation_recupd fmt t field
         | RecDel field -> pp_operation_recdel fmt t field
+        | Ignore ty -> fprintf fmt "@[%a@]" pp_ty ty
         | OCustom _ ->
           fprintf fmt "@[<hov 2>@[%a@].@[%a@]@]"
             pp_t t pp_operation op

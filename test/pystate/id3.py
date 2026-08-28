@@ -1,9 +1,9 @@
-def f(y):
+def id(y):
   # nonlocal z
   # z = 42
   return y
 
-def id(x):
+def f(x):
   # def f(y):
     # nonlocal z
     # z = 42
@@ -12,7 +12,7 @@ def id(x):
     # nonlocal z
     # z = "hello"
   z = 0
-  f(0)
+  id(0)
   # g(0)
   return z
 

@@ -25,7 +25,7 @@ type expr' =
   | Res of res_kind * expr
   | Proj of res_kind * expr
   | IfV of {cond:expr; v:ident; s:ident; body:expr}
-  | IfR of {cond:expr; v:ident; s:ident; body:expr}
+  | IfR of {cond:expr; v:ident; body:expr}
   | Ite of expr * expr * expr
   | Tuple of expr list
   | Pi of int * expr
@@ -45,7 +45,7 @@ and v_tag_t ty = MT.(Tag.mk v_tag ty )
 let r_tag_gt = r_tag_t MT.Ty.any |> MlGTy.mk
 and v_tag_gt = v_tag_t MT.Ty.any |> MlGTy.mk
 
-let mk_fun_cast p f =
+let mk_fun_cast _p f = f (*
   let vdom = Utils.mk_tv ~k:MT.KInfer "i" in
   let vimg = Utils.mk_tv ~k:MT.KInfer "o" in
   let v_in_st = Utils.mk_rtv ~k:MT.KInfer "si" in
@@ -56,7 +56,7 @@ let mk_fun_cast p f =
   let ty = GTy.mk (Arrow.mk i o) in
   Utils.mk_coerce p
     ~check:MSAst.CheckStatic
-    f ty
+    f ty *)
 
 let res_tag = function R -> r_tag | V -> v_tag
 
@@ -184,7 +184,7 @@ let reduce e =
         let body = loop r.body in
         match snd cond with
         | Tuple [_,Res (V, _);_] as r -> r
-        | Tuple [_,Res (R,e) ;s] -> snd (subst body [r.v, e; r.s, s])
+        (* | Tuple [_,Res (R,e) ;s] -> snd (subst body [r.v, e; r.s, s]) *)
         | _ -> IfR{r with cond; body }
       )
     (* IfR r *)
@@ -261,15 +261,17 @@ let bindV pos e s0 v s body =
   (* bindv v, s = e s0 in body *)
   let cond = smon_run pos e s0 in
   pos, IfV { cond; v; s; body }
-and bindR pos e s0 v s body =
+and bindR pos e s0 v body =
   (* bindr v, s = e s0 in body *)
   let cond = smon_run pos e s0 in
-  pos, IfR { cond; v; s; body }
+  pos, IfR { cond; v; body }
 
 let app pos e1 e2 =
   pos, App(Normal_call, e1, e2)
 
 let none = Ast.None_
+let emptyrec = MT.Record.mk_closed []
+let emptyrecv = mk_ident "{ø}"
 
 (* Combinators *)
 let const pos st c =
@@ -302,7 +304,7 @@ let return pos st e =
   let v = mk_ident_v () in
   smon_ret pos s0 st
     (bindV pos e s0 v s1
-       (emon_ret pos R (pos, Var v) s1))
+       (emon_ret pos R (pos, Var v) emptyrecv))
 
 let ite pos st cond e1 e2 =
   (* λ s0. bindv v, s1 = cond s0 in
@@ -330,19 +332,19 @@ let seq pos st e1 e2 =
        v s1 (smon_run pos e2 s1))
 
 let mk_fun_ctx xid sid add_ret =
-  let inner_sty, outer_sty = mk_lambda_states sid in
+  let inner_sty, _outer_sty = mk_lambda_states sid in
   let locals = sid.locals |> Ast.IdentSet.to_list |> List.map source in
   let nl_used = sid.nl_used |> Ast.IdentSet.to_list |> List.map source in
   let _,_,xty = Env.get_var_infos (mlvar xid) in
-  { pty = MT.Tuple.mk [xty;outer_sty];
+  { pty = xty (* MT.Tuple.mk [xty;emptyrec]*);
     xid; xty;
-    outer_sty; nl_used ;
+    outer_sty=emptyrec; nl_used ;
     inner_sid = mk_ident_s (); inner_sty; locals;
     add_ret }
 
 let lambda pos fun_ctx e_body =
   (* λ s. V(λ p.fun_ctx. e), s *)
-  let f = pos, Lambda (mk_ident "p", Normal fun_ctx,e_body) in
+  let f = pos, Lambda (fun_ctx.xid, Normal fun_ctx,e_body) in
   let s = mk_ident_s () in
   smon_ret pos s (MT.Record.mk' Utils.("row" ^ scpt () |>  mk_rtv)  [],[])
     (emon_ret pos V f s)
@@ -350,19 +352,20 @@ let lambda pos fun_ctx e_body =
 let apply pos st e1 e2 =
   (* λ s0. bindv f, s1 = e1 s0 in
            bindv x, s2 = e2 s1 in
-           bindr r, s3 = f (x,s2) in
-           V(r), s3 *)
+           let r = f x in (* r done by to_ml function *)
+           V(r), s2 *)
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s ()
-  and s2 = mk_ident_s ()
-  and s3 = mk_ident_s () in
+  and s2 = mk_ident_s () in
   let f = mk_ident_v ()
   and x = mk_ident_v ()
   and r = mk_ident_v () in
   let app =
     pos,
-    IfR { cond = app pos (pos, Var f) (pair pos (pos, Var x) (pos, Var s2));
-          v = r; s = s3; body = emon_ret pos V (pos, Var r) s3}
+    IfR { cond = app pos (pos, Var f) ( (*pair pos*)
+                                         (pos, Var x)
+                                         (*pos, Var emptyrecv*));
+          v = r; body = emon_ret pos V (pos, Var r) s2 }
   in
   smon_ret pos s0 st
     (bindV pos e1 s0
@@ -392,8 +395,7 @@ let binop pos st e1 (bop:Ast.binop) e2 =
           V(v3), s3 *)
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s ()
-  and s2 = mk_ident_s ()
-  and s3 = mk_ident_s () in
+  and s2 = mk_ident_s () in
   let v1 = mk_ident_v ()
   and v2 = mk_ident_v ()
   and v3 = mk_ident_v () in
@@ -415,8 +417,8 @@ let binop pos st e1 (bop:Ast.binop) e2 =
     pos,
     IfR { cond = app pos
               (pos, Var op)
-              (pair pos (pos, Tuple [pos, Var v1; pos, Var v2]) (pos, Var s2));
-          v = v3; s = s3; body = emon_ret pos V (pos, Var v3) s3}
+              (pair pos (pos, Tuple [pos, Var v1; pos, Var v2]) (pos, Var emptyrecv));
+          v = v3; body = emon_ret pos V (pos, Var v3) s2}
   in
   smon_ret pos s0 st
     (bindV pos e1 s0
@@ -559,9 +561,12 @@ let initial_env ids =
 
 (* Translation pystate -> mlsem *)
 
-let mk_ident_ml =
+let mk_ident_m =
   let _, sn = Utils.gen_cpt () in
   fun () -> mk_ident ("m" ^ sn ())
+let mk_ident_r =
+  let _, sn = Utils.gen_cpt () in
+  fun () -> mk_ident ("v" ^ sn ())
 
 let cpt = Utils.gen_cpt () |> snd
 
@@ -569,34 +574,56 @@ let mk_match p tagpos tagneg cond v s body =
   let open Utils in
   let tagp_gt = MT.(Tag.mk tagpos Ty.any) |> MlGTy.mk in
   let tagn_gt = MT.(Tag.mk tagneg Ty.any) |> MlGTy.mk in
-  let c_ml = mk_ident_ml () |> mlvar in (* result of cond: c_ml = (t(v),s) *)
-  let r_ml = mk_ident_ml () |> mlvar in (* tag of result: t(v) *)
+  let c_ml = mk_ident_m () |> mlvar in (* result of cond: c_ml = (t(v),s) *)
+  let r_ml = mk_ident_r () |> mlvar in (* tag of result: t(v) *)
   let c_var = var_of_vart p c_ml in
   let r_var = var_of_vart p r_ml in
-  (* let c = cond in
-     let r = fst c in
-     tif r is tag
-     then let v = r#tag in
-          let s = snd c in
-          body
-     else c *)
-  mk_let p []
-    c_ml cond
-    (mk_let p []
-       (mlvar s) (mk_proj_tuple p 2 1 c_var)
-       (mk_let p []
-          r_ml (mk_proj_tuple p 2 0 c_var)
-          (mk_ite_approx p r_var tagp_gt
-             (mk_let p []
-                (mlvar v) (mk_proj_tag p tagpos
-                             (mk_cast p ~check:MSAst.NoCheck
+  if tagpos = r_tag
+  then
+    (* let r = cond in
+       tif r is tag
+       then let v = r#tag in
+            let s = emptyrec in
+            body
+       else r *)
+    mk_let p []
+      r_ml cond
+      (mk_ite_approx p r_var tagp_gt
+         (mk_let p []
+            (mlvar v) (mk_proj_tag p tagpos
+                         (mk_cast p ~check:MSAst.NoCheck
+                            r_var
+                            tagp_gt))
+            body)
+         (mk_tuple p [ (mk_cast p ~check:MSAst.NoCheck
+                          r_var
+                          tagn_gt)
+                     ; mlvar emptyrecv |> var_of_vart p]) )
+  else
+    (* let c = cond in
+       let r = fst c in
+       tif r is tag
+       then let v = r#tag in
+            let s = snd c in
+            body
+       else c *)
+    mk_let p []
+      c_ml cond
+      (mk_let p []
+         (mlvar s) (mk_proj_tuple p 2 1 c_var)
+         (mk_let p []
+            r_ml (mk_proj_tuple p 2 0 c_var)
+            (mk_ite_approx p r_var tagp_gt
+               (mk_let p []
+                  (mlvar v) (mk_proj_tag p tagpos
+                               (mk_cast p ~check:MSAst.NoCheck
+                                  r_var
+                                  tagp_gt))
+                  body)
+               (mk_tuple p [ (mk_cast p ~check:MSAst.NoCheck
                                 r_var
-                                tagp_gt))
-                body)
-             (mk_tuple p [ (mk_cast p ~check:MSAst.NoCheck
-                              r_var
-                              tagn_gt)
-                         ; mlvar s |> var_of_vart p]) )))
+                                tagn_gt)
+                           ; mlvar s |> var_of_vart p]) )))
 
 let mk_delete_fields p e l =
   List.fold_left (fun e f ->
@@ -612,8 +639,8 @@ let rec to_ml (p,e) =
   | Proj (r, p_e) -> mk_proj_tag p (res_tag r) (to_ml p_e)
   | IfV {cond;v;s;body} ->
     mk_match p v_tag r_tag (to_ml cond) v s (to_ml body)
-  | IfR {cond;v;s;body} ->
-    mk_match p r_tag v_tag (to_ml cond) v s (to_ml body)
+  | IfR {cond;v;body} ->
+    mk_match p r_tag v_tag (to_ml cond) v (mk_ident_s ()) (to_ml body)
   | Ite (test, e1, e2) ->
     mk_ite p (to_ml test) MT.(GTy.mk Ty.tt) (to_ml e1) (to_ml e2)
   | Tuple el -> mk_tuple p List.(map to_ml el)
@@ -628,8 +655,8 @@ let rec to_ml (p,e) =
       | Normal ctx ->
         let pid = var_of_vart p ml_id in
         let s_arg = mlvar ctx.inner_sid in
-        let m = mk_ident_ml () |> mlvar in
-        let mvar = var_of_vart p m in
+        let m = mk_ident_m () |> mlvar in
+        (* let mvar = var_of_vart p m in *)
         let r = mk_ident "tag" |> mlvar in
         let rvar = var_of_vart p r in
         (* initialize the local scope of the function
@@ -638,17 +665,20 @@ let rec to_ml (p,e) =
            - copy the parameter
            - initialize locals
              The parameter is in locals *)
-        let input_state = mk_proj_tuple p 2 1 pid in
+        (* let input_state = mk_proj_tuple p 2 1 pid in *)
         let outer_f = ctx.nl_used |>
           List.map (fun id ->
+              let _, _, tv = Env.get_var_infos (mlvar id) in
               ident_name id,
-              mk_projection p (MSAst.PiField (ident_name id)) input_state)
+              (* mk_projection p (MSAst.PiField (ident_name id)) input_state *)
+              mk_value p MlGTy.(mk tv)
+            )
         in
-        let param_f = [ (ident_name ctx.xid, mk_proj_tuple p 2 0 pid)] in
+        let param_f = [ (ident_name ctx.xid, (*mk_proj_tuple p 2 0*) pid)] in
         let local_f = ctx.locals |>
           List.map (fun id ->
               let nid = ident_name id in
-              (nid, if nid = ident_name ctx.xid then mk_proj_tuple p 2 0 pid
+              (nid, if nid = ident_name ctx.xid then (*mk_proj_tuple p 2 0*) pid
                else MlGTy.mk undef |> mk_value p))
         in
         let local_env =
@@ -657,36 +687,37 @@ let rec to_ml (p,e) =
               mk_record_update p id e acc
             ) (Utils.mk_record p [] [])
         in
-        let restore_env s = List.fold_left
+        (* let restore_env s = List.fold_left
             (fun acc id -> mk_record_update p (ident_name id)
                 (mk_projection p (MSAst.PiField (ident_name id)) s) acc )
-            input_state ctx.nl_used in
+            input_state ctx.nl_used in *)
         (* let s_arg = {p.input_state w/ x=p.x ; y=Undef ; ... }) in
            let m = e s_arg in
            let r = m.0 in
-           ( R(r#V)
-             |or|
-             if r is V
-             then R(None)
-             else r
-           , { p.input_state with g = (m.1) for g in dom(s_run) } )
+           R(r#V)
+           |or|
+           if r is V
+           then R(None)
+           else r
         *)
-        ctx.pty ,
+        ctx.xty ,
         mk_let p []
           s_arg local_env
           (mk_let p []
              m (mk_app p ml_e (var_of_vart p s_arg))
              (mk_let p []
                 r (mk_proj_tuple p 2 0 (var_of_vart p m))
-                (mk_tuple p
-                   [ if ctx.add_ret
+                (* (mk_tuple p *)
+                   (* [ *)
+                     (if ctx.add_ret
                      then mk_tag p r_tag (mk_proj_tag p v_tag rvar)
                      else mk_ite p rvar v_tag_gt
                          (mk_tag p r_tag (to_ml (p, Const none)))
-                         rvar
-                   ; (*mk_cast p*) (mk_proj_tuple p 2 1 mvar |> restore_env)
+                         rvar)
+                   (* ; (\*mk_cast p*\) (mk_proj_tuple p 2 1 mvar |> restore_env) *)
                      (*(MlGTy.mk ctx.outer_sty)*)
-                   ])))
+                   (* ]) *)
+             ))
       | State (sty,_idl) -> sty, ml_e
     in
     let ml_fun =
@@ -736,7 +767,8 @@ let prepare_toplevel le =
         let e2 : expr = (p, Var (Simple v)) in
         (i+1, vn, (vn, (p, (Pi (1, (p, App (Normal_call, e1,e2))))))
                   ::accl))
-      (0, v0, [v0,(MC.Position.dummy, EmptyRec)]) le
+      (0, v0, [mlvar emptyrecv,(MC.Position.dummy, EmptyRec);
+               v0,(MC.Position.dummy, EmptyRec)]) le
   in
   List.rev le
 
@@ -774,10 +806,10 @@ and pp_expr' fmt e =
     fprintf fmt "@[@[<hov 2>@{<bold>bindv@} %a, %a =@ %a@] \
                  @{<bold>in@}@ %a@]"
       pp_ident v pp_ident s pp_expr cond pp_expr body
-  | IfR {cond; v; s; body} ->
-    fprintf fmt "@[@[<hov 2>@{<bold>bindr@} %a, %a =@ %a@] \
+  | IfR {cond; v; body} ->
+    fprintf fmt "@[@[<hov 2>@{<bold>bindr@} %a    =@ %a@] \
                  @{<bold>in@}@ %a@]"
-      pp_ident v pp_ident s pp_expr cond pp_expr body
+      pp_ident v pp_expr cond pp_expr body
   | Ite (e1, e2, e3) ->
     fprintf fmt
       "@[<v>@[<hov 2>@{<bold>if@} %a@]@ \

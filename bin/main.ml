@@ -14,7 +14,7 @@ let ml_type mcenv ast =
       ~direct_narrowing:true ~partition_narrowing:false mcenv
       (MS.Refinement.refinements mcenv ast) ast in
   MSC.typeof_def mcenv annot ast
-  |> MTS.norm_and_simpl
+  |> MTS.simplify_factorize
 
 let upd_env mce v ts =
   ( if MC.Env.mem v mce
@@ -62,7 +62,7 @@ let treat_file file =
   MS.Config.value_restriction := false;
 
   let (_,g as p) = Prog.of_module (Env.init globals bil to_loc) m in
-  pr "pysem ast" "%a" Ast.pp_prog p;
+  pr ~dbg:0 "pysem ast" "%a" Ast.pp_prog p;
 
   (* Then modify Py_state.(of_prog and make_state_record etc.) *)
 
