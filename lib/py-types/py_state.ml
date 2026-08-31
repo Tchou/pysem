@@ -647,7 +647,7 @@ let rec to_ml (p,e) =
               mk_value p (MlGTy.mk ty)
             )
         in
-        let param_f = [ (ident_name ctx.xid, mk_proj_tuple p 2 0 pid)] in
+        (* let param_f = [ (ident_name ctx.xid, mk_proj_tuple p 2 0 pid)] in *)
         let local_f = ctx.locals |>
           List.map (fun id ->
               let nid = ident_name id in
@@ -655,7 +655,7 @@ let rec to_ml (p,e) =
                else MlGTy.mk undef |> mk_value p))
         in
         let local_env =
-          outer_f @ param_f @ local_f
+          outer_f @ local_f
           |> List.fold_left (fun acc (id, e) ->
               mk_record_update p id e acc
             ) (Utils.mk_record p [] [])
