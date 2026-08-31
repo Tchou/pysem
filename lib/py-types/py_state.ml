@@ -694,7 +694,7 @@ let rec to_ml (p,e) =
                 (mk_tuple p
                    [ if ctx.add_ret
                      then mk_tag p r_tag (mk_proj_tag p v_tag rvar)
-                     else mk_ite p rvar v_tag_gt
+                     else mk_ite_approx p rvar v_tag_gt (* FIXME bug with mk_ite *)
                          (mk_tag p r_tag (to_ml (p, Const none)))
                          rvar
                    ; (*mk_cast p*) (mk_proj_tuple p 2 1 mvar |> restore_env)
