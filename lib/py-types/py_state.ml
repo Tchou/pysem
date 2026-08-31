@@ -351,7 +351,7 @@ let apply pos st e1 e2 =
   (* λ s0. bindv f, s1 = e1 s0 in
            bindv x, s2 = e2 s1 in
            bindr r, s3 = f (x,s2) in
-           V(r), s3 *)
+           V(r), s2 *)
   let s0 = mk_ident_s ()
   and s1 = mk_ident_s ()
   and s2 = mk_ident_s ()
@@ -362,7 +362,7 @@ let apply pos st e1 e2 =
   let app =
     pos,
     IfR { cond = app pos (pos, Var f) (pair pos (pos, Var x) (pos, Var s2));
-          v = r; s = s3; body = emon_ret pos V (pos, Var r) s3}
+          v = r; s = s3; body = emon_ret pos V (pos, Var r) s2}
   in
   smon_ret pos s0 st
     (bindV pos e1 s0
@@ -634,15 +634,18 @@ let rec to_ml (p,e) =
         let rvar = var_of_vart p r in
         (* initialize the local scope of the function
            - start from an *empty record*
-           - copy the outer scope that is used
+           - ~copy the outer scope that is used~
            - copy the parameter
            - initialize locals
              The parameter is in locals *)
-        let input_state = mk_proj_tuple p 2 1 pid in
+        (* let input_state = mk_proj_tuple p 2 1 pid in *)
         let outer_f = ctx.nl_used |>
           List.map (fun id ->
+              let _, _, ty = Env.get_var_infos (mlvar id) in
               ident_name id,
-              mk_projection p (MSAst.PiField (ident_name id)) input_state)
+              (* mk_projection p (MSAst.PiField (ident_name id)) input_state *)
+              mk_value p (MlGTy.mk ty)
+            )
         in
         let param_f = [ (ident_name ctx.xid, mk_proj_tuple p 2 0 pid)] in
         let local_f = ctx.locals |>
@@ -657,10 +660,20 @@ let rec to_ml (p,e) =
               mk_record_update p id e acc
             ) (Utils.mk_record p [] [])
         in
-        let restore_env s = List.fold_left
-            (fun acc id -> mk_record_update p (ident_name id)
-                (mk_projection p (MSAst.PiField (ident_name id)) s) acc )
-            input_state ctx.nl_used in
+        let restore_env s =
+          let gtyrec = ctx.nl_used
+            |> List.map (fun id ->
+                let _, _, ty = Env.get_var_infos (mlvar id) in
+                ident_name id, (ty, false))
+            |> MT.Record.mk_open
+            |> MlGTy.mk in
+          mk_let p [] (mk_ident_ml () |> mlvar)
+            (mk_cast p s gtyrec) (to_ml (p,EmptyRec))
+        in
+          (* List.fold_left *)
+          (*   (fun acc id -> mk_record_update p (ident_name id) *)
+          (*       (mk_projection p (MSAst.PiField (ident_name id)) s) acc ) *)
+          (*   input_state ctx.nl_used in *)
         (* let s_arg = {p.input_state w/ x=p.x ; y=Undef ; ... }) in
            let m = e s_arg in
            let r = m.0 in
