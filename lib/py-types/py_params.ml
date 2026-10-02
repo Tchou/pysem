@@ -409,7 +409,7 @@ let pp_py_scheme fmt s =
               |> List.map (fun (x, n) -> x, MT.TVar.typ n)
               |> MT.Subst.of_list1
   in
-  let pp_ty = Sstt.Printer.print_ty (MT.PEnv.printer_params ()) in
+  let pp_ty = Printing.TyPrinter.print_ty (MT.PEnv.printer_params ()) in
   let pp_gty fmt gty =
     let inf, sup = MT.GTy.destruct gty in
     let inf' = MT.Subst.apply subst inf in

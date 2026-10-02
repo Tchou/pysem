@@ -30,7 +30,7 @@ let pr ?(dbg=1) str =
 
 let dbg_pr str = pr ~dbg:2 str
 
-let pp_list ?(sep:(unit,Format.formatter,unit) format=";@ ") =
+let pp_list ?(sep:_ format=";@ ") =
   Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt sep)
 let pp_nel str = function [] -> "" | _ -> str
 
@@ -38,6 +38,105 @@ let mlvar_show mlv = MlVar.(if !Utils.debug && not !Utils.export
                             then show_uniq mlv
                             else show mlv)
 and mlvar_show_full = MlVar.show_uniq
+
+module TyPrinter = struct
+  open Sstt
+  open Printer
+
+  let any = { op = Builtin Any ; ty = Ty.any } (* Printer.any *)
+  let fany = { fop = FTy (any, true) ; fty = Ty.F.any } (* Printer.fany *)
+
+  let fprintf_box fmt pp arg =
+    Format.fprintf fmt "@[<hov>%a@]" pp arg
+  let fprintf_box2 fmt pp a1 a2 =
+    Format.fprintf fmt "@[<hov>%a@]" (fun fmt () -> pp fmt a1 a2) ()
+
+  let rec print_descr prec assoc fmt d =
+    let rec aux prec assoc fmt d =
+      match d.op with
+      | Extension e -> print_extension_node_ctx prec assoc fmt e
+      | Alias str -> Format.pp_print_string fmt str
+      | Node n -> fprintf_box fmt NodeId.pp n
+      | Builtin b -> print_builtin fmt b
+      | Var v -> fprintf_box fmt Var.pp v
+      | Enum a -> fprintf_box fmt Enum.pp a
+      | Tag (t,d) ->
+        Format.fprintf fmt "%a(%a)"
+          Tag.pp t print_descr' d
+      | Interval (lb,ub) -> fprintf_box fmt print_interval (lb,ub)
+      | Record (bindings,tail) ->
+        let print_binding fmt (l,f) =
+          Format.fprintf fmt "@[<hov 2>%a : @[%a@]@]"
+            Label.pp l print_fdescr' f
+        in
+        Format.fprintf fmt "@[<hov>{ @[<v>%a@]@ %a}@]"
+          (pp_list ~sep:" ;@ " print_binding) bindings
+          print_tail tail
+      | Varop (v,ds) -> fprintf_box fmt (Prec.print_nary_op aux prec assoc v) ds
+      | Binop (b,d1,d2) ->
+        fprintf_box2 fmt (Prec.print_binary_op aux prec assoc b) d1 d2
+      | Unop (u,d) -> fprintf_box fmt (Prec.print_unary_op aux prec assoc u) d
+    in
+    aux prec assoc fmt d
+  and print_fdescr prec assoc fmt fd =
+    let rec aux prec assoc fmt fd =
+      match fd.fop with
+      | FRowVar v -> fprintf_box fmt RowVar.pp v
+      | FTy (d, opt) ->
+        if opt then
+          Format.fprintf fmt "%a?" (print_descr Prec.max_prec NoAssoc) d
+        else
+          print_descr prec assoc fmt d
+      | FVarop (v,fops) ->
+        fprintf_box fmt (Prec.print_nary_fop aux prec assoc v) fops
+      | FBinop (b,fop1,fop2) ->
+        fprintf_box2 fmt (Prec.print_binary_fop aux prec assoc b) fop1 fop2
+      | FUnop (FNeg,fop) ->
+        fprintf_box2 fmt (Prec.print_binary_fop aux prec assoc FDiff) fany fop
+    in
+    aux prec assoc fmt fd
+  and print_tail fmt tail = (* Printer.print_tail *)
+    match tail with
+    | {fty ; _} when Ty.F.equiv fty Ty.F.any -> Format.fprintf fmt ".."
+    | {fty ; _} when Ty.F.equiv fty (Ty.F.mk_descr Ty.O.absent) ->
+      Format.fprintf fmt ""
+    | _ -> Format.fprintf fmt ";;@ %a " print_fdescr' tail
+
+  (* Printer.(...) *)
+  and print_descr' fmt d = print_descr Prec.min_prec NoAssoc fmt d
+  and print_fdescr' fmt fop = print_fdescr Prec.min_prec NoAssoc fmt fop
+
+  let print_descr = print_descr'
+
+  let print_def fmt (n,d) =
+    Format.fprintf fmt "@[<hov 2>%a = %a@]"
+      NodeId.pp n
+      print_descr d
+
+  let printer fmt (t:Sstt.Printer.(descr t)) =
+    let open Format in
+    fprintf fmt "@[<hov>%a@]%a"
+      print_descr t.main
+      (fun fmt -> function
+         | [] -> pp_print_nothing fmt ()
+         | defs ->
+           fprintf fmt "@\n@[%a@]"
+             (fun fmt defs ->
+                fprintf fmt "@[<hov 2>where %a@]"
+                  (pp_list ~sep:"@\nand " print_def) defs
+             ) defs
+      ) t.defs
+
+  let print_ty params fmt ty =
+    let open Sstt.Printer in
+    let ast = get params ty in
+    Format.fprintf fmt "@[%a@]" printer ast
+
+  let pp_ty fmt ty = print_ty (MT.PEnv.printer_params ()) fmt ty
+end
+
+let set_ml_printer () =
+  Mlsem.Types.PrinterCfg.set_printer TyPrinter.printer
 
 module MSAstPrinter = struct
   open MSAst
@@ -48,7 +147,7 @@ module MSAstPrinter = struct
   let pp_ogty fmt = function
     | None -> Format.pp_print_nothing fmt ()
     | Some gty -> fprintf fmt "@{<bold;purple>: @[%a@]@} " pp_gty gty
-  let pp_ty = MT.Ty.pp
+  let pp_ty = TyPrinter.pp_ty
   let pp_tag = MT.Tag.pp
   let pp_projection fmt p =
     let open MSAst in
@@ -139,7 +238,8 @@ module MSAstPrinter = struct
       (pp_list pp_print_string) x_l
 
   and pp_e' pp_t (fmt:formatter) (e:MSAst.e) :unit =
-    let check_str = function Check -> ":" | NoCheck -> "!" | CheckStatic -> "s" in
+    let check_str =
+      function Check -> ":" | NoCheck -> "!" | CheckStatic -> "s" in
     match e with
     | Value gty -> fprintf fmt "@[<hov 2>%a@]" pp_gty gty
     | Var v -> fprintf fmt "@[%a@]" pp_variable v
@@ -174,15 +274,20 @@ module MSAstPrinter = struct
     | Projection (p,t) -> pp_projection_arg fmt (p,t) pp_t
     | Let (tyl,v,t1,t2) ->
       fprintf fmt
-        "@[<v>@[<hov 2>let %a@{<bold;purple>%s@[%a@]@} =@ @[%a@]@ in@]@\n@[%a@]@]"
+        "@[<v>@[<hov 2>let %a@{<bold;purple>%s@[%a@]@} =@ @[%a@]@ in@]@\n\
+         @[%a@]@]"
         pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t1 pp_t t2
     | TypeCast (t,ty,c) ->
-      fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ %s> @[%a@]@}@]"
+      fprintf fmt
+        "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ %s> @[%a@]@}@]"
         pp_t t (check_str c) pp_gty ty
     | TypeCoerce (t,gty,c) ->
-      fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ <%s @[%a@]@}@]"
+      fprintf fmt
+        "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ <%s @[%a@]@}@]"
         pp_t t (check_str c) pp_gty gty
-    | Alt (set,tl) -> fprintf fmt "@[<hov 2>Alt({aname=%s,@ [%a])@]" set.aname (pp_list ~sep:";@ " pp_t) tl
+    | Alt (set,tl) ->
+      fprintf fmt "@[<hov 2>Alt({aname=%s,@ [%a])@]"
+        set.aname (pp_list ~sep:";@ " pp_t) tl
   let rec pp_e fmt e = pp_e' pp_t fmt e
   and pp_t fmt (_,e) = pp_e' pp_t fmt e
 
@@ -197,10 +302,10 @@ module MLAstPrinter = struct
   open MLAst
   open Format
 
-  let pp_variable = MSAstPrinter.pp_variable
-  let pp_gty = MlGTy.pp
-  let pp_ogty = MSAstPrinter.pp_ogty
-  let pp_ty = MT.Ty.pp
+  let pp_variable   = MSAstPrinter.pp_variable
+  let pp_gty        = MSAstPrinter.pp_gty
+  let pp_ogty       = MSAstPrinter.pp_ogty
+  let pp_ty         = MSAstPrinter.pp_ty
   let pp_projection = MSAstPrinter.pp_projection
   let pp_operation = SA.pp_operation
 
@@ -296,10 +401,10 @@ module MLAstPrinter = struct
       end
     | Projection (p,t) -> MSAstPrinter.pp_projection_arg fmt (p,t) pp_t
     | Declare (v,t) ->
-      fprintf fmt "@[<hov 2>val mut %a =@ %a@]"
-        pp_variable v pp_t t
+      fprintf fmt "@[<hov 2>val mut %a =@ %a@]" pp_variable v pp_t t
     | Let (tyl,v,t1,t2) ->
-      fprintf fmt "@[@[<hov 2>let %a@{<bold;purple>%s@[%a@]@} =@ @[%a@]@ in@]@\n%a@]"
+      fprintf fmt
+        "@[@[<hov 2>let %a@{<bold;purple>%s@[%a@]@} =@ @[%a@]@ in@]@\n%a@]"
         pp_variable v (pp_nel " : " tyl) (pp_list pp_ty) tyl pp_t t1 pp_t t2
     | TypeCast (t,ty,_) ->
       fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ :> @[%a@]@}@]"
@@ -307,15 +412,12 @@ module MLAstPrinter = struct
     | TypeCoerce (t,gty,_) ->
       fprintf fmt "@[<hov 2>@{<bold;purple>(@}%a@{<bold;purple>)@ <: @[%a@]@}@]"
         pp_t t pp_gty gty
-    | VarAssign (v,t) -> fprintf fmt "@[<hov 2>%a :=@ %a@]"
-                           pp_variable v pp_t t
+    | VarAssign (v,t) -> fprintf fmt "@[<hov 2>%a :=@ %a@]" pp_variable v pp_t t
     | Loop t -> fprintf fmt "@[<hov 2>loop:@ %a@]" pp_t t
-    | Try tl -> fprintf fmt "@[<hov 2>try@ [%a]@]"
-                  (pp_list ~sep:",@ " pp_t) tl
+    | Try tl -> fprintf fmt "@[<hov 2>try@ [%a]@]" (pp_list ~sep:",@ " pp_t) tl
     | Seq (t1,t2) -> fprintf fmt "@[<hov 2>%a;@ %a@]" pp_t t1 pp_t t2
     | Alt (set,tl) -> fprintf fmt "@[<hov 2>Alt({aname=%s,@ [%a])@]"
                         set.aname (pp_list ~sep:";@ " pp_t) tl
-
     | Block (_,t) -> fprintf fmt "@[<hov 2>Block:@ %a@]" pp_t t
     | Ret (_,ot) -> fprintf fmt "@[<hov 2>Ret:@ %a@]"
                       (pp_print_option pp_t) ot
@@ -411,5 +513,6 @@ let pp_ml_top fmt (v,ml) =
 
 let pp_ml_tys fmt (v,tys) =
   let open MLAstPrinter in
+  set_ml_printer ();
   Format.fprintf fmt "@[<hov 2>val %a :@ %a@]"
     pp_variable v MT.TyScheme.pp tys

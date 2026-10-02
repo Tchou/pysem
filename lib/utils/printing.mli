@@ -27,6 +27,14 @@ val pp_nel : string -> 'a list -> string
 val mlvar_show : MlVar.t -> string
 val mlvar_show_full : MlVar.t -> string
 
+module TyPrinter : sig
+  val print_ty : Sstt.Printer.params -> Format.formatter -> Sstt.Ty.t -> unit
+  val pp_ty : Format.formatter -> Sstt.Ty.t -> unit
+end
+
+val set_ml_printer : unit -> unit
+(** Sets TyPrinter's printer as MLsem printer. *)
+
 module MSAstPrinter : sig
   val pp_variable : Format.formatter -> MlVar.t -> unit
   val pp_projection : Format.formatter -> MSAst.projection -> unit
