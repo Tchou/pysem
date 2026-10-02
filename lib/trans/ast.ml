@@ -206,12 +206,13 @@ module Binop = struct
     and int_cmp = bop_arrow Ty.int Ty.int Ty.bool
     and and_op = Ty.conj [ bop_arrow Ty.tt   Ty.tt   Ty.tt
                          ; bop_arrow Ty.bool Ty.ff   Ty.ff
-                         ; bop_arrow Ty.ff   Ty.bool Ty.ff]
-    and or_op  = Ty.conj [ bop_arrow Ty.tt   Ty.tt   Ty.tt
-                         ; bop_arrow Ty.bool Ty.ff   Ty.ff
-                         ; bop_arrow Ty.ff   Ty.bool Ty.ff]
-    and pol_cmp = let a, b = pol_tv (), pol_tv () in
-      bop_arrow a b Ty.bool in
+                         ; bop_arrow Ty.ff   Ty.bool Ty.ff ]
+    and or_op  = Ty.conj [ bop_arrow Ty.ff   Ty.ff   Ty.ff
+                         ; bop_arrow Ty.bool Ty.tt   Ty.tt
+                         ; bop_arrow Ty.tt   Ty.bool Ty.tt ]
+    and cmp = bop_arrow Ty.any Ty.any Ty.bool in
+    let eq_cmp = let a, b = pol_tv (), pol_tv () in (* FIXME: slows Sstt *)
+      Ty.conj [ cmp ; bop_arrow a Ty.(diff b a) Ty.ff ] in
     match binop with
     | Add  -> int_op
     | Sub  -> int_op
@@ -221,14 +222,14 @@ module Binop = struct
     | Pow  -> int_op
     | And  -> and_op
     | Or   -> or_op
-    | Eq   -> pol_cmp
-    | Neq  -> pol_cmp
+    | Eq   -> eq_cmp
+    | Neq  -> cmp
     | Lt   -> int_cmp
     | Gt   -> int_cmp
     | Le   -> int_cmp
     | Ge   -> int_cmp
-    | Is   -> pol_cmp
-    | Isn  -> pol_cmp
+    | Is   -> eq_cmp
+    | Isn  -> cmp
 
   let to_ml pos op =
     let open Utils in
@@ -260,7 +261,7 @@ let pp_binop fmt op =
      | Pow  -> "^"
      | And  -> "&&"
      | Or   -> "||"
-     | Eq   -> "="
+     | Eq   -> "=="
      | Neq  -> "<>"
      | Lt   -> "<"
      | Gt   -> ">"
