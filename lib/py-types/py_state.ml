@@ -70,8 +70,8 @@ and mk_lambda_states (sid:Ast.scoped_identifiers) =
   let open Ast in
   let mk_rec l = List.fold_left (fun acc ident ->
       let name = Ast.Ident.name ident in
-      let _,_,tv = Env.get_var_infos ident.name in
-      (name, MT.FTy.of_oty (tv, false))::acc) [] l
+      let vi = Env.get_var_infos ident.name in
+      (name, MT.FTy.of_oty (vi.ty, false))::acc) [] l
     |> List.rev
     |> MT.Record.mk' ("row" ^ scpt () |> Utils.mk_rtv)
   in
@@ -333,9 +333,9 @@ let mk_fun_ctx xid sid add_ret =
   let inner_sty, outer_sty = mk_lambda_states sid in
   let locals = sid.locals |> Ast.IdentSet.to_list |> List.map source in
   let nl_used = sid.nl_used |> Ast.IdentSet.to_list |> List.map source in
-  let _,_,xty = Env.get_var_infos (mlvar xid) in
-  { pty = MT.Tuple.mk [xty;outer_sty];
-    xid; xty;
+  let xi = Env.get_var_infos (mlvar xid) in
+  { pty = MT.Tuple.mk [xi.ty;outer_sty];
+    xid; xty=xi.ty;
     outer_sty; nl_used ;
     inner_sid = mk_ident_s (); inner_sty; locals;
     add_ret }
@@ -407,7 +407,8 @@ let binop pos st e1 (bop:Ast.binop) e2 =
             let open MT in
             Arrow.mk Tuple.(mk [mk [a;b]; s_tv]) (Tuple.mk [r_tag_t o; s_tv])
           in
-          let pol_tv _ = Utils.mk_tv "θ" in
+          let _,cpt = Utils.gen_cpt () in
+          let pol_tv _ = Utils.mk_tv ("θ"^(cpt ())) in
           Ast.Binop.ty bop_arrow pol_tv bop
           |> PSBuiltins.add bop_str)
   in
@@ -464,8 +465,8 @@ let make_state_record _sid =
 
 let make_unique_state_type () =
   Env.(Vartbl.fold
-         (fun mlvar (_scope, _tv, typv) acc ->
-            (MlVar.show mlvar, (typv, true))::acc)
+         (fun mlvar vi acc ->
+            (MlVar.show mlvar, (vi.ty, true))::acc)
          variables [])
   |> MT.Record.mk_closed
 
@@ -641,10 +642,10 @@ let rec to_ml (p,e) =
         (* let input_state = mk_proj_tuple p 2 1 pid in *)
         let outer_f = ctx.nl_used |>
           List.map (fun id ->
-              let _, _, ty = Env.get_var_infos (mlvar id) in
+              let vi = Env.get_var_infos (mlvar id) in
               ident_name id,
               (* mk_projection p (MSAst.PiField (ident_name id)) input_state *)
-              mk_value p (MlGTy.mk ty)
+              mk_value p (MlGTy.mk vi.ty)
             )
         in
         (* let param_f = [ (ident_name ctx.xid, mk_proj_tuple p 2 0 pid)] in *)
@@ -663,8 +664,8 @@ let rec to_ml (p,e) =
         let restore_env s =
           let gtyrec = ctx.nl_used
             |> List.map (fun id ->
-                let _, _, ty = Env.get_var_infos (mlvar id) in
-                ident_name id, (ty, false))
+                let vi = Env.get_var_infos (mlvar id) in
+                ident_name id, (vi.ty, false))
             |> MT.Record.mk_open
             |> MlGTy.mk in
           mk_let p [] (mk_ident_ml () |> mlvar)
