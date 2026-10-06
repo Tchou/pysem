@@ -39,6 +39,21 @@ let mlvar_show mlv = MlVar.(if !Utils.debug && not !Utils.export
                             else show mlv)
 and mlvar_show_full = MlVar.show_uniq
 
+let is_dummy_pos pos = let open PC.Position in pos.line < 0 || pos.column < 0
+let pp_pc_position fmt pos =
+  let open PC.Position in
+  if is_dummy_pos pos
+  then Format.fprintf fmt "dummy_pos"
+  else Format.fprintf fmt "%d:%d" pos.line pos.column
+let pp_pc_location fmt loc =
+  let open PCL in
+  if is_dummy_pos loc.start || is_dummy_pos loc.stop
+  then Format.fprintf fmt "dummy_loc"
+  else Format.fprintf fmt "%a-%a"
+      pp_pc_position loc.start pp_pc_position loc.stop
+let pp_pc_identifier fmt id =
+  Format.pp_print_string fmt (PCI.to_string id)
+
 module TyPrinter = struct
   open Sstt
   open Printer

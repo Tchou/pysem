@@ -2,7 +2,7 @@ open Aliases
 
 let of_module (env : Env.t) (m : PC.Module.t) : Ast.prog =
   (* TODO factor *)
-  let mod_bid = Parsing.BlockId.mk_module env.Env.current.filename Parsing.dummy_loc in
+  let mod_bid = Parsing.BlockId.mk_module env.Env.module_n Parsing.dummy_loc in
   let sid = Ast.scoped_identifiers env mod_bid in
   (*Printing.dbg_pr "PROG"
     "nl_unused: @[%a@]@\n- nl_used: @[%a@]@\n- locals: @[%a@]%!"

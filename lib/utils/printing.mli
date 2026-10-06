@@ -27,6 +27,10 @@ val pp_nel : string -> 'a list -> string
 val mlvar_show : MlVar.t -> string
 val mlvar_show_full : MlVar.t -> string
 
+val pp_pc_position : Format.formatter -> PC.Position.t -> unit
+val pp_pc_location : Format.formatter -> PCL.t -> unit
+val pp_pc_identifier : Format.formatter -> PCI.t -> unit
+
 module TyPrinter : sig
   val print_ty : Sstt.Printer.params -> Format.formatter -> Sstt.Ty.t -> unit
   val pp_ty : Format.formatter -> Sstt.Ty.t -> unit

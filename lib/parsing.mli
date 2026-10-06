@@ -35,6 +35,9 @@ module BlockId : sig
   val mk_module : string -> PyreAst.Concrete.Location.t -> t
   val equal : t -> t -> bool
   val hash : t -> int
+
+  val pp : Format.formatter -> t -> unit
+  val pp_full : Format.formatter -> t -> unit
 end
 module BidTable : Hashtbl.S with type key = BlockId.t
 
@@ -50,9 +53,6 @@ type block_info = {
 
 val dummy_loc : PyreAst.Concrete.Location.t
 (** Dummy location, used for modules and builtins variables. **)
-
-val pp_loc : Format.formatter -> PyreAst.Concrete.Location.t -> unit
-(** Pretty print a location, or nothing if the location is a dummy one. *)
 
 val show_scope : scope -> string
 val pretty_scope : scope -> string

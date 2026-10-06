@@ -5,6 +5,7 @@ type t =
   { current : block_info
   ; infos : block_info BidTable.t
   ; filename : string
+  ; module_n : string
   ; vars : (MlVar.t * info) IdentMap.t
   ; to_loc : Utils.loc_converter }
 
@@ -22,6 +23,15 @@ type var_info =
     in_blocks : BlockId.t list ;
     ty_var : Sstt.Var.t ;
     ty : Sstt.Ty.t }
+let pp_var_info fmt vi =
+  Format.fprintf fmt "@[<hov>from %a,@ inside [%a]@]"
+    BlockId.pp vi.block_def
+    Printing.(pp_list BlockId.pp) vi.in_blocks
+let pp_var_info_full fmt vi =
+  Format.fprintf fmt "@[<hov>from %a,@ inside [%a],@ ty %a@]"
+    BlockId.pp vi.block_def
+    Printing.(pp_list BlockId.pp_full) vi.in_blocks
+    Printing.TyPrinter.pp_ty vi.ty
 
 let variables : var_info Vartbl.t = Vartbl.create 16
 let vartbl_add mlvar (block_def:BlockId.t) def =
@@ -39,8 +49,7 @@ and get_vars_infos () = Vartbl.fold
     (fun mlv infos acc -> (mlv,infos)::acc) variables []
 and vars_rec b =
   Vartbl.fold
-    (fun mlvar vi acc ->
-       (MlVar.show mlvar, (vi.ty, b))::acc)
+    (fun mlvar vi acc -> (MlVar.show mlvar, (vi.ty, b))::acc)
     variables
     []
 
@@ -48,21 +57,29 @@ let set_mut_top b = top_kind := MlMVar.(if b then Mut else Immut)
 let set_mut_local b = local_kind := MlMVar.(if b then Mut else Immut)
 
 let init globals bil to_loc =
+  let pymod_name n =
+    String.split_on_char '/' n
+    |> List.rev
+    |> function [] -> "%%module%%" | x::_ -> x
+  in
   let infos = BidTable.create 16 in
-  let mod_id,filename =
+  let mod_id,module_n,filename =
     List.fold_left (fun m ({name; location; kind; _ } as bi) ->
-        let bid = BlockId.mk ~name ~location ~kind in
-        BidTable.add infos bid bi;
         match kind with
-          | Module -> Some (bid,name)
-          | _ -> m
+        | Module ->
+          let n = pymod_name name in
+          let bid = BlockId.mk ~name:n ~location ~kind in
+          BidTable.add infos bid bi;
+          Some (bid,n,name)
+        | _ -> BidTable.add infos (BlockId.mk ~name ~location ~kind) bi; m
       ) None bil
     |> function
     | None -> raise Not_found
-    | Some (bid,name) -> bid,name in
+    | Some (bid,name,filename) -> bid,name,filename in
   { current = BidTable.find infos mod_id
   ; infos
   ; filename
+  ; module_n
   ; vars = IdentMap.fold
         (fun ident info vmap ->
            let var = Utils.mk_var_t ~kind:!top_kind (PCI.to_string ident) in
