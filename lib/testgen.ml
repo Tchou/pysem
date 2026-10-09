@@ -100,7 +100,8 @@ let rec rand_ident () =
 
 (** Generates an id (named after its kind). *)
 and gen_ident kind =
-  { name = MlVar.create (Some (ident_str kind))
+  let open Ident in
+  { mlv = MlVar.create (Some (ident_str kind))
   ; scope = Parsing.Unknown }
 and rand_idents nb =
   List.init nb (fun _ -> rand_ident ())

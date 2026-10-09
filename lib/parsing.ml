@@ -99,8 +99,12 @@ type info = {
   context : context;
   locations : PCL.t list
 }
-let pp_info fmt i = Format.fprintf fmt "%s,(del=%b,load=%b,store=%b)"
-    (show_scope i.scope) i.context.del i.context.load i.context.store
+let pp_info fmt i =
+  Format.fprintf fmt "(%s|%s%s%s)"
+    (show_scope i.scope)
+    (if i.context.del then "d" else "-")
+    (if i.context.load then "r" else "-")
+    (if i.context.store then "w" else "-")
 
 let ident ?location ?(scope=Unknown) ?(ctx=PC.ExpressionContext.make_load_of_t()) id =
   IdentMap.singleton id { scope; context = context ctx; locations = Option.to_list location }
@@ -756,26 +760,24 @@ type block_info = {
   location : PCL.t;
   kind : block_kind;
   identifiers : info IdentMap.t;
-  defines : (string * PCL.t * block_kind) list
+  defines : BlockId.t list
 }
 
 let pp_vars fmt vars =
   let open Format in
   fprintf fmt "%a"
-    (pp_print_list ~pp_sep:pp_print_space
+    (Printing.pp_list ~sep:" "
        (fun fmt (v, i) -> fprintf fmt "%a=%a" pp_id v pp_info i))
     vars
 
-let pp_defines fmt (s, loc, k) =
-  Format.fprintf fmt "%s (%a) %a" s pp_loc loc pp_block_kind k
 let pp_block_info fmt bi =
   let open Format in
   fprintf fmt "@[%a %s (%s:%a)@]@\n"
     pp_block_kind bi.kind bi.name bi.filename pp_loc bi.location;
   fprintf fmt "@[vars:@[<v>%a@]@]@\n"
     pp_vars (IdentMap.bindings bi.identifiers);
-  fprintf fmt "@[defines:@[<v>%a@]@]@\n--"
-    (pp_print_list ~pp_sep:pp_print_space pp_defines) bi.defines
+  fprintf fmt "@[defines:@[<v>%a@]@]"
+    (pp_print_list ~pp_sep:pp_print_space BlockId.pp) bi.defines
 
 let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
   let vars, bids = BidTable.find tbl.blocks bid in
@@ -818,8 +820,7 @@ let rec resolve_unknown_scope enclosing scope (tbl : env) bid =
     location = bid.BlockId.location;
     kind = bid.BlockId.kind;
     identifiers = r_vars;
-    defines = List.map (fun bid ->
-        BlockId.(PCI.to_string bid.name, bid.location, bid.kind)) bids;
+    defines = bids;
   } :: List.concat_map (resolve_unknown_scope nenclosing nscope tbl) bids
 
 

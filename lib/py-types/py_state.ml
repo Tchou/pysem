@@ -2,7 +2,7 @@ open Aliases
 
 type res_kind = R | V
 type ident = Simple of MlVar.t
-           | Source of Ast.ident
+           | Source of Ast.Ident.t
 type fun_ctx = {
   (* λp.e = λ(x,s).let s_arg = { s with ⋯ } in let ⋯ = e s_arg in ⋯ *)
   pty : Sstt.Ty.t ; (* type of p, the pair argument (x,s) *)
@@ -70,7 +70,7 @@ and mk_lambda_states (sid:Ast.scoped_identifiers) =
   let open Ast in
   let mk_rec l = List.fold_left (fun acc ident ->
       let name = Ast.Ident.name ident in
-      let vi = Env.get_var_infos ident.name in
+      let vi = Env.get_var_infos ident.mlv in
       (name, MT.FTy.of_oty (vi.ty, false))::acc) [] l
     |> List.rev
     |> MT.Record.mk' ("row" ^ scpt () |> Utils.mk_rtv)
@@ -83,7 +83,7 @@ and mk_lambda_states (sid:Ast.scoped_identifiers) =
   inner_sty, outer_sty
 and init_state (ids:Ast.IdentSet.t) =
   Ast.IdentSet.fold
-    (fun id acc -> (MlVar.show id.name, (Utils.undef, false))::acc)
+    (fun id acc -> (MlVar.show id.mlv, (Utils.undef, false))::acc)
     ids []
   |> MT.Record.mk_closed
 and pack_toplevel = false
@@ -109,7 +109,7 @@ end
 
 let mlvar = function
     Simple v -> v
-  | Source(Ast.{name; _ }) -> name
+  | Source id -> id.mlv
 let ident_name id = mlvar id |> MlVar.show
 
 let subst e s = (* unsound in general but ok since it's only called for
@@ -229,8 +229,8 @@ let mk_ident_s =
 
 let cast_if cond id pos expr =
   match id with
-  | Source (Ast.{scope;_}) ->
-    if cond scope
+  | Source id ->
+    if cond id.scope
     then Cast ((pos,expr), MT.Ty.neg Utils.undef |> MlGTy.mk)
     else expr
   | _ -> expr
@@ -554,7 +554,7 @@ let ty_undef = MT.Enum.(define "%py_uninitialized" |> typ)
 let initial_env ids =
   Utils.mk_rec_disj false
     [(List.map (fun id ->
-         let v = id.Ast.name in
+         let v = id.Ast.Ident.mlv in
          (MlVar.show v, (ty_undef, false)))
          (Ast.IdentSet.to_list ids))]
 

@@ -72,12 +72,12 @@ let rec to_ml (p,instr:instr) : (MlMVar.t * MLAst.t) =
         join_let_rev l last |> no_var
     end
   | FunDef (f, args, _idents, body) ->
-    ( f.name
+    ( f.mlv
     , Expr.ml_lambda p args (to_ml body |> snd) )
   | Return eo ->
     ( match eo with None -> mk_unit p | Some e -> Expr.to_ml e )
     |> mk_return p |> no_var
-  | Assign (x,e) -> (x.name, Expr.to_ml e)
+  | Assign (x,e) -> (x.mlv, Expr.to_ml e)
   (* Expr.to_ml e |> mk_varassign p x.name |> no_var *)
   | While _ -> failwith "TODO while"
   | If (e,i,io) ->

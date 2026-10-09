@@ -2,68 +2,54 @@ open Aliases
 
 type 'a annot = MC.Position.t * 'a
 
-type ident =
-  { name : MlVar.t
-  ; scope : Parsing.scope }
-
 module Ident = struct
-  type t = ident
-  let name id = Printing.mlvar_show id.name
-  let name_full id = Printing.mlvar_show_full id.name
-  let pp fmt id = Format.fprintf fmt "%s" (name id)
-  let pp_mid fmt id = Format.fprintf fmt "%s(%s)" (name id)
-      (Parsing.show_scope id.scope)
-  let pp_full fmt id = Format.fprintf fmt "%s(%s)" (name_full id)
-      (Parsing.show_scope id.scope)
-  let external_name id =
-    match MlVar.get_name id.name with
-    | Some s -> s
-    | None -> "%anon%"
-
-  let of_identifier (env:Env.t) id : ident =
-    let open Env in
-    let open Parsing in
-    let v, info = match IdentMap.find_opt id env.vars with
-      | None -> Format.sprintf "id %s not found in %s %s!"
-                  (PCI.to_string id)
-                  (Parsing.show_block_kind env.current.kind)
-                  env.current.name
-                |> failwith
-      | Some vi -> vi
-    in
-    { name = v
-    ; scope = info.scope }
-
-  let of_argument env arg : ident =
-    of_identifier env arg.PC.Argument.identifier
+  type t = { mlv : MlVar.t ; scope : Parsing.scope }
 
   let compare i1 i2 =
-    let c = MlVar.compare i1.name i2.name in
+    let c = MlVar.compare i1.mlv i2.mlv in
     if c <> 0 then c else compare i1.scope i2.scope
+
+  let name id = Printing.mlvar_show id.mlv
+  let name_full id = Printing.mlvar_show_full id.mlv
+  let external_name id = MlVar.get_name id.mlv |> Option.value ~default:"%anon%"
+
+  let pp fmt id = Format.fprintf fmt "%s" (name id)
+  let pp_mid fmt id =
+    Format.fprintf fmt "%s(%s)" (name id) (Parsing.show_scope id.scope)
+  let pp_full fmt id =
+    Format.fprintf fmt "%s(%s)" (name_full id) (Parsing.show_scope id.scope)
+
+  let of_identifier (env:Env.t) id : t =
+    let open Parsing in
+    match IdentMap.find_opt id env.vars with
+    | None ->
+      fail "id %s not found in %s %s!"
+        (PCI.to_string id) (show_block_kind env.current.kind) env.current.name
+    | Some (mlv, info) -> { mlv ; scope = info.scope }
+
+  let of_argument env arg : t = of_identifier env arg.PC.Argument.identifier
 end
 
 module IdentSet =
 struct
   include Set.Make(Ident)
-  let mem_ml mlv = exists (fun {name;_} -> MlVar.equal name mlv)
-  let find_ml mlv = find_first (fun {name;_} -> MlVar.equal name mlv)
-  let find_ml_opt mlv = find_first_opt (fun {name;_} -> MlVar.equal name mlv)
+  let mem_ml m = exists (fun {mlv;_} -> MlVar.equal mlv m)
+  let find_ml m = find_first (fun {mlv;_} -> MlVar.equal mlv m)
+  let find_ml_opt m = find_first_opt (fun {mlv;_} -> MlVar.equal mlv m)
   let pp fmt s =
-    let open Format in
     if is_empty s && !Utils.debug
-    then fprintf fmt "ø"
+    then Format.fprintf fmt "ø"
     else Printing.pp_list ~sep:",@ " Ident.pp_mid fmt (to_list s)
 end
 
+type ident = Ident.t
 type binop =
   | Add | Sub | Mult | Div | Mod | Pow | And | Or | Eq | Neq | Lt | Gt | Le | Ge
   | Is | Isn
 type const =
   | None_
-  (* | Ellipsis *)
   | Bool of bool
   | Int of int
-  (* | Float of float *)
   | String of string
 type scoped_identifiers = {
   nl_used : IdentSet.t;
@@ -77,7 +63,6 @@ type expr' =
   | Lambda of spec * scoped_identifiers * expr
   | Apply of expr * params
   | Tuple of expr list
-  (* | Projection of expr * expr (\* proj, value *\) *)
 and expr = expr' annot
 and spec =
   { posonly : (ident * expr option) list
@@ -118,8 +103,8 @@ let scoped_identifiers env bid =
   let open Parsing in
   let infos = BidTable.find env.Env.infos bid in
   IdentMap.fold
-    (fun ident (name, s) ({nl_used; nl_unused;locals} as acc) ->
-       let id = { name; scope = s.scope } in
+    (fun ident (mlv, s) ({nl_used; nl_unused;locals} as acc) ->
+       let id : Ident.t = { mlv; scope = s.scope } in
        match s.scope,infos.kind with
        | (Local _, _) | (Global, Module ) ->
          {acc with locals = IdentSet.(add id locals)}
@@ -136,9 +121,7 @@ module Const = struct
     | False -> Bool false
     | True -> Bool true
     | Integer i -> Int i
-    (* | Float f -> Float f *)
     | String s -> String s
-    (* | Ellipsis -> Ellipsis *)
 
     | Float _ | Ellipsis | BigInteger _ | Complex _ | ByteString _
       -> failwith "Not implemented (Const)."

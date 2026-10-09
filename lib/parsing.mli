@@ -47,7 +47,7 @@ type block_info = {
   location : PyreAst.Concrete.Location.t;         (** location of the block in the file *)
   kind : block_kind;             (** the kind of the block *)
   identifiers : info IdentMap.t; (** a map of identifers defined in the scope of the block *)
-  defines : (string * PyreAst.Concrete.Location.t * block_kind) list; (** name, location and kind of the blocks defined in this one. *)
+  defines : BlockId.t list;      (** ids of the blocks defined in this one. *)
 }
 (** Informations about blocks *)
 

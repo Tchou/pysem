@@ -129,7 +129,7 @@ let rec ml_lambda p args body =
     in
     ( i+1
     , default
-    , (id.name, ast_in)
+    , (id.mlv, ast_in)
       ::l
     , t )
   in
@@ -153,7 +153,7 @@ let rec ml_lambda p args body =
   join_let_rev def f_anon
 
 and to_ml (p,e:expr) : MLAst.t = match e with
-  | Var v -> var_of_vart p v.name
+  | Var v -> var_of_vart p v.mlv
   | Binop (e1,bop,e2) ->
      mk_2app p (Binop.to_ml p bop) (to_ml e1) (to_ml e2)
   | Cst c -> mk_value p Const.(to_gty c)
