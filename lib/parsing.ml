@@ -89,9 +89,11 @@ let default_context = { del = false; load = false; store = false }
 let context =
   PC.ExpressionContext.(
     function
-    | Del -> { default_context with del = true }
-    | Load -> { default_context with load = true }
-    | Store -> { default_context with store = true}
+    | None -> default_context
+    | Some c -> match c with
+      | Del -> { default_context with del = true }
+      | Load -> { default_context with load = true }
+      | Store -> { default_context with store = true}
   )
 
 type info = {
@@ -105,8 +107,10 @@ let pp_info fmt i =
     (if i.context.del then "d" else "-")
     (if i.context.load then "r" else "-")
     (if i.context.store then "w" else "-")
+  (* Format.fprintf fmt "%s,(del=%b,load=%b,store=%b)"
+    (show_scope i.scope) i.context.del i.context.load i.context.store *)
 
-let ident ?location ?(scope=Unknown) ?(ctx=PC.ExpressionContext.make_load_of_t()) id =
+let ident ?location ?(scope=Unknown) ?(ctx=Some (PC.ExpressionContext.make_load_of_t())) id =
   IdentMap.singleton id { scope; context = context ctx; locations = Option.to_list location }
 
 let merge_scope locs1 locs2 var s1 s2 =
@@ -196,7 +200,7 @@ let get1 ((a, _, _) : 'a result) = a
 let get2 ((_, a, _) : 'a result) = a
 let get3 ((_, _, a) : 'a result) = a
 
-let store_ctx = PC.ExpressionContext.make_store_of_t ()
+let store_ctx = Some (PC.ExpressionContext.make_store_of_t ())
 (*
   [bind]/[bind_opt] must be used for identifiers that bind names, see:
  https://docs.python.org/3/reference/executionmodel.html#binding-of-names
@@ -214,7 +218,6 @@ let bind_opt ~location o = match o with
 (* Computations of free variables and variable scope *)
 
 let enter_arguments scope (a : PC.Arguments.t) vars =
-  let open PC.ExpressionContext in
   let seen = IdentTable.create 16 in
   let add_arg_list l vars =
     List.fold_left (fun avars PC.Argument.{location;identifier; _} ->
@@ -222,7 +225,7 @@ let enter_arguments scope (a : PC.Arguments.t) vars =
         if IdentTable.mem seen identifier
         then raise_ ~locations:[location] (DuplicateArgument (identifier));
         IdentTable.add seen identifier ();
-        ident ~location ~scope ~ctx:(make_store_of_t ()) identifier
+        ident ~location ~scope ~ctx:None identifier
         |> merge_vars avars
       ) vars l
   in
@@ -500,7 +503,7 @@ let expression tbl =
     let* value in make_starred_of_t ~location ~value ~ctx ()
   in
   let name ~location ~id ~ctx =
-    let* id = id, ident ~location ~ctx id, [] in
+    let* id = id, ident ~location ~ctx:(Some ctx) id, [] in
     make_name_of_t ~location ~id ~ctx ()
   in
   let list ~location ~elts ~ctx =
