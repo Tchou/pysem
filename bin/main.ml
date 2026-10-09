@@ -61,8 +61,24 @@ let treat_file file =
   MS.Config.infer_overload := false;
   MS.Config.value_restriction := false;
 
-  let (_,g as p) = Prog.of_module (Env.init globals bil to_loc) m in
+  let env = (Env.init globals bil to_loc) in
+  let (_,_g as p) = Prog.of_module env m in
   pr ~dbg:0 "pysem ast" "%a" Ast.pp_prog p;
+
+  pr "blockid" "@[<v>- %a@]"
+    Printing.(pp_list ~sep:"@\n- "
+                (fun fmt b -> fprintf fmt "@[%a@]"
+                    Parsing.pp_block_info b))
+                bil;
+
+  pr "variables" "%a"
+    (fun fmt v -> Env.Vartbl.iter
+        (fun mlvar vi -> Format.fprintf fmt "%s: %a@\n"
+            Printing.(mlvar_show mlvar) Env.pp_var_info_full vi)
+        v)
+    Env.variables
+
+  (* * )
 
   (* Then modify Py_state.(of_prog and make_state_record etc.) *)
 
@@ -77,7 +93,7 @@ let treat_file file =
           let id = PCI.to_string pci in
           id, MT.TVar.(Some id |> mk KInfer |> typ, inner_let))
      ) in *)
-  let module_state = Py_state.init_state g
+  let module_state = Py_state.init_state _g
     (* Env.vars_rec true
     |> List.map (fun (mlvar, (_ty, _b)) ->
         (mlvar, (Utils.undef, false)))
@@ -165,7 +181,7 @@ let treat_file file =
            else nl := false ))
     names
 
-  (* *)
+  ( * *)
 
 (* CLI *)
 
@@ -271,7 +287,7 @@ let () =
   with
   | Sys_error msg -> Format.eprintf "%s@\n%!" msg; exit 1
   | e ->
-    Format.eprintf "ERROR: %s@\n%s@\n%!"
+    Format.eprintf "@{<bold>@{<red>ERROR@}: %s@}@\n%s@\n%!"
       (Printexc.to_string e)
       (Printexc.get_backtrace ());
     exit 10
